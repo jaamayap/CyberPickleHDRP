@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 349caf3e36f64e619ec34cdd2093c4dc, type: 3}
+  m_Name: Lobbed Missile Trajectory
+  m_EditorClassIdentifier: 
+  displayPreLaunch: 1
+  displayPostLaunch: 1
+  targetSprite: {fileID: 21300000, guid: c6d6b8f2076e046418099d01efa1dbed, type: 3}
+  scaleValuesWithDistance: 1
+  farDistance: 0
+  closeDistance: 0
+  farScale: 2
+  closeScale: 0
+  farOpacity: 0
+  closeOpacity: 1
+  farColor: {r: 1, g: 1, b: 1, a: 1}
+  closeColor: {r: 1, g: 0, b: 0, a: 1}
+  physicsVelocity: {fileID: 11400000, guid: 7fdb9378cbdca4ddfb5b00172e016a64, type: 2}
+  scaleWithInaccuracy: 1
+  hideWhenPastTarget: 0

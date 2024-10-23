@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c41c689a1e1c4b4e9e08017b08450681, type: 3}
+  m_Name: Hit Preview Overlay
+  m_EditorClassIdentifier: 
+  displayPreLaunch: 1
+  displayPostLaunch: 0
+  hitPreviewRange: 150
+  showFromAllSpawnPoints: 1
+  showDebugLine: 1
+  debugLineColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  debugLineColorOnTarget: {r: 1, g: 0, b: 0, a: 1}
+  targetSprite: {fileID: 21300000, guid: c6d6b8f2076e046418099d01efa1dbed, type: 3}
+  scale: 0.5
+  spriteColor: {r: 0.990566, g: 0.990566, b: 0.990566, a: 1}
+  changeColorOnTarget: 1
+  spriteColorTarget: {r: 1, g: 0, b: 0, a: 1}
+  targetMask:
+    serializedVersion: 2
+    m_Bits: 128

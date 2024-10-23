@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 70b859dbcf9c455ab87b061158cf4493, type: 3}
+  m_Name: Forward Line 3m Red
+  m_EditorClassIdentifier: 
+  displayPreLaunch: 1
+  displayPostLaunch: 0
+  hitPreviewRange: 20
+  showFromAllSpawnPoints: 1
+  showDebugLine: 1
+  debugLineColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  debugLineColorOnTarget: {r: 1, g: 0, b: 0, a: 1}
+  startWidth: 0.05
+  endWidth: 0.05
+  length: 5
+  lineColor: {r: 1, g: 0.019995868, b: 0, a: 1}

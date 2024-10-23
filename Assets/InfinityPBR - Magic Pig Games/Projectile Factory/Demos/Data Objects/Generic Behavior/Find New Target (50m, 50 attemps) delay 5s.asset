@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 155d352b79ba480eb6c1f1b1d563fd57, type: 3}
+  m_Name: Find New Target (50m, 50 attemps) delay 5s
+  m_EditorClassIdentifier: 
+  startSearchDelay: 5
+  searchAttempts: 50
+  delayBetweenAttempts: 1
+  searchRadius: 50
+  targetSelection: 2
+  seekNewTargets: 1
+  inheritDefaultTarget: 0
+  overrideCollisionMask: 1
+  customCollisionMask:
+    serializedVersion: 2
+    m_Bits: 128

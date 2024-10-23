@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79f4bca7fe06447d897b187c8b578578, type: 3}
+  m_Name: Wave Up and Down
+  m_EditorClassIdentifier: 
+  localDirection: {x: 0, y: 0, z: 1}
+  changeDirectionAfterCollision: 1
+  localDirectionAfterCollision: {x: 0, y: 0, z: 0}
+  waveDirection: {x: 1, y: 0, z: 0}
+  waveAmplitude: 0.024
+  waveFrequency: 40

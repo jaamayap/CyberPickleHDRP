@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProjectInfo>
+	<Project Name="CyberPickleHDRP_WwiseProject" GUID="{70F964D3-D541-4201-B039-18B6EA96FA08}" Generator="2023.1.7.8574"/>
+	<CacheRoot>../../../../CyberPickleHDRP_WwiseProject/.cache</CacheRoot>
+	<Platforms>
+		<Platform Name="Mac" GUID="{AA43462C-578B-495F-915B-0046F1FACEBE}" BasePlatform="Mac" BasePlatformGUID="{9C6217D5-DD11-4795-87C1-6CE02853C540}" Path="../../../../CyberPickleHDRP_WwiseProject/GeneratedSoundBanks/Mac"/>
+		<Platform Name="Windows" GUID="{9D517AF8-3217-4BDB-A85D-6A0087803150}" BasePlatform="Windows" BasePlatformGUID="{6E0CB257-C6C8-4C5C-8366-2740DFC441EB}" Path="../../../../CyberPickleHDRP_WwiseProject/GeneratedSoundBanks/Windows"/>
+	</Platforms>
+	<Languages>
+		<Language Name="English(US)" Id="684519430" GUID="{3111EB44-527B-465D-8FA3-9AE141FD911A}" Default="true" UseAsStandIn="true"/>
+	</Languages>
+	<FileHash>{F86B83FB-7377-B37F-29CA-3AC272343E92}</FileHash>
+</ProjectInfo>

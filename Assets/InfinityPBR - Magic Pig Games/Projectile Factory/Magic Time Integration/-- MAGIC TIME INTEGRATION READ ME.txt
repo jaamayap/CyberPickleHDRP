@@ -1,0 +1,5 @@
+This .unitypackage has the files needed to connect Projectile Factory with Magic Time.
+
+Please check the documentation for further details and a walkthrough: 
+
+https://infinitypbr.gitbook.io/infinity-pbr/projectile-factory/magic-time-for-projectile-factory
