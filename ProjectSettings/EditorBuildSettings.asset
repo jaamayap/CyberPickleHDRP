@@ -6,12 +6,24 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/MainScene.unity
-    guid: 45b1ad3630487d646ac0fa6343b717e6
+    path: Assets/_CyberPickle/Scenes/Boot/Boot.unity
+    guid: 7bb048cecc99ce44ca8528c6eb85de01
   - enabled: 1
-    path: Assets/Scenes/PoweredbyWwise.unity
-    guid: d5be37ee1b3bcd84896750f214550124
+    path: Assets/_CyberPickle/Scenes/MainMenu/MainMenu.unity
+    guid: 6501ce1547bb7ca4d8b6bd69fe1a6358
   - enabled: 1
-    path: Assets/Scenes/StartScreen.unity
-    guid: 518f3424c886154418ba9ed01a3efe0b
+    path: Assets/_CyberPickle/Scenes/CharacterSelect/CharacterSelect.unity
+    guid: 0dde37c6c72d0c34b90f11a3c4b679b9
+  - enabled: 1
+    path: Assets/_CyberPickle/Scenes/EquipmentSelect/EquipmentSelect.unity
+    guid: 38a0102eda94fdf48a7be28543dc3d29
+  - enabled: 1
+    path: Assets/_CyberPickle/Scenes/LevelSelect/LevelSelect.unity
+    guid: 623c2ac10dba168488b546a279fe0ea2
+  - enabled: 1
+    path: Assets/_CyberPickle/Scenes/Game/Game.unity
+    guid: 76ae9580877488d479dc5fc1a788e71b
+  - enabled: 1
+    path: Assets/_CyberPickle/Scenes/PostGame/PostGame.unity
+    guid: 8006866ebc7c436458ab378e9b26f0d5
   m_configObjects: {}
