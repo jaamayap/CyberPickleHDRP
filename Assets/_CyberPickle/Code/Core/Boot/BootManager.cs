@@ -96,11 +96,14 @@ namespace CyberPickle.Core.Boot
             uiController.UpdateLoadingText("Initializing Core Systems...");
             float progressStart = 0f;
             float progressEnd = 0.3f;
-            float step = (progressEnd - progressStart) / 4f; // 4 systems
+            float step = (progressEnd - progressStart) / 4f;
 
-            yield return InitializeManager<AudioManager>("Audio System", progressStart, progressStart + step);
-            yield return InitializeManager<SaveManager>("Save System", progressStart + step, progressStart + (step * 2));
-            yield return InitializeManager<InputManager>("Input System", progressStart + (step * 2), progressStart + (step * 3));
+            // Initialize Input Manager first
+            yield return InitializeManager<InputManager>("Input System", progressStart, progressStart + step);
+
+            // Then other systems
+            yield return InitializeManager<AudioManager>("Audio System", progressStart + step, progressStart + (step * 2));
+            yield return InitializeManager<SaveManager>("Save System", progressStart + (step * 2), progressStart + (step * 3));
             yield return InitializeManager<PoolManager>("Pool System", progressStart + (step * 3), progressEnd);
         }
 

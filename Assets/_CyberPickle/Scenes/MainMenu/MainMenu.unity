@@ -859,29 +859,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4e8a6e03c7d40204b8008a129b3dfa91, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  glitchInterval: 2
-  glitchIntensity: 0
-  glitchIntensityMax: 0.14
-  glitchIntensityMin: 0.06
-  glitchAmplitude: 0.107
-  glitchSpeed: 5.4
-  randomCharIntervalMin: 0.5
-  randomCharIntervalMax: 2
-  randomCharDisplayDurationMin: 0.05
-  randomCharDisplayDurationMax: 0.1
-  randomCharIntensity: 0.35
-  fadeDuration: 5
-  pulseScale: 1.03
-  pulseSpeed: 0.1
-  scanlineIntensity: 1
-  scanlineSpeed: 1.4
-  scanlineFrequency: 1050
-  chromAberration: 0.00581
-  colorGlitchIntensity: 0.65
-  colorGlitchDuration: 0.1
-  glitchIntensityDuration: 0.28
-  glitchIntensityInterval: 9.5
-  rgbSplitAmount: 0.0298
+  config: {fileID: 11400000, guid: f8d8800a23fdd4c4bb9258981e6068c4, type: 2}
 --- !u!21 &282857689
 Material:
   serializedVersion: 8
@@ -936,16 +914,16 @@ Material:
     - _BevelWidth: 0
     - _BumpFace: 0
     - _BumpOutline: 0
-    - _ChromAberration: 0.002
+    - _ChromAberration: 0.00427
     - _ColorMask: 15
     - _CullMode: 0
     - _Diffuse: 0.5
     - _FaceDilate: 0
     - _FaceUVSpeedX: 0
     - _FaceUVSpeedY: 0
-    - _GlitchAmplitude: 0.1
+    - _GlitchAmplitude: 0
     - _GlitchIntensity: 0
-    - _GlitchSpeed: 5
+    - _GlitchSpeed: 0
     - _GlowInner: 0.05
     - _GlowOffset: 0
     - _GlowOuter: 0.05
@@ -965,9 +943,9 @@ Material:
     - _ScaleRatioC: 0.73125
     - _ScaleX: 1
     - _ScaleY: 1
-    - _ScanlineFrequency: 800
+    - _ScanlineFrequency: 1050
     - _ScanlineIntensity: 1
-    - _ScanlineSpeed: 4.1
+    - _ScanlineSpeed: 1.4
     - _ShaderFlags: 0
     - _Sharpness: 0
     - _SpecularPower: 2
@@ -1368,29 +1346,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4e8a6e03c7d40204b8008a129b3dfa91, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  glitchInterval: 0.95
-  glitchIntensity: 0
-  glitchIntensityMax: 0
-  glitchIntensityMin: 0
-  glitchAmplitude: 0.1
-  glitchSpeed: 5
-  randomCharIntervalMin: 0.5
-  randomCharIntervalMax: 2
-  randomCharDisplayDurationMin: 0.01
-  randomCharDisplayDurationMax: 0.1
-  randomCharIntensity: 0
-  fadeDuration: 2
-  pulseScale: 1.076
-  pulseSpeed: 1.63
-  scanlineIntensity: 1
-  scanlineSpeed: 4.1
-  scanlineFrequency: 800
-  chromAberration: 0.002
-  colorGlitchIntensity: 0.5
-  colorGlitchDuration: 0.5
-  glitchIntensityDuration: 2
-  glitchIntensityInterval: 10
-  rgbSplitAmount: 0.01
+  config: {fileID: 11400000, guid: 56539ed170e75a045b0e6589d50db7d9, type: 2}
 --- !u!114 &1057140200
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1753,14 +1709,14 @@ Material:
     - _BevelWidth: 0
     - _BumpFace: 0
     - _BumpOutline: 0
-    - _ChromAberration: 0.00581
+    - _ChromAberration: 0.0058
     - _ColorMask: 15
     - _CullMode: 0
     - _Diffuse: 0.5
     - _FaceDilate: 0
     - _FaceUVSpeedX: 0
     - _FaceUVSpeedY: 0
-    - _GlitchAmplitude: 0.107
+    - _GlitchAmplitude: 0.1
     - _GlitchIntensity: 0
     - _GlitchSpeed: 5.4
     - _GlowInner: 0.05

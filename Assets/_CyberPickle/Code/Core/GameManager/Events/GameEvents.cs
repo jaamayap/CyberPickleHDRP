@@ -1,3 +1,5 @@
+using CyberPickle.Core.States;
+
 namespace CyberPickle.Core.Events
 {
     public static class GameEvents
@@ -24,5 +26,14 @@ namespace CyberPickle.Core.Events
         public static readonly GameEvent<int> OnCurrencyChanged = new GameEvent<int>();
         public static readonly GameEvent<string> OnItemPurchased = new GameEvent<string>();
         public static readonly GameEvent<string> OnItemEquipped = new GameEvent<string>();
+
+        
+        // Input related events
+        public static readonly GameEvent OnMainMenuInput = new GameEvent();
+        public static readonly GameEvent<float> OnHorizontalInput = new GameEvent<float>();
+        public static readonly GameEvent OnPauseRequested = new GameEvent();
+        public static readonly GameEvent OnResumeRequested = new GameEvent();
+        public static readonly GameEvent<GameState> OnGameStateChanged = new GameEvent<GameState>();
+        
     }
 }

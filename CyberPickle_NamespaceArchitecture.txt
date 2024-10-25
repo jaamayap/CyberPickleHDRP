@@ -1,0 +1,380 @@
+Namespace: CyberPickle.Achievements
+ Class: AchievementManager : Manager<AchievementManager>, IInitializable
+   Constructor: public AchievementManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Characters
+ Class: CharacterManager : Manager<CharacterManager>, IInitializable
+   Constructor: public CharacterManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Core
+ Class: GameManager : Manager<GameManager>, IInitializable
+   Field: private GameConfig gameConfig
+   Field: private GameState currentState
+   Field: private GameState previousState
+   Field: private bool isInitialized
+   Field: private bool isPaused
+   Constructor: public GameManager()
+   Method: public sealed void Initialize()
+   Method: private void RegisterEventListeners()
+   Method: private void LoadGameConfig()
+   Method: public void StartNewGame()
+   Method: private IEnumerator StartNewGameSequence()
+   Method: public void StartLevel(string levelId)
+   Method: private IEnumerator StartLevelSequence(string levelId)
+   Method: public void PauseGame()
+   Method: public void ResumeGame()
+   Method: public void GameOver()
+   Method: private IEnumerator GameOverSequence()
+   Method: private void ChangeState(GameState newState)
+   Method: private void HandleStateChange()
+   Method: private void HandlePlayerDeath()
+   Method: private void HandleLevelCompleted(string levelId)
+   Method: private IEnumerator LevelCompleteSequence(string levelId)
+   Method: private void SaveProgress()
+   Method: private IEnumerator LoadSceneAsync(string sceneName)
+   Method: public void ToggleDebugMode()
+   Method: protected override void OnManagerAwake()
+   Method: private void OnApplicationPause(bool pauseStatus)
+   Method: private void OnApplicationQuit()
+   Property: public GameState CurrentState { get; }
+   Property: public bool IsPaused { get; }
+Namespace: CyberPickle.Core.Analytics
+ Class: AnalyticsManager : Manager<AnalyticsManager>, IInitializable
+   Constructor: public AnalyticsManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Core.Audio
+ Class: AudioManager : Manager<AudioManager>, IInitializable
+   Constructor: public AudioManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Core.Boot
+ Class: BootManager : Manager<BootManager>, IInitializable
+   Field: private BootConfig bootConfig
+   Field: private BootUIController uiController
+   Field: private float minimumLoadTime
+   Field: private float delayBeforeScene
+   Field: private float startTime
+   Constructor: public BootManager()
+   Method: protected override void OnManagerAwake()
+   Method: public sealed void Initialize()
+   Method: private IEnumerator InitializeGameSystems()
+   Method: private IEnumerator InitializeCore()
+   Method: private IEnumerator InitializeServices()
+   Method: private IEnumerator InitializeGameplay()
+   Method: private IEnumerator InitializeManager(string systemName, float startProgress, float endProgress)
+   Method: private void LoadMainMenuScene()
+ Class: BootSceneManager : Manager<BootSceneManager>
+   Field: private CanvasGroup logoCanvasGroup
+   Field: private TextMeshProUGUI companyNameText
+   Field: private Image loadingBarFill
+   Field: private TextMeshProUGUI loadingText
+   Field: private float fadeInDuration
+   Field: private float displayDuration
+   Field: private float fadeOutDuration
+   Field: private string mainMenuSceneName
+   Field: private float minimumLoadingTime
+   Field: private bool waitForInput
+   Field: private float startTime
+   Constructor: public BootSceneManager()
+   Method: protected override void OnManagerAwake()
+   Method: private IEnumerator BootSequence()
+   Method: private IEnumerator WaitForAnyKey()
+   Method: private IEnumerator InitializeSystems()
+   Method: private IEnumerator FadeInLogo()
+   Method: private IEnumerator FadeOutLogo()
+   Method: private IEnumerator UpdateProgressBar(float from, float to)
+   Method: private void UpdateLoadingText(string text)
+   Method: private void LoadMainMenu()
+Namespace: CyberPickle.Core.Boot.UI
+ Class: BootUIController : MonoBehaviour
+   Field: private CanvasGroup logoCanvasGroup
+   Field: private TextMeshProUGUI companyNameText
+   Field: private Slider loadingBarSlider
+   Field: private TextMeshProUGUI loadingText
+   Constructor: public BootUIController()
+   Method: private void Awake()
+   Method: private void ValidateReferences()
+   Method: public void UpdateProgress(float progress)
+   Method: public void UpdateLoadingText(string text)
+   Method: public void SetLogoAlpha(float alpha)
+Namespace: CyberPickle.Core.Config
+ Class: BootConfig : ScriptableObject
+   Field: public string mainMenuSceneName
+   Field: public float fadeInDuration
+   Field: public float displayDuration
+   Field: public float fadeOutDuration
+   Field: public float minimumLoadingTime
+   Field: public bool waitForInput
+   Field: public string[] loadingTips
+   Constructor: public BootConfig()
+ Class: GameConfig : ScriptableObject
+   Field: public string mainMenuSceneName
+   Field: public string characterSelectSceneName
+   Field: public string equipmentSelectSceneName
+   Field: public string levelSelectSceneName
+   Field: public string gameSceneName
+   Field: public string postGameSceneName
+   Field: public float gameStartDelay
+   Field: public float gameOverDelay
+   Field: public bool enableTutorial
+   Field: public bool enableDebugMode
+   Field: public bool skipBootSequence
+   Field: public bool unlockAllCharacters
+   Constructor: public GameConfig()
+Namespace: CyberPickle.Core.Events
+ Class: GameEvent
+   Field: private List<Action> listeners
+   Constructor: public GameEvent()
+   Method: public void AddListener(Action listener)
+   Method: public void RemoveListener(Action listener)
+   Method: public void Invoke()
+ Class: GameEvent<T>
+   Field: private List<Action<T>> listeners
+   Constructor: public GameEvent<T>()
+   Method: public void AddListener(Action<T> listener)
+   Method: public void RemoveListener(Action<T> listener)
+   Method: public void Invoke(T value)
+ Class: EventManager : Manager<EventManager>, IInitializable
+   Field: private bool isInitialized
+   Constructor: public EventManager()
+   Method: public sealed void Initialize()
+   Method: private void RegisterGlobalEventListeners()
+   Method: private void TrackLevelCompletion(string levelId)
+   Method: private void TrackAchievement(string achievementId)
+   Method: protected override void OnManagerAwake()
+ Class: GameEvents
+   Field: public static GameEvent OnGameInitialized
+   Field: public static GameEvent OnGameStarted
+   Field: public static GameEvent OnGamePaused
+   Field: public static GameEvent OnGameResumed
+   Field: public static GameEvent OnGameOver
+   Field: public static GameEvent<int> OnExperienceGained
+   Field: public static GameEvent<int> OnLevelUp
+   Field: public static GameEvent<float> OnHealthChanged
+   Field: public static GameEvent OnPlayerDied
+   Field: public static GameEvent<string> OnAchievementUnlocked
+   Field: public static GameEvent<string> OnLevelCompleted
+   Field: public static GameEvent<string> OnCharacterUnlocked
+   Field: public static GameEvent<int> OnCurrencyChanged
+   Field: public static GameEvent<string> OnItemPurchased
+   Field: public static GameEvent<string> OnItemEquipped
+   Field: public static GameEvent OnMainMenuInput
+   Field: public static GameEvent<float> OnHorizontalInput
+   Field: public static GameEvent OnPauseRequested
+   Field: public static GameEvent OnResumeRequested
+   Field: public static GameEvent<GameState> OnGameStateChanged
+Namespace: CyberPickle.Core.Input
+ Class: InputManager : Manager<InputManager>, IInitializable
+   Field: private float mouseSensitivity
+   Field: private float touchSensitivity
+   Field: private float keyboardSensitivity
+   Field: private GameState currentGameState
+   Field: private bool isInputEnabled
+   Field: private bool isInitialized
+   Field: private InputAction moveAction
+   Field: private InputAction anyKeyAction
+   Field: private InputAction touchPositionAction
+   Field: private InputAction touchPressAction
+   Field: private Vector2 previousTouchPosition
+   Constructor: public InputManager()
+   Method: public sealed void Initialize()
+   Method: private void SetupInputActions()
+   Method: private void OnEnable()
+   Method: private void OnDisable()
+   Method: private void HandleMovement(Vector2 movement)
+   Method: private void HandleAnyKeyPress()
+   Method: private void HandleTouchPress(float pressed)
+   Method: private void Update()
+   Method: private void RegisterEvents()
+   Method: private void HandleGameStateChanged(GameState newState)
+   Method: public void EnableInput()
+   Method: public void DisableInput()
+   Method: private void OnDestroy()
+Namespace: CyberPickle.Core.Interfaces
+ Interface: ICleanable
+   Method: public abstract void Cleanup()
+ Interface: IInitializable
+   Method: public abstract void Initialize()
+Namespace: CyberPickle.Core.Management
+ Class: Manager<T> : MonoBehaviour
+   Field: private static T instance
+   Field: private static object lockObject
+   Field: private static bool isQuitting
+   Constructor: protected Manager<T>()
+   Constructor: private Manager<T>()
+   Method: protected virtual void Awake()
+   Method: protected virtual void OnManagerAwake()
+   Method: protected virtual void OnApplicationQuit()
+   Property: public static T Instance { get; }
+Namespace: CyberPickle.Core.Pool
+ Class: PoolManager : Manager<PoolManager>, IInitializable
+   Constructor: public PoolManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Core.SaveSystem
+ Class: SaveManager : Manager<SaveManager>, IInitializable
+   Constructor: public SaveManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Core.Services.Authentication
+ Class: AuthenticationManager : Manager<AuthenticationManager>, IInitializable
+   Field: private AuthenticationState currentState
+   Field: private ProfileContainer profileContainer
+   Field: private AuthenticationEvents events
+   Field: private bool isInitialized
+   Constructor: public AuthenticationManager()
+   Method: protected override void OnManagerAwake()
+   Method: public sealed void Initialize()
+   Method: private void SubscribeToAuthEvents()
+   Method: private void UnsubscribeFromAuthEvents()
+   Method: public async Task<bool> SignInAnonymouslyAsync()
+   Method: public async Task<bool> SwitchProfileAsync(string profileId)
+   Method: public void SignOut()
+   Method: private ProfileData CreateNewProfile(string profileId, string playerId)
+   Method: public void UpdateProfileProgress(float playTime, int score, float distance)
+   Method: public void ClearProfileProgress(string profileId)
+   Method: public IReadOnlyList<ProfileData> GetAllProfiles()
+   Method: private void OnSignedIn()
+   Method: private void OnSignedOut()
+   Method: private void OnSessionExpired()
+   Method: private void HandleAuthenticationError(AuthenticationException e)
+   Method: private void HandleRequestError(RequestFailedException e)
+   Method: private void SetState(AuthenticationState newState)
+   Method: public void SubscribeToAuthenticationCompleted(Action<string> callback)
+   Method: public void UnsubscribeFromAuthenticationCompleted(Action<string> callback)
+   Method: public void SubscribeToAuthenticationFailed(Action<string> callback)
+   Method: public void UnsubscribeFromAuthenticationFailed(Action<string> callback)
+   Method: public void SubscribeToProfileSwitched(Action<string> callback)
+   Method: public void UnsubscribeFromProfileSwitched(Action<string> callback)
+   Method: private void OnDestroy()
+   Property: public AuthenticationState CurrentState { get; }
+   Property: public bool IsSignedIn { get; }
+   Property: public string CurrentPlayerId { get; }
+   Property: public ProfileData CurrentProfile { get; }
+ Class: AuthenticationEvents
+   Constructor: public AuthenticationEvents()
+   Method: internal void InvokeProfileLoaded(string profileId)
+   Method: internal void InvokeProfileSwitched(string profileId)
+   Method: internal void InvokeNewProfileCreated(string profileId)
+   Method: internal void InvokeAuthenticationStateChanged(AuthenticationState state)
+   Method: internal void InvokeAuthenticationCompleted(string playerId)
+   Method: internal void InvokeAuthenticationFailed(string error)
+   Method: internal void InvokeSessionTokenFound(string token)
+   Method: internal void InvokeSessionExpired()
+   Method: internal void InvokeSignedOut()
+   Event: public Action<string> OnProfileLoaded
+   Event: public Action<string> OnProfileSwitched
+   Event: public Action<string> OnNewProfileCreated
+   Event: public Action<AuthenticationState> OnAuthenticationStateChanged
+   Event: public Action<string> OnAuthenticationCompleted
+   Event: public Action<string> OnAuthenticationFailed
+   Event: public Action<string> OnSessionTokenFound
+   Event: public Action OnSessionExpired
+   Event: public Action OnSignedOut
+ Enum: AuthenticationState
+   Value: NotInitialized = 0
+   Value: NotAuthenticated = 1
+   Value: AuthenticationInProgress = 2
+   Value: Authenticated = 3
+   Value: AuthenticationFailed = 4
+   Value: ProfileSwitchInProgress = 5
+   Value: SessionExpired = 6
+Namespace: CyberPickle.Core.Services.Authentication.Data
+ Class: ProfileContainer
+   Field: private List<ProfileData> profiles
+   Field: private static string PROFILES_PREFS_KEY
+   Constructor: public ProfileContainer()
+   Method: public void AddProfile(ProfileData profile)
+   Method: public ProfileData GetProfile(string profileId)
+   Method: public void SetActiveProfile(string profileId)
+   Method: public void UpdateProfile(ProfileData updatedProfile)
+   Method: public void RemoveProfile(string profileId)
+   Method: public void SaveProfiles()
+   Method: public static ProfileContainer Load()
+   Method: public void ClearAll()
+   Property: public IReadOnlyList<ProfileData> Profiles { get; }
+   Property: public ProfileData ActiveProfile { get; }
+ Class: ProfileData
+   Constructor: public ProfileData(string profileId, string playerId)
+   Method: public void UpdateLoginTime()
+   Method: public void UpdateSessionToken(string token)
+   Method: public void UpdateDisplayName(string name)
+   Method: public void UpdateProgress(float playTime, int score, float distance)
+   Method: public void ClearProgress()
+   Method: public void SetActive(bool active)
+   Method: public string ToJson()
+   Method: public static ProfileData FromJson(string json)
+   Property: public string ProfileId { get; set; }
+   Property: public string PlayerId { get; set; }
+   Property: public DateTime CreatedAt { get; set; }
+   Property: public DateTime LastLoginAt { get; set; }
+   Property: public string DisplayName { get; set; }
+   Property: public bool HasSaveData { get; set; }
+   Property: public float TotalPlayTime { get; set; }
+   Property: public int HighestScore { get; set; }
+   Property: public float FurthestDistance { get; set; }
+   Property: public string SessionToken { get; set; }
+   Property: public bool IsActive { get; set; }
+Namespace: CyberPickle.Core.Services.Leaderboard
+ Class: LeaderboardManager : Manager<LeaderboardManager>, IInitializable
+   Constructor: public LeaderboardManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Core.Services.Steam
+ Class: SteamManager : Manager<SteamManager>, IInitializable
+   Constructor: public SteamManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.Core.States
+ Enum: GameState
+   Value: None = 0
+   Value: Loading = 1
+   Value: MainMenu = 2
+   Value: CharacterSelect = 3
+   Value: EquipmentSelect = 4
+   Value: LevelSelect = 5
+   Value: Playing = 6
+   Value: Paused = 7
+   Value: PostGame = 8
+   Value: GameOver = 9
+Namespace: CyberPickle.Progression
+ Class: ProgressionManager : Manager<ProgressionManager>, IInitializable
+   Constructor: public ProgressionManager()
+   Method: public sealed void Initialize()
+Namespace: CyberPickle.UI.Effects
+ Class: GlitchTextEffect : MonoBehaviour
+   Field: private GlitchTextConfig config
+   Field: private TextMeshProUGUI textMesh
+   Field: private Material glitchMaterial
+   Field: private string originalText
+   Constructor: public GlitchTextEffect()
+   Method: private void Start()
+   Method: private void OnValidate()
+   Method: private void UpdateShaderProperties()
+   Method: private IEnumerator FadeInRoutine()
+   Method: private IEnumerator GlitchTextRoutine()
+   Method: private IEnumerator RandomCharRoutine()
+   Method: private IEnumerator PulseRoutine()
+   Method: private IEnumerator DynamicGlitchIntensityRoutine()
+   Method: private IEnumerator CharacterColorGlitchRoutine()
+Namespace: CyberPickle.UI.Effects.Config
+ Class: GlitchTextConfig : ScriptableObject
+   Field: public float glitchInterval
+   Field: public float glitchIntensity
+   Field: public float glitchIntensityMax
+   Field: public float glitchIntensityMin
+   Field: public float glitchAmplitude
+   Field: public float glitchSpeed
+   Field: public float randomCharIntervalMin
+   Field: public float randomCharIntervalMax
+   Field: public float randomCharDisplayDurationMin
+   Field: public float randomCharDisplayDurationMax
+   Field: public float randomCharIntensity
+   Field: public float fadeDuration
+   Field: public float pulseScale
+   Field: public float pulseSpeed
+   Field: public float scanlineIntensity
+   Field: public float scanlineSpeed
+   Field: public float scanlineFrequency
+   Field: public float chromAberration
+   Field: public float colorGlitchIntensity
+   Field: public float colorGlitchDuration
+   Field: public float glitchIntensityDuration
+   Field: public float glitchIntensityInterval
+   Field: public float rgbSplitAmount
+   Constructor: public GlitchTextConfig()
