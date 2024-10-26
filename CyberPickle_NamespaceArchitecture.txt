@@ -162,6 +162,8 @@ Namespace: CyberPickle.Core.Events
    Field: public static GameEvent OnPauseRequested
    Field: public static GameEvent OnResumeRequested
    Field: public static GameEvent<GameState> OnGameStateChanged
+   Field: public static GameEvent OnAuthenticationRequested
+   Field: public static GameEvent OnProfileLoadRequested
 Namespace: CyberPickle.Core.Input
  Class: InputManager : Manager<InputManager>, IInitializable
    Field: private float mouseSensitivity
@@ -378,3 +380,52 @@ Namespace: CyberPickle.UI.Effects.Config
    Field: public float glitchIntensityInterval
    Field: public float rgbSplitAmount
    Constructor: public GlitchTextConfig()
+Namespace: CyberPickle.UI.Screens.MainMenu
+ Class: MainMenuController : MonoBehaviour
+   Field: private TextMeshProUGUI pressAnyButtonText
+   Field: private GameObject authPanel
+   Field: private float fadeOutDuration
+   Field: private bool isWaitingForInput
+   Field: private CanvasGroup pressButtonCanvasGroup
+   Constructor: public MainMenuController()
+   Method: private void Awake()
+   Method: private void Start()
+   Method: private void Update()
+   Method: private void HandleMainMenuInput()
+   Method: private IEnumerator TransitionToAuth()
+   Method: private void OnDestroy()
+Namespace: CyberPickle.UI.Windows.Auth
+ Class: AuthPanelController : MonoBehaviour
+   Field: private GameObject terminalWindowPanel
+   Field: private TextMeshProUGUI debugConsole
+   Field: private TextMeshProUGUI resultText
+   Field: private TextMeshProUGUI statusText
+   Field: private Slider loadingSlider
+   Field: private float loadingAnimationSpeed
+   Field: private float typewriterSpeed
+   Field: private float messageDisplayDuration
+   Field: private float panelFadeInDuration
+   Field: private AuthenticationManager authManager
+   Field: private bool isInitialized
+   Field: private Coroutine currentTypewriterCoroutine
+   Field: private Coroutine loadingCoroutine
+   Field: private CanvasGroup panelCanvasGroup
+   Constructor: public AuthPanelController()
+   Method: private void Awake()
+   Method: private void OnEnable()
+   Method: private void OnDisable()
+   Method: private void SetupCanvasGroup()
+   Method: private void SubscribeToEvents()
+   Method: private void UnsubscribeFromEvents()
+   Method: private void InitializeAuthentication()
+   Method: private IEnumerator InitializationSequence()
+   Method: private IEnumerator FadeInPanel()
+   Method: private void StartAuthentication()
+   Method: private IEnumerator AnimateLoading()
+   Method: private IEnumerator TypewriterEffect(TextMeshProUGUI textComponent, string message)
+   Method: private void OnAuthenticationCompleted(string playerId)
+   Method: private void OnAuthenticationFailed(string error)
+   Method: private void OnProfileSwitched(string profileId)
+   Method: private void UpdateStatus(string status)
+   Method: private void ClearConsole()
+   Method: private void OnDestroy()

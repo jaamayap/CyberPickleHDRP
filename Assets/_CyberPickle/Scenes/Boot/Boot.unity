@@ -173,29 +173,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4e8a6e03c7d40204b8008a129b3dfa91, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  glitchInterval: 0.1
-  glitchIntensity: 0
-  glitchIntensityMax: 0
-  glitchIntensityMin: 0
-  glitchAmplitude: 0
-  glitchSpeed: 0
-  randomCharIntervalMin: 0.1
-  randomCharIntervalMax: 0.1
-  randomCharDisplayDurationMin: 0.01
-  randomCharDisplayDurationMax: 0.1
-  randomCharIntensity: 0
-  fadeDuration: 5
-  pulseScale: 1
-  pulseSpeed: 0.1
-  scanlineIntensity: 1
-  scanlineSpeed: 4.16
-  scanlineFrequency: 1257
-  chromAberration: 0.00206
-  colorGlitchIntensity: 0
-  colorGlitchDuration: 0.1
-  glitchIntensityDuration: 2
-  glitchIntensityInterval: 10
-  rgbSplitAmount: 0.0234
+  config: {fileID: 11400000, guid: aec7a184b22e7ea44b3e8ac3e94bec64, type: 2}
 --- !u!114 &129881633
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1118,7 +1096,7 @@ Material:
     - _BevelWidth: 0
     - _BumpFace: 0
     - _BumpOutline: 0
-    - _ChromAberration: 0.00206
+    - _ChromAberration: 0.00106
     - _ColorMask: 15
     - _CullMode: 0
     - _Diffuse: 0.5
@@ -1147,9 +1125,9 @@ Material:
     - _ScaleRatioC: 0.73125
     - _ScaleX: 1
     - _ScaleY: 1
-    - _ScanlineFrequency: 1257
-    - _ScanlineIntensity: 1
-    - _ScanlineSpeed: 4.16
+    - _ScanlineFrequency: 800
+    - _ScanlineIntensity: 0.712
+    - _ScanlineSpeed: 4.53
     - _ShaderFlags: 0
     - _Sharpness: 0
     - _SpecularPower: 2
@@ -1604,6 +1582,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 714705c7b173624469034475b35cabf4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  mouseSensitivity: 1.5
+  touchSensitivity: 1.5
+  keyboardSensitivity: 0.1
 --- !u!1 &1974949848
 GameObject:
   m_ObjectHideFlags: 0

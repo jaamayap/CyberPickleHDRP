@@ -34,6 +34,9 @@ namespace CyberPickle.Core.Events
         public static readonly GameEvent OnPauseRequested = new GameEvent();
         public static readonly GameEvent OnResumeRequested = new GameEvent();
         public static readonly GameEvent<GameState> OnGameStateChanged = new GameEvent<GameState>();
-        
+
+        // Authentication events
+        public static readonly GameEvent OnAuthenticationRequested = new GameEvent();
+        public static readonly GameEvent OnProfileLoadRequested = new GameEvent();
     }
 }
