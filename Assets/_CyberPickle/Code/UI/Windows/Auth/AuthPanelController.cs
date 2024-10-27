@@ -1,4 +1,4 @@
-// File: Assets/Scripts/UI/Windows/Auth/AuthPanelController.cs
+// File: Assets/Code/UI/Windows/Auth/AuthPanelController.cs
 // Namespace: CyberPickle.UI.Windows.Auth
 //
 // Purpose: Controls the authentication panel UI and process
@@ -86,7 +86,7 @@ namespace CyberPickle.UI.Windows.Auth
             }
         }
 
-        private void InitializeAuthentication()
+        public void InitializeAuthentication()
         {
             if (!isInitialized)
             {
@@ -97,12 +97,13 @@ namespace CyberPickle.UI.Windows.Auth
 
         private IEnumerator InitializationSequence()
         {
-            // Fade in the panel
-            yield return StartCoroutine(FadeInPanel());
-
-            // Clear previous state
+            // Reset state
+            isInitialized = false;
             ClearConsole();
             loadingSlider.value = 0f;
+
+            // Fade in the panel
+            yield return StartCoroutine(FadeInPanel());
 
             // Initial boot sequence
             yield return StartCoroutine(TypewriterEffect(debugConsole, "> Initializing terminal..."));
@@ -147,6 +148,11 @@ namespace CyberPickle.UI.Windows.Auth
 
         private IEnumerator TypewriterEffect(TextMeshProUGUI textComponent, string message)
         {
+            if (currentTypewriterCoroutine != null)
+            {
+                StopCoroutine(currentTypewriterCoroutine);
+            }
+
             // Store the existing text
             string existingText = textComponent.text;
 

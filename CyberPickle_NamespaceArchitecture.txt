@@ -381,18 +381,100 @@ Namespace: CyberPickle.UI.Effects.Config
    Field: public float rgbSplitAmount
    Constructor: public GlitchTextConfig()
 Namespace: CyberPickle.UI.Screens.MainMenu
+ Class: CreateProfileCardController : MonoBehaviour
+   Field: private GameObject cardContent
+   Field: private TextMeshProUGUI plusIcon
+   Field: private TextMeshProUGUI headerText
+   Field: private TextMeshProUGUI descriptionText
+   Field: private CanvasGroup terminalInterface
+   Field: private Image scanlineEffect
+   Field: private Image glitchOverlay
+   Field: private TextMeshProUGUI statusText
+   Field: private TextMeshProUGUI promptText
+   Field: private TMP_InputField inputField
+   Field: private Image blinkingCursor
+   Field: private GameObject validationSection
+   Field: private TextMeshProUGUI[] validationTexts
+   Field: private Image[] validationIcons
+   Field: private Button confirmButton
+   Field: private Button cancelButton
+   Field: private TextMeshProUGUI compilationText
+   Field: private Image progressBar
+   Field: private float typewriterSpeed
+   Field: private float validationCheckDelay
+   Field: private AuthenticationManager authManager
+   Field: private bool isProcessing
+   Field: private Coroutine currentTypewriter
+   Constructor: public CreateProfileCardController()
+   Method: private void Awake()
+   Method: private void InitializeUI()
+   Method: public void StartProfileCreation()
+   Method: private IEnumerator ProfileCreationSequence()
+   Method: private void OnInputChanged(string value)
+   Method: private IEnumerator ValidateInput(string input)
+   Method: private void UpdateValidation(int index, bool isValid, string message)
+   Method: private void OnConfirmProfile()
+   Method: private IEnumerator CreateProfileSequence()
+   Method: private void OnCancelProfile()
+   Method: private void ResetCard()
+   Method: private IEnumerator TypewriterEffect(TextMeshProUGUI textComponent, string message)
+   Method: private void OnDestroy()
+   Event: public Action<string, string> OnProfileCreated
  Class: MainMenuController : MonoBehaviour
    Field: private TextMeshProUGUI pressAnyButtonText
    Field: private GameObject authPanel
+   Field: private GameObject profileSelectionPanel
+   Field: private GameObject mainMenuButtonsPanel
    Field: private float fadeOutDuration
+   Field: private float panelTransitionDuration
    Field: private bool isWaitingForInput
    Field: private CanvasGroup pressButtonCanvasGroup
    Constructor: public MainMenuController()
    Method: private void Awake()
    Method: private void Start()
+   Method: private void InitializeUI()
+   Method: private void SubscribeToEvents()
    Method: private void Update()
    Method: private void HandleMainMenuInput()
    Method: private IEnumerator TransitionToAuth()
+   Method: private void HandleProfileLoadRequested()
+   Method: private void HandleGameStateChanged(GameState newState)
+   Method: private IEnumerator TransitionToPanels(GameObject panelToHide, GameObject panelToShow)
+   Method: private void HideAllPanels()
+   Method: public void OnPlayButtonClicked()
+   Method: public void OnOptionsButtonClicked()
+   Method: public void OnQuitButtonClicked()
+   Method: private void OnDestroy()
+ Class: ProfileSelectionController : MonoBehaviour
+   Field: private GameObject profileSelectionPanel
+   Field: private Transform profilesContainer
+   Field: private GameObject profileCardPrefab
+   Field: private GameObject createProfileCardPrefab
+   Field: private TextMeshProUGUI playerIdText
+   Field: private TextMeshProUGUI statusText
+   Field: private TextMeshProUGUI titleText
+   Field: private Button backButton
+   Field: private CanvasGroup mainMenuButtonsGroup
+   Field: private AuthenticationManager authManager
+   Field: private List<GameObject> instantiatedCards
+   Field: private CreateProfileCardController createProfileCard
+   Field: private bool isTransitioning
+   Constructor: public ProfileSelectionController()
+   Method: private void Awake()
+   Method: private void Start()
+   Method: private void InitializeUI()
+   Method: private void UpdateHeaderInfo()
+   Method: private void LoadProfiles()
+   Method: private void CreateProfileCard(ProfileData profile)
+   Method: private void ConfigureProfileCard(GameObject card, ProfileData profile)
+   Method: private void HandleProfileCreated(string profileId, string displayName)
+   Method: private void HandleProfileSelection(GameObject card, ProfileData profile)
+   Method: private IEnumerator TransitionToMainMenu(GameObject selectedCard, ProfileData profile)
+   Method: private IEnumerator FadeInMainMenuButtons()
+   Method: private void HandleProfileDeletion(ProfileData profile)
+   Method: private void HandleBackButton()
+   Method: private IEnumerator TransitionBackToAuth()
+   Method: private void ClearExistingProfiles()
    Method: private void OnDestroy()
 Namespace: CyberPickle.UI.Windows.Auth
  Class: AuthPanelController : MonoBehaviour
@@ -417,7 +499,7 @@ Namespace: CyberPickle.UI.Windows.Auth
    Method: private void SetupCanvasGroup()
    Method: private void SubscribeToEvents()
    Method: private void UnsubscribeFromEvents()
-   Method: private void InitializeAuthentication()
+   Method: public void InitializeAuthentication()
    Method: private IEnumerator InitializationSequence()
    Method: private IEnumerator FadeInPanel()
    Method: private void StartAuthentication()
