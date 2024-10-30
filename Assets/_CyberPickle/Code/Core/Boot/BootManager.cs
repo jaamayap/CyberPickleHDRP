@@ -1,3 +1,5 @@
+// File: Assets/Code/Core/Boot/BootManager.cs
+
 using UnityEngine;
 using System.Collections;
 using CyberPickle.Core.Management;
@@ -40,8 +42,6 @@ namespace CyberPickle.Core.Boot
             startTime = Time.time;
             Initialize();
         }
-
-
 
         public void Initialize()
         {
@@ -112,12 +112,13 @@ namespace CyberPickle.Core.Boot
             uiController.UpdateLoadingText("Initializing Services...");
             float progressStart = 0.3f;
             float progressEnd = 0.6f;
-            float step = (progressEnd - progressStart) / 4f; // 4 systems
+            float step = (progressEnd - progressStart) / 5f; // Updated to 5 systems
 
             yield return InitializeManager<AuthenticationManager>("Authentication", progressStart, progressStart + step);
-            yield return InitializeManager<LeaderboardManager>("Leaderboard", progressStart + step, progressStart + (step * 2));
-            yield return InitializeManager<SteamManager>("Steam", progressStart + (step * 2), progressStart + (step * 3));
-            yield return InitializeManager<AnalyticsManager>("Analytics", progressStart + (step * 3), progressEnd);
+            yield return InitializeManager<ProfileManager>("Profile Manager", progressStart + step, progressStart + (step * 2));
+            yield return InitializeManager<LeaderboardManager>("Leaderboard", progressStart + (step * 2), progressStart + (step * 3));
+            yield return InitializeManager<SteamManager>("Steam", progressStart + (step * 3), progressStart + (step * 4));
+            yield return InitializeManager<AnalyticsManager>("Analytics", progressStart + (step * 4), progressEnd);
         }
 
         private IEnumerator InitializeGameplay()
@@ -134,7 +135,7 @@ namespace CyberPickle.Core.Boot
         }
 
         private IEnumerator InitializeManager<M>(string systemName, float startProgress, float endProgress)
-    where M : Manager<M>, IInitializable
+            where M : Manager<M>, IInitializable
         {
             Debug.Log($"<color=yellow>[BootManager] Initializing {systemName}...</color>");
 
@@ -174,5 +175,6 @@ namespace CyberPickle.Core.Boot
         }
     }
 }
+
 
 

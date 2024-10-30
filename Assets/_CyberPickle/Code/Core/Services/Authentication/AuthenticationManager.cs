@@ -1,3 +1,16 @@
+// File: Assets/Code/Core/Services/Authentication/AuthenticationManager.cs
+//
+// Purpose: Manages authentication state in the game.
+// Provides centralized control over user authentication.
+//
+// Dependencies:
+// - Unity.Services.Authentication for base authentication
+// - CyberPickle.Core.Events for game-wide event system
+// - CyberPickle.Core.Management for base manager pattern
+//
+// Created: 2024-01-13
+// Updated: 2024-01-14
+
 using UnityEngine;
 using System;
 using System.Threading.Tasks;
@@ -5,28 +18,23 @@ using Unity.Services.Core;
 using Unity.Services.Authentication;
 using CyberPickle.Core.Management;
 using CyberPickle.Core.Events;
-using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.Interfaces;
-using System.Collections.Generic;
 
 namespace CyberPickle.Core.Services.Authentication
 {
     public class AuthenticationManager : Manager<AuthenticationManager>, IInitializable
     {
         private AuthenticationState currentState = AuthenticationState.NotInitialized;
-        private ProfileContainer profileContainer;
-        private AuthenticationEvents events;
+        private AuthenticationEvents authEvents;
         private bool isInitialized;
 
         public AuthenticationState CurrentState => currentState;
         public bool IsSignedIn => AuthenticationService.Instance.IsSignedIn;
         public string CurrentPlayerId => AuthenticationService.Instance.PlayerId;
-        public ProfileData CurrentProfile => profileContainer?.ActiveProfile;
 
         protected override void OnManagerAwake()
         {
-            events = new AuthenticationEvents();
-            profileContainer = ProfileContainer.Load();
+            authEvents = new AuthenticationEvents();
         }
 
         public async void Initialize()
@@ -46,7 +54,7 @@ namespace CyberPickle.Core.Services.Authentication
                 // Check for cached session
                 if (AuthenticationService.Instance.SessionTokenExists)
                 {
-                    events.InvokeSessionTokenFound(AuthenticationService.Instance.Profile);
+                    authEvents.InvokeSessionTokenFound(AuthenticationService.Instance.PlayerId);
                 }
 
                 SetState(AuthenticationState.NotAuthenticated);
@@ -94,16 +102,8 @@ namespace CyberPickle.Core.Services.Authentication
 
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
 
-                // If we have a cached profile, load it
-                var profile = profileContainer.GetProfile(AuthenticationService.Instance.Profile);
-                if (profile == null)
-                {
-                    // Create new profile
-                    profile = CreateNewProfile(AuthenticationService.Instance.Profile,
-                                            AuthenticationService.Instance.PlayerId);
-                }
+                // Sign-in successful, events are handled in OnSignedIn
 
-                profileContainer.SetActiveProfile(profile.ProfileId);
                 return true;
             }
             catch (AuthenticationException e)
@@ -118,39 +118,13 @@ namespace CyberPickle.Core.Services.Authentication
             }
         }
 
-        public async Task<bool> SwitchProfileAsync(string profileId)
-        {
-            try
-            {
-                SetState(AuthenticationState.ProfileSwitchInProgress);
-
-                // Switch profile in Unity's Authentication service
-                AuthenticationService.Instance.SwitchProfile(profileId);
-
-                // Try to sign in with the new profile
-                await AuthenticationService.Instance.SignInAnonymouslyAsync();
-
-                // Update our profile container
-                profileContainer.SetActiveProfile(profileId);
-
-                events.InvokeProfileSwitched(profileId);
-                return true;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to switch profile: {e.Message}");
-                events.InvokeAuthenticationFailed($"Profile switch failed: {e.Message}");
-                return false;
-            }
-        }
-
         public void SignOut()
         {
             try
             {
                 AuthenticationService.Instance.SignOut();
                 SetState(AuthenticationState.NotAuthenticated);
-                events.InvokeSignedOut();
+                authEvents.InvokeSignedOut();
             }
             catch (Exception e)
             {
@@ -160,62 +134,26 @@ namespace CyberPickle.Core.Services.Authentication
 
         #endregion
 
-        #region Profile Management
-
-        private ProfileData CreateNewProfile(string profileId, string playerId)
-        {
-            var profile = new ProfileData(profileId, playerId);
-            profileContainer.AddProfile(profile);
-            events.InvokeNewProfileCreated(profileId);
-            return profile;
-        }
-
-        public void UpdateProfileProgress(float playTime, int score, float distance)
-        {
-            if (CurrentProfile != null)
-            {
-                CurrentProfile.UpdateProgress(playTime, score, distance);
-                profileContainer.UpdateProfile(CurrentProfile);
-            }
-        }
-
-        public void ClearProfileProgress(string profileId)
-        {
-            var profile = profileContainer.GetProfile(profileId);
-            if (profile != null)
-            {
-                profile.ClearProgress();
-                profileContainer.UpdateProfile(profile);
-            }
-        }
-
-        public IReadOnlyList<ProfileData> GetAllProfiles()
-        {
-            return profileContainer.Profiles;
-        }
-
-        #endregion
-
         #region Event Handlers
 
         private void OnSignedIn()
         {
             SetState(AuthenticationState.Authenticated);
-            events.InvokeAuthenticationCompleted(AuthenticationService.Instance.PlayerId);
+            authEvents.InvokeAuthenticationCompleted(AuthenticationService.Instance.PlayerId);
             Debug.Log($"Signed in successfully. Player ID: {AuthenticationService.Instance.PlayerId}");
         }
 
         private void OnSignedOut()
         {
             SetState(AuthenticationState.NotAuthenticated);
-            events.InvokeSignedOut();
+            authEvents.InvokeSignedOut();
             Debug.Log("Signed out successfully");
         }
 
         private void OnSessionExpired()
         {
             SetState(AuthenticationState.SessionExpired);
-            events.InvokeSessionExpired();
+            authEvents.InvokeSessionExpired();
             Debug.Log("Session expired");
         }
 
@@ -228,7 +166,7 @@ namespace CyberPickle.Core.Services.Authentication
             string errorMessage = $"Authentication error: {e.Message}";
             Debug.LogError(errorMessage);
             SetState(AuthenticationState.AuthenticationFailed);
-            events.InvokeAuthenticationFailed(errorMessage);
+            authEvents.InvokeAuthenticationFailed(errorMessage);
         }
 
         private void HandleRequestError(RequestFailedException e)
@@ -236,7 +174,7 @@ namespace CyberPickle.Core.Services.Authentication
             string errorMessage = $"Request failed: {e.Message} (Error Code: {e.ErrorCode})";
             Debug.LogError(errorMessage);
             SetState(AuthenticationState.AuthenticationFailed);
-            events.InvokeAuthenticationFailed(errorMessage);
+            authEvents.InvokeAuthenticationFailed(errorMessage);
         }
 
         #endregion
@@ -246,35 +184,55 @@ namespace CyberPickle.Core.Services.Authentication
             if (currentState != newState)
             {
                 currentState = newState;
-                events.InvokeAuthenticationStateChanged(newState);
+                authEvents.InvokeAuthenticationStateChanged(newState);
             }
         }
 
         #region Event Subscription Methods
 
+        public void SubscribeToAuthenticationStateChanged(Action<AuthenticationState> callback)
+            => authEvents.OnAuthenticationStateChanged += callback;
+
+        public void UnsubscribeFromAuthenticationStateChanged(Action<AuthenticationState> callback)
+            => authEvents.OnAuthenticationStateChanged -= callback;
+
         public void SubscribeToAuthenticationCompleted(Action<string> callback)
-            => events.OnAuthenticationCompleted += callback;
+            => authEvents.OnAuthenticationCompleted += callback;
+
         public void UnsubscribeFromAuthenticationCompleted(Action<string> callback)
-            => events.OnAuthenticationCompleted -= callback;
+            => authEvents.OnAuthenticationCompleted -= callback;
 
         public void SubscribeToAuthenticationFailed(Action<string> callback)
-            => events.OnAuthenticationFailed += callback;
+            => authEvents.OnAuthenticationFailed += callback;
+
         public void UnsubscribeFromAuthenticationFailed(Action<string> callback)
-            => events.OnAuthenticationFailed -= callback;
+            => authEvents.OnAuthenticationFailed -= callback;
 
-        public void SubscribeToProfileSwitched(Action<string> callback)
-            => events.OnProfileSwitched += callback;
-        public void UnsubscribeFromProfileSwitched(Action<string> callback)
-            => events.OnProfileSwitched -= callback;
+        // Session event subscriptions
+        public void SubscribeToSessionTokenFound(Action<string> callback)
+            => authEvents.OnSessionTokenFound += callback;
 
-        // Add more subscription methods as needed...
+        public void UnsubscribeFromSessionTokenFound(Action<string> callback)
+            => authEvents.OnSessionTokenFound -= callback;
+
+        public void SubscribeToSessionExpired(Action callback)
+            => authEvents.OnSessionExpired += callback;
+
+        public void UnsubscribeFromSessionExpired(Action callback)
+            => authEvents.OnSessionExpired -= callback;
+
+        public void SubscribeToSignedOut(Action callback)
+            => authEvents.OnSignedOut += callback;
+
+        public void UnsubscribeFromSignedOut(Action callback)
+            => authEvents.OnSignedOut -= callback;
 
         #endregion
 
         private void OnDestroy()
         {
             UnsubscribeFromAuthEvents();
-            profileContainer?.SaveProfiles();
+            // No profile container to save
         }
     }
 }

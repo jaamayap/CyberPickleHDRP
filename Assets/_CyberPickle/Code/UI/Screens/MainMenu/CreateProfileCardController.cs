@@ -1,12 +1,18 @@
 // File: Assets/Code/UI/Screens/MainMenu/CreateProfileCardController.cs
+//
+// Purpose: Controls the create profile card UI and transitions between card content and terminal interface.
+// This controller focuses solely on UI handling and delegates profile creation to the ProfileManager.
+//
+// Created: 2024-01-13
+// Updated: 2024-01-14
+
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 using System.Collections;
 using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Events;
 using System;
-using CyberPickle.Core.Services.Authentication.Data;
-using System.Linq;
 
 namespace CyberPickle.UI.Screens.MainMenu
 {
@@ -14,85 +20,93 @@ namespace CyberPickle.UI.Screens.MainMenu
     {
         [Header("Card Content")]
         [SerializeField] private GameObject cardContent;
-        [SerializeField] private TextMeshProUGUI plusIcon;
-        [SerializeField] private TextMeshProUGUI headerText;
-        [SerializeField] private TextMeshProUGUI descriptionText;
+        [SerializeField] private CanvasGroup cardContentCanvasGroup;
 
         [Header("Terminal Interface")]
-        [SerializeField] private CanvasGroup terminalInterface;
-        [SerializeField] private Image scanlineEffect;
-        [SerializeField] private Image glitchOverlay;
-        [SerializeField] private TextMeshProUGUI statusText;
-
-        [Header("Input Section")]
-        [SerializeField] private TextMeshProUGUI promptText;
+        [SerializeField] private GameObject terminalInterface;
+        [SerializeField] private CanvasGroup terminalCanvasGroup;
         [SerializeField] private TMP_InputField inputField;
-        [SerializeField] private Image blinkingCursor;
+        [SerializeField] private Button confirmButton;
+        [SerializeField] private Button cancelButton;
+        [SerializeField] private TextMeshProUGUI statusText;
 
         [Header("Validation")]
         [SerializeField] private GameObject validationSection;
-        [SerializeField] private TextMeshProUGUI[] validationTexts;
-        [SerializeField] private Image[] validationIcons;
+        [SerializeField] private TextMeshProUGUI[] validationMessages;
 
-        [Header("Buttons")]
-        [SerializeField] private Button confirmButton;
-        [SerializeField] private Button cancelButton;
+        [Header("Animation Settings")]
+        [SerializeField] private float transitionDuration = 0.5f;
 
-        [Header("Effects")]
-        [SerializeField] private TextMeshProUGUI compilationText;
-        [SerializeField] private Image progressBar;
-
-        [Header("Settings")]
-        [SerializeField] private float typewriterSpeed = 0.05f;
-        [SerializeField] private float validationCheckDelay = 0.5f;
-
-        private AuthenticationManager authManager;
         private bool isProcessing;
-        private Coroutine currentTypewriter;
-
-        // Event to notify when profile is created
-        public event Action<string, string> OnProfileCreated; // profileId, displayName
+        private ProfileManager profileManager;
+        private AuthenticationManager authManager;
+        private string pendingDisplayName;
 
         private void Awake()
         {
+            profileManager = ProfileManager.Instance;
             authManager = AuthenticationManager.Instance;
-            InitializeUI();
+            InitializeComponents();
+            SetInitialState();
+            SubscribeToEvents();
         }
 
-        private void InitializeUI()
+        private void InitializeComponents()
         {
-            // Hide terminal interface initially
-            if (terminalInterface != null)
-            {
-                terminalInterface.alpha = 0;
-                terminalInterface.gameObject.SetActive(false);
-            }
+            // Setup CanvasGroups
+            if (cardContentCanvasGroup == null && cardContent != null)
+                cardContentCanvasGroup = cardContent.GetComponent<CanvasGroup>() ?? cardContent.gameObject.AddComponent<CanvasGroup>();
 
-            // Hide validation section
-            if (validationSection != null)
-            {
-                validationSection.SetActive(false);
-            }
+            if (terminalCanvasGroup == null && terminalInterface != null)
+                terminalCanvasGroup = terminalInterface.GetComponent<CanvasGroup>() ?? terminalInterface.gameObject.AddComponent<CanvasGroup>();
 
-            // Setup input field
-            if (inputField != null)
-            {
-                inputField.onValueChanged.AddListener(OnInputChanged);
-                inputField.gameObject.SetActive(false);
-            }
+            // Setup button listeners
+            Button cardButton = cardContent.GetComponent<Button>();
+            if (cardButton == null)
+                cardButton = cardContent.gameObject.AddComponent<Button>();
 
-            // Setup buttons
+            cardButton.onClick.AddListener(StartProfileCreation);
+
             if (confirmButton != null)
-            {
-                confirmButton.onClick.AddListener(OnConfirmProfile);
-                confirmButton.gameObject.SetActive(false);
-            }
+                confirmButton.onClick.AddListener(HandleProfileConfirmation);
 
             if (cancelButton != null)
+                cancelButton.onClick.AddListener(CancelProfileCreation);
+
+            if (inputField != null)
+                inputField.onValueChanged.AddListener(ValidateInput);
+        }
+
+        private void SubscribeToEvents()
+        {
+            if (profileManager != null)
             {
-                cancelButton.onClick.AddListener(OnCancelProfile);
-                cancelButton.gameObject.SetActive(false);
+                profileManager.SubscribeToNewProfileCreated(HandleProfileCreated);
             }
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            if (profileManager != null)
+            {
+                profileManager.UnsubscribeFromNewProfileCreated(HandleProfileCreated);
+            }
+        }
+
+        private void SetInitialState()
+        {
+            // Ensure CardContent is visible and active
+            SetCardContentActive(true);
+            if (cardContent != null)
+                cardContent.SetActive(true);
+
+            // Ensure Terminal Interface is hidden initially
+            SetTerminalInterfaceActive(false);
+            if (terminalInterface != null)
+                terminalInterface.SetActive(false);
+
+            if (validationSection != null)
+                validationSection.SetActive(false);
         }
 
         public void StartProfileCreation()
@@ -100,190 +114,234 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (isProcessing) return;
             isProcessing = true;
 
-            StartCoroutine(ProfileCreationSequence());
+            // Activate terminal interface but with 0 alpha
+            if (terminalInterface != null)
+            {
+                terminalInterface.SetActive(true);
+                if (terminalCanvasGroup != null)
+                    terminalCanvasGroup.alpha = 0f;
+            }
+
+            StartCoroutine(TransitionToTerminal());
         }
 
-        private IEnumerator ProfileCreationSequence()
+        private IEnumerator TransitionToTerminal()
         {
-            // Show terminal interface
-            terminalInterface.gameObject.SetActive(true);
+            Debug.Log("Starting transition to terminal interface");
 
-            // Fade in terminal interface
-            float elapsed = 0;
-            while (elapsed < 1f)
+            float elapsedTime = 0f;
+            while (elapsedTime < transitionDuration)
             {
-                elapsed += Time.deltaTime;
-                terminalInterface.alpha = elapsed;
+                elapsedTime += Time.deltaTime;
+                float normalizedTime = elapsedTime / transitionDuration;
+
+                SetCardContentActive(false, 1 - normalizedTime);
+                SetTerminalInterfaceActive(true, normalizedTime);
+
                 yield return null;
             }
 
-            // Initial messages
-            yield return TypewriterEffect(statusText, "INITIALIZING NEW AGENT PROFILE...");
-            yield return new WaitForSeconds(0.5f);
-            yield return TypewriterEffect(promptText, "ENTER CODENAME:");
+            // Ensure final states
+            if (cardContent != null)
+                cardContent.SetActive(false);
 
-            // Show input field
-            inputField.gameObject.SetActive(true);
-            inputField.ActivateInputField();
+            FinalizeTransition();
 
             isProcessing = false;
+            Debug.Log("Terminal interface transition completed");
         }
 
-        private void OnInputChanged(string value)
+        private void FinalizeTransition()
         {
-            if (string.IsNullOrEmpty(value)) return;
+            SetCardContentActive(false);
+            SetTerminalInterfaceActive(true);
 
-            if (!validationSection.activeSelf)
+            if (inputField != null)
             {
+                inputField.text = string.Empty;
+                inputField.Select();
+                inputField.ActivateInputField();
+            }
+
+            if (validationSection != null)
                 validationSection.SetActive(true);
-            }
-
-            // Start validation checks
-            StartCoroutine(ValidateInput(value));
         }
 
-        private IEnumerator ValidateInput(string input)
+        private void ValidateInput(string input)
         {
-            // Length check
-            validationTexts[0].text = "ANALYZING CODENAME LENGTH...";
-            yield return new WaitForSeconds(validationCheckDelay);
-            bool lengthValid = input.Length >= 3 && input.Length <= 20;
-            UpdateValidation(0, lengthValid,
-                lengthValid ? "LENGTH: VALID" : "LENGTH: INVALID (3-20 CHARS)");
-
-            // Character check
-            validationTexts[1].text = "VALIDATING CHARACTERS...";
-            yield return new WaitForSeconds(validationCheckDelay);
-            bool charsValid = System.Text.RegularExpressions.Regex.IsMatch(input, "^[a-zA-Z0-9_]+$");
-            UpdateValidation(1, charsValid,
-                charsValid ? "CHARACTERS: VALID" : "CHARACTERS: INVALID (A-Z, 0-9, _)");
-
-            // Uniqueness check
-            validationTexts[2].text = "CHECKING DATABASE...";
-            yield return new WaitForSeconds(validationCheckDelay);
-            bool isUnique = !authManager.GetAllProfiles().Any(p =>
-                p.DisplayName.Equals(input, StringComparison.OrdinalIgnoreCase));
-            UpdateValidation(2, isUnique,
-                isUnique ? "DATABASE: UNIQUE" : "DATABASE: NAME EXISTS");
-
-            // Show/hide confirm button based on all validations
-            confirmButton.gameObject.SetActive(lengthValid && charsValid && isUnique);
-        }
-
-        private void UpdateValidation(int index, bool isValid, string message)
-        {
-            if (validationIcons != null && index < validationIcons.Length)
+            if (string.IsNullOrEmpty(input))
             {
-                validationIcons[index].color = isValid ? Color.green : Color.red;
+                SetConfirmButtonState(false);
+                return;
             }
 
-            if (validationTexts != null && index < validationTexts.Length)
-            {
-                validationTexts[index].text = message;
-            }
+            bool isValid = true;
+
+            // Length check (3-20 characters)
+            isValid &= input.Length >= 3 && input.Length <= 20;
+
+            // Character check (letters, numbers, underscore)
+            isValid &= System.Text.RegularExpressions.Regex.IsMatch(input, "^[a-zA-Z0-9_]+$");
+
+            SetConfirmButtonState(isValid);
+            UpdateValidationMessages(input);
         }
 
-        private void OnConfirmProfile()
+        private void HandleProfileConfirmation()
         {
-            if (isProcessing) return;
-            isProcessing = true;
+            if (string.IsNullOrWhiteSpace(inputField.text)) return;
 
-            StartCoroutine(CreateProfileSequence());
-        }
+            pendingDisplayName = inputField.text.Trim();
 
-        private IEnumerator CreateProfileSequence()
-        {
-            // Hide input and validation
-            inputField.gameObject.SetActive(false);
-            validationSection.SetActive(false);
-
-            yield return TypewriterEffect(statusText, "COMPILING AGENT DATA...");
-
-            string displayName = inputField.text.Trim();
-            string profileId = $"{displayName.ToLower()}_{DateTime.UtcNow.Ticks}";
-
-            bool success = true;
-            string errorMessage = string.Empty;
+            // Disable input during profile creation
+            SetInteractable(false);
+            UpdateStatus("Creating profile...");
 
             try
             {
-                // Create profile
-                var newProfile = new ProfileData(profileId, authManager.CurrentPlayerId);
-                newProfile.UpdateDisplayName(displayName);
+                // Generate profileId
+                string profileId = $"{pendingDisplayName.ToLower()}_{DateTime.UtcNow.Ticks}";
 
-                // Notify listeners
-                OnProfileCreated?.Invoke(profileId, displayName);
+                // Get playerId from AuthenticationManager
+                string playerId = authManager.CurrentPlayerId;
+
+                // Create the profile
+                profileManager.CreateProfile(profileId, playerId, pendingDisplayName);
+
+                // Success will be handled in HandleProfileCreated
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                success = false;
-                errorMessage = e.Message;
-                Debug.LogError($"Failed to create profile: {errorMessage}");
+                SetInteractable(true);
+                UpdateStatus("Failed to create profile. Please try again.");
+                Debug.LogError($"Error creating profile: {ex.Message}");
+            }
+        }
+
+        private void HandleProfileCreated(string profileId)
+        {
+            // Only process if we have a valid status text component
+            if (statusText == null) return;
+
+            UpdateStatus("Profile created successfully!");
+            if (gameObject != null && gameObject.activeInHierarchy)
+            {
+                // Instead of immediately starting the coroutine, delay it slightly
+                StartCoroutine(DelayedTransition());
+            }
+        }
+
+        private IEnumerator DelayedTransition()
+        {
+            // Small delay to ensure all state changes are completed
+            yield return new WaitForSeconds(0.1f);
+
+            // Check again if the object is still active
+            if (gameObject != null && gameObject.activeInHierarchy)
+            {
+                StartCoroutine(TransitionToCard());
+            }
+        }
+
+        private void CancelProfileCreation()
+        {
+            StartCoroutine(TransitionToCard());
+        }
+
+        private IEnumerator TransitionToCard()
+        {
+            float elapsedTime = 0f;
+            while (elapsedTime < transitionDuration)
+            {
+                elapsedTime += Time.deltaTime;
+                float normalizedTime = elapsedTime / transitionDuration;
+
+                SetCardContentActive(true, normalizedTime);
+                SetTerminalInterfaceActive(false, 1 - normalizedTime);
+
+                yield return null;
             }
 
-            // Show appropriate message based on success
-            yield return TypewriterEffect(statusText,
-                success ? "PROFILE CREATION SUCCESSFUL" : "ERROR: PROFILE CREATION FAILED");
-
-            yield return new WaitForSeconds(1f);
-            ResetCard();
-        }
-
-        private void OnCancelProfile()
-        {
-            if (isProcessing) return;
-            ResetCard();
-        }
-
-        private void ResetCard()
-        {
-            StopAllCoroutines();
+            SetInitialState();
             isProcessing = false;
-
-            // Reset UI elements
-            terminalInterface.gameObject.SetActive(false);
-            validationSection.SetActive(false);
-            inputField.text = "";
-            inputField.gameObject.SetActive(false);
-            confirmButton.gameObject.SetActive(false);
-            cancelButton.gameObject.SetActive(false);
-
-            // Reset card content
-            cardContent.SetActive(true);
         }
 
-        private IEnumerator TypewriterEffect(TextMeshProUGUI textComponent, string message)
+        private void SetCardContentActive(bool active, float alpha = 1f)
         {
-            if (currentTypewriter != null)
+            if (cardContentCanvasGroup != null)
             {
-                StopCoroutine(currentTypewriter);
+                cardContentCanvasGroup.alpha = alpha;
+                cardContentCanvasGroup.interactable = active;
+                cardContentCanvasGroup.blocksRaycasts = active;
             }
+        }
 
-            textComponent.text = "";
-            foreach (char c in message)
+        private void SetTerminalInterfaceActive(bool active, float alpha = 1f)
+        {
+            if (terminalCanvasGroup != null)
             {
-                textComponent.text += c;
-                yield return new WaitForSeconds(typewriterSpeed);
+                terminalCanvasGroup.alpha = alpha;
+                terminalCanvasGroup.interactable = active;
+                terminalCanvasGroup.blocksRaycasts = active;
             }
+        }
+
+        private void SetConfirmButtonState(bool enabled)
+        {
+            if (confirmButton != null)
+                confirmButton.interactable = enabled;
+        }
+
+        private void SetInteractable(bool interactable)
+        {
+            if (inputField != null)
+                inputField.interactable = interactable;
+            if (confirmButton != null)
+                confirmButton.interactable = interactable;
+            if (cancelButton != null)
+                cancelButton.interactable = interactable;
+        }
+
+        private void UpdateStatus(string message)
+        {
+            if (statusText != null)
+                statusText.text = message;
+        }
+
+        private void UpdateValidationMessages(string input)
+        {
+            if (validationMessages == null || validationMessages.Length == 0)
+                return;
+
+            // Update validation messages based on current input
+            if (validationMessages.Length > 0)
+                validationMessages[0].text = input.Length >= 3 && input.Length <= 20 ?
+                    "Length: Valid" : "Length: Must be 3-20 characters";
+
+            if (validationMessages.Length > 1)
+                validationMessages[1].text = System.Text.RegularExpressions.Regex.IsMatch(input, "^[a-zA-Z0-9_]+$") ?
+                    "Characters: Valid" : "Characters: Use only letters, numbers, and underscore";
         }
 
         private void OnDestroy()
         {
-            // Clean up event listeners
-            if (inputField != null)
+            UnsubscribeFromEvents();
+
+            if (cardContent != null)
             {
-                inputField.onValueChanged.RemoveListener(OnInputChanged);
+                var button = cardContent.GetComponent<Button>();
+                if (button != null)
+                    button.onClick.RemoveListener(StartProfileCreation);
             }
 
             if (confirmButton != null)
-            {
-                confirmButton.onClick.RemoveListener(OnConfirmProfile);
-            }
+                confirmButton.onClick.RemoveListener(HandleProfileConfirmation);
 
             if (cancelButton != null)
-            {
-                cancelButton.onClick.RemoveListener(OnCancelProfile);
-            }
+                cancelButton.onClick.RemoveListener(CancelProfileCreation);
+
+            if (inputField != null)
+                inputField.onValueChanged.RemoveListener(ValidateInput);
         }
     }
 }

@@ -1,8 +1,11 @@
 // File: Assets/Code/UI/Windows/Auth/AuthPanelController.cs
 // Namespace: CyberPickle.UI.Windows.Auth
 //
-// Purpose: Controls the authentication panel UI and process
-// Responds to authentication events and manages the terminal display
+// Purpose: Controls the authentication panel UI and process.
+// Responds to authentication events and manages the terminal display.
+//
+// Created: 2024-01-13
+// Updated: 2024-01-14
 
 using UnityEngine;
 using TMPro;
@@ -31,6 +34,7 @@ namespace CyberPickle.UI.Windows.Auth
         [SerializeField] private float panelFadeInDuration = 0.5f;
 
         private AuthenticationManager authManager;
+        private ProfileManager profileManager;
         private bool isInitialized;
         private Coroutine currentTypewriterCoroutine;
         private Coroutine loadingCoroutine;
@@ -39,6 +43,7 @@ namespace CyberPickle.UI.Windows.Auth
         private void Awake()
         {
             authManager = AuthenticationManager.Instance;
+            profileManager = ProfileManager.Instance;
             SetupCanvasGroup();
         }
 
@@ -70,7 +75,11 @@ namespace CyberPickle.UI.Windows.Auth
             {
                 authManager.SubscribeToAuthenticationCompleted(OnAuthenticationCompleted);
                 authManager.SubscribeToAuthenticationFailed(OnAuthenticationFailed);
-                authManager.SubscribeToProfileSwitched(OnProfileSwitched);
+            }
+
+            if (profileManager != null)
+            {
+                profileManager.SubscribeToProfileSwitched(OnProfileSwitched);
             }
         }
 
@@ -82,7 +91,11 @@ namespace CyberPickle.UI.Windows.Auth
             {
                 authManager.UnsubscribeFromAuthenticationCompleted(OnAuthenticationCompleted);
                 authManager.UnsubscribeFromAuthenticationFailed(OnAuthenticationFailed);
-                authManager.UnsubscribeFromProfileSwitched(OnProfileSwitched);
+            }
+
+            if (profileManager != null)
+            {
+                profileManager.UnsubscribeFromProfileSwitched(OnProfileSwitched);
             }
         }
 
@@ -185,7 +198,7 @@ namespace CyberPickle.UI.Windows.Auth
             StartCoroutine(TypewriterEffect(debugConsole, $"> Authentication successful. PlayerID: {playerId}"));
             UpdateStatus("Authentication Complete");
 
-            // Trigger profile loading event
+            // Trigger profile selection panel or next step
             GameEvents.OnProfileLoadRequested.Invoke();
         }
 
@@ -207,14 +220,15 @@ namespace CyberPickle.UI.Windows.Auth
 
         private void UpdateStatus(string status)
         {
-            statusText.text = $"> {status}";
+            if (statusText != null)
+                statusText.text = $"> {status}";
         }
 
         private void ClearConsole()
         {
-            debugConsole.text = "";
-            statusText.text = "";
-            resultText.text = "";
+            if (debugConsole != null) debugConsole.text = "";
+            if (statusText != null) statusText.text = "";
+            if (resultText != null) resultText.text = "";
         }
 
         private void OnDestroy()

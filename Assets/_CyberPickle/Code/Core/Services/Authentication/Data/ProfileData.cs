@@ -7,89 +7,93 @@ namespace CyberPickle.Core.Services.Authentication.Data
     public class ProfileData
     {
         // Authentication Data
-        public string ProfileId { get; private set; }
-        public string PlayerId { get; private set; }
-        public DateTime CreatedAt { get; private set; }
-        public DateTime LastLoginAt { get; private set; }
+        [SerializeField]
+        private string profileId;
+        [SerializeField]
+        private string playerId;
 
         // Profile Metadata
-        public string DisplayName { get; private set; }
-        public bool HasSaveData { get; private set; }
-        public float TotalPlayTime { get; private set; }
-        public int HighestScore { get; private set; }
-        public float FurthestDistance { get; private set; }
+        [SerializeField]
+        private string displayName;
+        [SerializeField]
+        private bool hasSaveData;
+        [SerializeField]
+        private float totalPlayTime;
+        [SerializeField]
+        private int highestScore;
+        [SerializeField]
+        private float furthestDistance;
 
         // Session Data
-        public string SessionToken { get; private set; }
-        public bool IsActive { get; private set; }
+        [SerializeField]
+        private bool isActive;
 
-        public ProfileData(string profileId, string playerId)
+        // Serialized DateTime as ticks
+        [SerializeField]
+        private long createdAtTicks;
+        [SerializeField]
+        private long lastLoginAtTicks;
+
+        // Public Properties for Access
+        public string ProfileId => profileId;
+        public string PlayerId => playerId;
+        public string DisplayName => displayName;
+        public bool HasSaveData => hasSaveData;
+        public float TotalPlayTime => totalPlayTime;
+        public int HighestScore => highestScore;
+        public float FurthestDistance => furthestDistance;
+        public bool IsActive => isActive;
+        public DateTime CreatedAt => new DateTime(createdAtTicks);
+        public DateTime LastLoginAt => new DateTime(lastLoginAtTicks);
+
+        // Constructors
+        public ProfileData(string profileId, string playerId, string displayName)
         {
-            ProfileId = profileId;
-            PlayerId = playerId;
-            CreatedAt = DateTime.UtcNow;
-            LastLoginAt = DateTime.UtcNow;
-            DisplayName = $"Player_{profileId}";
-            HasSaveData = false;
-            IsActive = true;
+            this.profileId = profileId;
+            this.playerId = playerId;
+            this.displayName = displayName;
+            this.createdAtTicks = DateTime.UtcNow.Ticks;
+            this.lastLoginAtTicks = DateTime.UtcNow.Ticks;
+            this.isActive = false;
+            this.hasSaveData = false;
+            this.totalPlayTime = 0f;
+            this.highestScore = 0;
+            this.furthestDistance = 0f;
         }
 
+        // Methods to Update Profile Data
         public void UpdateLoginTime()
         {
-            LastLoginAt = DateTime.UtcNow;
-        }
-
-        public void UpdateSessionToken(string token)
-        {
-            SessionToken = token;
-            LastLoginAt = DateTime.UtcNow;
+            lastLoginAtTicks = DateTime.UtcNow.Ticks;
         }
 
         public void UpdateDisplayName(string name)
         {
             if (!string.IsNullOrEmpty(name))
             {
-                DisplayName = name;
+                displayName = name;
             }
         }
 
         public void UpdateProgress(float playTime, int score, float distance)
         {
-            TotalPlayTime = playTime;
-            if (score > HighestScore) HighestScore = score;
-            if (distance > FurthestDistance) FurthestDistance = distance;
-            HasSaveData = true;
+            totalPlayTime = playTime;
+            if (score > highestScore) highestScore = score;
+            if (distance > furthestDistance) furthestDistance = distance;
+            hasSaveData = true;
         }
 
         public void ClearProgress()
         {
-            TotalPlayTime = 0;
-            HighestScore = 0;
-            FurthestDistance = 0;
-            HasSaveData = false;
+            totalPlayTime = 0f;
+            highestScore = 0;
+            furthestDistance = 0f;
+            hasSaveData = false;
         }
 
         public void SetActive(bool active)
         {
-            IsActive = active;
-        }
-
-        public string ToJson()
-        {
-            return JsonUtility.ToJson(this);
-        }
-
-        public static ProfileData FromJson(string json)
-        {
-            try
-            {
-                return JsonUtility.FromJson<ProfileData>(json);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to parse ProfileData from JSON: {e.Message}");
-                return null;
-            }
+            isActive = active;
         }
     }
 }

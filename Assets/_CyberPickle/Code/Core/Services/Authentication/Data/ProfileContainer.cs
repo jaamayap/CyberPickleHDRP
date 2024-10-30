@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEngine;
 
@@ -8,10 +9,30 @@ namespace CyberPickle.Core.Services.Authentication.Data
     [Serializable]
     public class ProfileContainer
     {
+        [SerializeField]
         private List<ProfileData> profiles = new List<ProfileData>();
-        private const string PROFILES_PREFS_KEY = "CyberPickle_Profiles";
+
+        // Removed static readonly initialization
+        // private static readonly string ProfilesFilePath = Path.Combine(Application.persistentDataPath, "profiles.json");
+
+        // Use a private static field without initialization
+        private static string profilesFilePath;
+
+        // Lazy-initialized static property to get the file path
+        private static string ProfilesFilePath
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(profilesFilePath))
+                {
+                    profilesFilePath = Path.Combine(Application.persistentDataPath, "profiles.json");
+                }
+                return profilesFilePath;
+            }
+        }
 
         public IReadOnlyList<ProfileData> Profiles => profiles.AsReadOnly();
+
         public ProfileData ActiveProfile => profiles.FirstOrDefault(p => p.IsActive);
 
         public void AddProfile(ProfileData profile)
@@ -55,20 +76,30 @@ namespace CyberPickle.Core.Services.Authentication.Data
 
         public void SaveProfiles()
         {
-            var json = JsonUtility.ToJson(this);
-            PlayerPrefs.SetString(PROFILES_PREFS_KEY, json);
-            PlayerPrefs.Save();
+            try
+            {
+                var json = JsonUtility.ToJson(this, prettyPrint: true);
+                File.WriteAllText(ProfilesFilePath, json);
+                Debug.Log($"Profiles saved successfully to {ProfilesFilePath}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to save profiles: {e.Message}");
+            }
         }
 
         public static ProfileContainer Load()
         {
             try
             {
-                var json = PlayerPrefs.GetString(PROFILES_PREFS_KEY, "");
-                if (string.IsNullOrEmpty(json))
+                if (!File.Exists(ProfilesFilePath))
                 {
+                    Debug.Log("Profiles file does not exist. Returning new ProfileContainer.");
                     return new ProfileContainer();
                 }
+
+                var json = File.ReadAllText(ProfilesFilePath);
+                Debug.Log($"Profiles loaded from {ProfilesFilePath}:\n{json}");
                 return JsonUtility.FromJson<ProfileContainer>(json);
             }
             catch (Exception e)
@@ -81,8 +112,11 @@ namespace CyberPickle.Core.Services.Authentication.Data
         public void ClearAll()
         {
             profiles.Clear();
-            PlayerPrefs.DeleteKey(PROFILES_PREFS_KEY);
-            PlayerPrefs.Save();
+            if (File.Exists(ProfilesFilePath))
+            {
+                File.Delete(ProfilesFilePath);
+            }
         }
     }
 }
+
