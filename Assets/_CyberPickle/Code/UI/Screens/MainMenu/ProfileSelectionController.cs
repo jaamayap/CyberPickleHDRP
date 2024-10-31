@@ -4,7 +4,7 @@
 // Manages profile card creation, selection, and animation.
 //
 // Created: 2024-01-13
-// Updated: 2024-01-14
+// Updated: 2024-01-15
 //
 // Dependencies:
 // - CyberPickle.Core.Services.Authentication for authentication management
@@ -15,12 +15,16 @@ using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 using System.Collections;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Authentication.Data;
-using System.Collections.Generic;
+using CyberPickle.Core.Services.Authentication.Flow;
+using CyberPickle.Core.Services.Authentication.Flow.Commands;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
-using System.Linq;
+using System;
 
 namespace CyberPickle.UI.Screens.MainMenu
 {
@@ -45,38 +49,62 @@ namespace CyberPickle.UI.Screens.MainMenu
         [SerializeField] private float transitionDuration = 0.5f;
         [SerializeField] private Vector3 cornerPosition = new Vector3(800f, 400f, 0f);
         [SerializeField] private Vector3 cornerScale = new Vector3(0.7f, 0.7f, 0.7f);
+        [SerializeField] private float statusMessageDuration = 3f;
 
         [Header("Canvas References")]
-        [SerializeField] private Canvas mainCanvas; 
+        [SerializeField] private Canvas mainCanvas;
 
         private AuthenticationManager authManager;
         private ProfileManager profileManager;
+        private AuthenticationFlowManager flowManager;
         private List<GameObject> instantiatedCards = new List<GameObject>();
         private CreateProfileCardController createProfileCard;
         private bool isTransitioning;
-        private GameObject currentActiveCard; // To keep track of the active card
+        private Coroutine statusMessageCoroutine;
+
+        #region Initialization
 
         private void Awake()
         {
-            authManager = AuthenticationManager.Instance;
-            profileManager = ProfileManager.Instance;
-            
+            Debug.Log("[ProfileSelection] Awake called");
+            InitializeManagers();
+            ValidateReferences();
         }
 
         private void Start()
         {
+            Debug.Log("[ProfileSelection] Start called");
+            if (!ValidateManagers()) return;
+
             InitializeUI();
             SubscribeToEvents();
-
-            // Load profiles after a short delay to ensure authentication is complete
-            StartCoroutine(DelayedProfileLoad());
         }
 
-        private IEnumerator DelayedProfileLoad()
+        private void InitializeManagers()
         {
-            yield return new WaitForSeconds(0.5f);
-            LoadProfiles();
-            UpdateUIState();
+            authManager = AuthenticationManager.Instance;
+            profileManager = ProfileManager.Instance;
+            flowManager = AuthenticationFlowManager.Instance;
+        }
+
+        private bool ValidateManagers()
+        {
+            if (authManager == null || profileManager == null || flowManager == null)
+            {
+                Debug.LogError("[ProfileSelection] Required managers are null!");
+                return false;
+            }
+            return true;
+        }
+
+        private void ValidateReferences()
+        {
+            if (profilesContainer == null)
+                Debug.LogError("[ProfileSelection] profilesContainer is null!");
+            if (profileCardPrefab == null)
+                Debug.LogError("[ProfileSelection] profileCardPrefab is null!");
+            if (createProfileCardPrefab == null)
+                Debug.LogError("[ProfileSelection] createProfileCardPrefab is null!");
         }
 
         private void InitializeUI()
@@ -87,22 +115,35 @@ namespace CyberPickle.UI.Screens.MainMenu
             UpdateHeaderInfo();
             backButton.onClick.AddListener(HandleBackButton);
 
-            // Initialize create profile card
+            InitializeCreateProfileCard();
+        }
+
+        private void InitializeCreateProfileCard()
+        {
             GameObject createCardObject = Instantiate(createProfileCardPrefab, profilesContainer);
             createProfileCard = createCardObject.GetComponent<CreateProfileCardController>();
         }
 
+        #endregion
+
+        #region Event Handling
+
         private void SubscribeToEvents()
         {
-            if (profileManager != null)
-            {
-                profileManager.SubscribeToNewProfileCreated(HandleProfileCreated);
-                profileManager.SubscribeToProfileSwitched(HandleProfileSwitched);
-            }
+            Debug.Log("[ProfileSelection] Subscribing to events");
 
             if (authManager != null)
             {
+                Debug.Log("[ProfileSelection] Subscribing to AuthManager events");
                 authManager.SubscribeToAuthenticationStateChanged(HandleAuthStateChanged);
+                authManager.SubscribeToAuthenticationCompleted(HandleAuthenticationCompleted);
+            }
+
+            if (profileManager != null)
+            {
+                Debug.Log("[ProfileSelection] Subscribing to ProfileManager events");
+                profileManager.SubscribeToNewProfileCreated(HandleProfileCreated);
+                profileManager.SubscribeToProfileSwitched(HandleProfileSwitched);
             }
         }
 
@@ -117,8 +158,188 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (authManager != null)
             {
                 authManager.UnsubscribeFromAuthenticationStateChanged(HandleAuthStateChanged);
+                authManager.UnsubscribeFromAuthenticationCompleted(HandleAuthenticationCompleted);
             }
         }
+
+        private void HandleAuthStateChanged(AuthenticationState state)
+        {
+            Debug.Log($"[ProfileSelection] Auth state changed to: {state}");
+
+            if (state == AuthenticationState.Authenticated)
+            {
+                Debug.Log("[ProfileSelection] Authentication completed, loading profiles");
+                LoadProfiles();
+            }
+        }
+
+        private void HandleAuthenticationCompleted(string playerId)
+        {
+            Debug.Log($"[ProfileSelection] Authentication completed for player: {playerId}");
+            LoadProfiles();
+        }
+
+        private void HandleProfileCreated(string profileId)
+        {
+            if (!gameObject.activeInHierarchy) return;
+
+            Debug.Log($"[ProfileSelection] HandleProfileCreated called for profile: {profileId}");
+
+            var profiles = profileManager.GetAllProfiles();
+            var newProfile = profiles.FirstOrDefault(p => p.ProfileId == profileId);
+
+            if (newProfile != null)
+            {
+                CreateProfileCard(newProfile);
+                var card = instantiatedCards.LastOrDefault();
+                if (card != null && card.activeInHierarchy)
+                {
+                    Debug.Log($"[ProfileSelection] Starting animation for new profile card: {newProfile.DisplayName}");
+                    StartCoroutine(AnimateProfileCard(newProfile));
+                }
+            }
+        }
+
+        private void HandleProfileSwitched(string profileId)
+        {
+            if (isTransitioning) return;
+            UpdateUIState();
+        }
+
+        #endregion
+
+        #region Profile Management
+
+        private void LoadProfiles()
+        {
+            if (isTransitioning || !gameObject.activeInHierarchy)
+            {
+                Debug.LogWarning("[ProfileSelection] Cannot load profiles - transitioning or inactive");
+                return;
+            }
+
+            Debug.Log("[ProfileSelection] Starting LoadProfiles");
+            ClearExistingProfiles();
+
+            var profiles = profileManager.GetAllProfiles();
+            if (profiles == null)
+            {
+                Debug.LogError("[ProfileSelection] GetAllProfiles returned null!");
+                return;
+            }
+
+            Debug.Log($"[ProfileSelection] Found {profiles.Count} profiles");
+
+            var sortedProfiles = profiles
+                .OrderBy(p => p.ProfileId == "default" ? 0 : 1)
+                .ThenBy(p => p.CreatedAt)
+                .ToList();
+
+            foreach (var profile in sortedProfiles)
+            {
+                CreateProfileCard(profile);
+            }
+        }
+
+        private async void HandleProfileSelection(ProfileData profile)
+        {
+            if (isTransitioning || !gameObject.activeInHierarchy) return;
+
+            try
+            {
+                isTransitioning = true;
+                var command = new SelectProfileCommand(profileManager, profile.ProfileId);
+                await flowManager.ExecuteCommand(command);
+                StartCoroutine(AnimateProfileCard(profile));
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[ProfileSelection] Error selecting profile: {ex.Message}");
+                isTransitioning = false;
+                ShowTemporaryStatus("Failed to select profile", true);
+            }
+        }
+
+        private async void HandleProfileDeletion(ProfileData profile)
+        {
+            if (profile == null) return;
+
+            try
+            {
+                var command = new DeleteProfileCommand(profileManager, profile.ProfileId);
+                await flowManager.ExecuteCommand(command);
+
+                if (profileManager.ActiveProfile?.ProfileId == profile.ProfileId)
+                {
+                    await profileManager.ClearAllProfilesAsync();
+                    authManager.SignOut();
+                }
+
+                LoadProfiles();
+                UpdateUIState();
+                ShowTemporaryStatus("Profile deleted successfully");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[ProfileSelection] Error deleting profile: {ex.Message}");
+                ShowTemporaryStatus("Failed to delete profile", true);
+            }
+        }
+
+        private void ClearExistingProfiles()
+        {
+            foreach (var card in instantiatedCards.Where(card => card != null))
+            {
+                var cardController = card.GetComponent<ProfileCardController>();
+                if (cardController != null)
+                {
+                    cardController.OnProfileSelected -= HandleProfileSelection;
+                    cardController.OnProfileDeleted -= HandleProfileDeletion;
+                }
+                Destroy(card);
+            }
+
+            instantiatedCards.Clear();
+            Debug.Log("[ProfileSelection] Cleared existing profile cards");
+        }
+
+        #endregion
+
+        #region Profile Card Management
+
+        private void CreateProfileCard(ProfileData profile)
+        {
+            if (profile == null || !gameObject.activeInHierarchy) return;
+
+            Debug.Log($"[ProfileSelection] Creating profile card for {profile.DisplayName}");
+
+            GameObject cardObject = Instantiate(profileCardPrefab, profilesContainer);
+            if (cardObject == null)
+            {
+                Debug.LogError("[ProfileSelection] Failed to instantiate profile card prefab");
+                return;
+            }
+
+            cardObject.name = $"ProfileCard_{profile.DisplayName}";
+
+            var cardController = cardObject.GetComponent<ProfileCardController>();
+            if (cardController != null)
+            {
+                cardController.Initialize(profile);
+                cardController.OnProfileSelected += HandleProfileSelection;
+                cardController.OnProfileDeleted += HandleProfileDeletion;
+            }
+            else
+            {
+                Debug.LogError("[ProfileSelection] ProfileCardController component not found on prefab");
+            }
+
+            instantiatedCards.Add(cardObject);
+        }
+
+        #endregion
+
+        #region UI Updates
 
         private void UpdateHeaderInfo()
         {
@@ -129,151 +350,69 @@ namespace CyberPickle.UI.Screens.MainMenu
                 statusText.text = authManager.IsSignedIn ? "SYSTEM STATUS: ONLINE" : "SYSTEM STATUS: OFFLINE";
         }
 
-        private void LoadProfiles()
+        private void UpdateUIState()
         {
-            if (isTransitioning || !gameObject.activeInHierarchy) return;
+            if (isTransitioning) return;
 
-            Debug.Log("Loading profiles...");
-            ClearExistingProfiles();
+            UpdateHeaderInfo();
 
-            var profiles = profileManager.GetAllProfiles();
+            if (createProfileCard != null)
+                createProfileCard.gameObject.SetActive(authManager.IsSignedIn);
+        }
 
-            if (profiles == null || profiles.Count == 0)
+        private void ShowTemporaryStatus(string message, bool isError = false)
+        {
+            if (statusMessageCoroutine != null)
+                StopCoroutine(statusMessageCoroutine);
+
+            statusMessageCoroutine = StartCoroutine(ShowStatusMessageRoutine(message, isError));
+        }
+
+        private IEnumerator ShowStatusMessageRoutine(string message, bool isError)
+        {
+            if (statusText != null)
             {
-                Debug.Log("No profiles found");
-                return;
+                statusText.text = message;
+                statusText.color = isError ? Color.red : Color.white;
             }
 
-            Debug.Log($"Found {profiles.Count} profiles");
+            yield return new WaitForSeconds(statusMessageDuration);
 
-            // Sort profiles: default first, then by creation date
-            var sortedProfiles = profiles.OrderBy(p => p.ProfileId == "default" ? 0 : 1)
-                                        .ThenBy(p => p.CreatedAt);
-
-            foreach (var profile in sortedProfiles)
+            if (statusText != null)
             {
-                CreateProfileCard(profile);
+                statusText.text = authManager.IsSignedIn ? "SYSTEM STATUS: ONLINE" : "SYSTEM STATUS: OFFLINE";
+                statusText.color = Color.white;
             }
         }
 
-        private void CreateProfileCard(ProfileData profile)
+        private void HandleBackButton()
         {
-            if (profile == null || !gameObject.activeInHierarchy) return;
-
-            Debug.Log($"Creating profile card for {profile.DisplayName}");
-
-            GameObject card = Instantiate(profileCardPrefab, profilesContainer);
-            if (card == null)
-            {
-                Debug.LogError("Failed to instantiate profile card prefab");
-                return;
-            }
-
-            // Set a meaningful name for the GameObject
-            card.name = $"ProfileCard_{profile.DisplayName}";
-
-            ConfigureProfileCard(card, profile);
-            instantiatedCards.Add(card);
+            if (isTransitioning) return;
+            StartCoroutine(TransitionBackToAuth());
         }
 
-        private void ConfigureProfileCard(GameObject card, ProfileData profile)
-        {
-            // Configure card UI elements
-            var nameText = card.GetComponentInChildren<TextMeshProUGUI>();
-            if (nameText != null)
-            {
-                nameText.text = profile.DisplayName;
-                Debug.Log($"Set profile card name text: {profile.DisplayName}");
-            }
-            else
-            {
-                Debug.LogError("Profile card is missing TextMeshProUGUI component");
-            }
+        #endregion
 
-            // Add selection button listener
-            var selectButton = card.GetComponentInChildren<Button>();
-            if (selectButton != null)
-            {
-                selectButton.onClick.AddListener(() => HandleProfileSelection(card, profile));
-                Debug.Log($"Added selection listener for profile: {profile.DisplayName}");
-            }
-            else
-            {
-                Debug.LogError("Profile card is missing Button component");
-            }
+        #region UI Transitions
 
-            // Configure delete button
-            var deleteButton = card.GetComponentsInChildren<Button>()
-                .FirstOrDefault(b => b.gameObject.name.Contains("Delete"));
-            if (deleteButton != null)
-            {
-                deleteButton.onClick.AddListener(() => HandleProfileDeletion(profile));
-                Debug.Log($"Added deletion listener for profile: {profile.DisplayName}");
-            }
-            else
-            {
-                Debug.LogWarning("Profile card is missing Delete button");
-            }
-
-            RectTransform rectTransform = card.GetComponent<RectTransform>();
-            if (rectTransform != null)
-            {
-                // Set pivot to top-right corner
-                rectTransform.pivot = new Vector2(1f, 1f);
-
-                // Set anchor to top-right corner
-                rectTransform.anchorMin = new Vector2(1f, 1f);
-                rectTransform.anchorMax = new Vector2(1f, 1f);
-
-                // Optionally set offset to zero
-                rectTransform.anchoredPosition = Vector2.zero;
-            }
-            else
-            {
-                Debug.LogError("Profile card is missing RectTransform component");
-            }
-        }
-
-        private void HandleProfileCreated(string profileId)
-        {
-            if (!gameObject.activeInHierarchy) return;
-
-            Debug.Log($"HandleProfileCreated called for profile: {profileId}");
-
-            var profiles = profileManager.GetAllProfiles();
-            var newProfile = profiles.FirstOrDefault(p => p.ProfileId == profileId);
-
-            if (newProfile != null)
-            {
-                // Instead of reloading all profiles, just add the new one
-                CreateProfileCard(newProfile);
-
-                // Find the card we just created
-                var card = instantiatedCards.LastOrDefault();
-                if (card != null && card.activeInHierarchy)
-                {
-                    Debug.Log($"Starting animation for new profile card: {newProfile.DisplayName}");
-                    StartCoroutine(AnimateProfileCard(card));
-                }
-                else
-                {
-                    Debug.LogError("Failed to find or animate new profile card");
-                }
-            }
-        }
-
-        private IEnumerator AnimateProfileCard(GameObject selectedCard)
+        private IEnumerator AnimateProfileCard(ProfileData profile)
         {
             isTransitioning = true;
 
-            if (!gameObject.activeInHierarchy || selectedCard == null)
+            var selectedCardController = instantiatedCards
+                .Select(c => c.GetComponent<ProfileCardController>())
+                .FirstOrDefault(controller => controller != null && controller.ProfileData.ProfileId == profile.ProfileId);
+
+            if (selectedCardController == null)
             {
-                Debug.LogError("Cannot animate: GameObject inactive or card is null");
+                Debug.LogError("[ProfileSelection] Cannot animate: Selected card not found");
                 isTransitioning = false;
                 yield break;
             }
 
-            Debug.Log($"Starting profile card animation for {selectedCard.name}");
+            GameObject selectedCard = selectedCardController.gameObject;
+
+            Debug.Log($"[ProfileSelection] Starting profile card animation for {selectedCard.name}");
 
             // Hide other cards
             foreach (var card in instantiatedCards)
@@ -297,7 +436,7 @@ namespace CyberPickle.UI.Screens.MainMenu
             RectTransform rectTransform = selectedCard.GetComponent<RectTransform>();
             if (rectTransform == null)
             {
-                Debug.LogError("Selected card does not have a RectTransform.");
+                Debug.LogError("[ProfileSelection] Selected card does not have a RectTransform");
                 isTransitioning = false;
                 yield break;
             }
@@ -308,14 +447,14 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             // Target position and scale
             Vector2 targetAnchoredPosition = Vector2.zero; // Top-right corner
-            Vector3 targetScale = new Vector3(0.7f, 0.7f, 0.7f);
+            Vector3 targetScale = cornerScale;
 
             float elapsedTime = 0f;
             while (elapsedTime < transitionDuration && selectedCard != null)
             {
                 elapsedTime += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsedTime / transitionDuration);
-                float smoothT = t * t * (3f - 2f * t);
+                float smoothT = t * t * (3f - 2f * t); // Smooth step interpolation
 
                 rectTransform.anchoredPosition = Vector2.Lerp(startAnchoredPosition, targetAnchoredPosition, smoothT);
                 rectTransform.localScale = Vector3.Lerp(startScale, targetScale, smoothT);
@@ -328,14 +467,9 @@ namespace CyberPickle.UI.Screens.MainMenu
             {
                 rectTransform.anchoredPosition = targetAnchoredPosition;
                 rectTransform.localScale = targetScale;
-
-                // Keep the card active
                 selectedCard.SetActive(true);
 
-                // Store the selected card reference if needed
-                currentActiveCard = selectedCard;
-
-                Debug.Log("Profile card animation completed successfully");
+                Debug.Log("[ProfileSelection] Profile card animation completed successfully");
             }
 
             // Hide the profile selection panel
@@ -348,163 +482,18 @@ namespace CyberPickle.UI.Screens.MainMenu
             isTransitioning = false;
         }
 
-
-        private Vector3 GetCanvasPosition(Vector2 screenPosition)
-        {
-            Vector3 worldPosition;
-            RectTransformUtility.ScreenPointToWorldPointInRectangle(
-                mainCanvas.GetComponent<RectTransform>(),
-                screenPosition,
-                mainCanvas.worldCamera,
-                out worldPosition);
-            return worldPosition;
-        }
-
-        private void HandleProfileSelection(GameObject card, ProfileData profile)
-        {
-            if (isTransitioning || !gameObject.activeInHierarchy) return;
-
-            isTransitioning = true;
-            StartCoroutine(TransitionToMainMenu(card, profile));
-        }
-
-        private IEnumerator TransitionToMainMenu(GameObject selectedCard, ProfileData profile)
-        {
-            // Switch active profile in ProfileManager
-            profileManager.SwitchActiveProfile(profile.ProfileId);
-
-            // Proceed with UI animation
-
-            // Hide other cards
-            foreach (var card in instantiatedCards)
-            {
-                if (card != selectedCard)
-                    card.SetActive(false);
-            }
-
-            if (createProfileCard != null)
-                createProfileCard.gameObject.SetActive(false);
-
-            // Animate selected card
-            Vector3 startPosition = selectedCard.transform.position;
-            Vector3 startScale = selectedCard.transform.localScale;
-
-            float elapsedTime = 0f;
-            while (elapsedTime < transitionDuration)
-            {
-                elapsedTime += Time.deltaTime;
-                float t = elapsedTime / transitionDuration;
-                float smoothT = t * t * (3f - 2f * t);
-
-                selectedCard.transform.position = Vector3.Lerp(startPosition, cornerPosition, smoothT);
-                selectedCard.transform.localScale = Vector3.Lerp(startScale, cornerScale, smoothT);
-
-                yield return null;
-            }
-
-            // Show main menu buttons
-            yield return StartCoroutine(FadeInMainMenuButtons());
-
-            isTransitioning = false;
-        }
-
-        private void UpdateUIForProfileSelection(ProfileData profile)
-        {
-            // Update UI elements without animation
-            mainMenuButtonsGroup.gameObject.SetActive(true);
-            mainMenuButtonsGroup.alpha = 1f;
-            mainMenuButtonsGroup.interactable = true;
-
-            // Change game state
-            GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
-        }
-
-        private IEnumerator FadeInMainMenuButtons()
-        {
-            float duration = 0.3f;
-            float elapsedTime = 0f;
-
-            mainMenuButtonsGroup.gameObject.SetActive(true);
-
-            while (elapsedTime < duration)
-            {
-                elapsedTime += Time.deltaTime;
-                mainMenuButtonsGroup.alpha = elapsedTime / duration;
-                yield return null;
-            }
-
-            mainMenuButtonsGroup.alpha = 1f;
-            mainMenuButtonsGroup.interactable = true;
-
-            GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
-        }
-
-        private void HandleAuthStateChanged(AuthenticationState state)
-        {
-            UpdateUIState();
-        }
-
-        private void HandleProfileSwitched(string profileId)
-        {
-            if (isTransitioning) return;
-            UpdateUIState();
-        }
-
-        private void UpdateUIState()
-        {
-            if (isTransitioning) return;
-
-            UpdateHeaderInfo();
-
-            // Additional UI updates based on authentication state
-            if (createProfileCard != null)
-                createProfileCard.gameObject.SetActive(authManager.IsSignedIn);
-        }
-
-
-        private void HandleProfileDeletion(ProfileData profile)
-        {
-            if (profile == null) return;
-
-            // If this is the active profile, handle accordingly
-            if (profileManager.ActiveProfile?.ProfileId == profile.ProfileId)
-            {
-                // Handle active profile deletion, e.g., switch to another profile or sign out
-                profileManager.DeleteProfile(profile.ProfileId);
-                profileManager.ClearAllProfiles();
-                authManager.SignOut();
-            }
-            else
-            {
-                // Delete the profile
-                profileManager.DeleteProfile(profile.ProfileId);
-            }
-
-            LoadProfiles();
-            UpdateUIState();
-        }
-
-        private void HandleBackButton()
-        {
-            if (isTransitioning) return;
-            StartCoroutine(TransitionBackToAuth());
-        }
-
         private IEnumerator TransitionBackToAuth()
         {
             isTransitioning = true;
 
-            float duration = 0.3f;
+            var containerCanvasGroup = profilesContainer.GetComponent<CanvasGroup>()
+                ?? profilesContainer.gameObject.AddComponent<CanvasGroup>();
+
             float elapsed = 0f;
-
-            var containerCanvasGroup = profilesContainer.GetComponent<CanvasGroup>();
-            if (containerCanvasGroup == null)
-                containerCanvasGroup = profilesContainer.gameObject.AddComponent<CanvasGroup>();
-
-            while (elapsed < duration)
+            while (elapsed < transitionDuration)
             {
                 elapsed += Time.deltaTime;
-                containerCanvasGroup.alpha = 1 - (elapsed / duration);
+                containerCanvasGroup.alpha = 1 - (elapsed / transitionDuration);
                 yield return null;
             }
 
@@ -521,33 +510,51 @@ namespace CyberPickle.UI.Screens.MainMenu
             isTransitioning = false;
         }
 
-        private void ClearExistingProfiles()
+        private IEnumerator FadeInMainMenuButtons()
         {
-            var cardsToRemove = new List<GameObject>();
+            float elapsedTime = 0f;
+            mainMenuButtonsGroup.gameObject.SetActive(true);
+
+            while (elapsedTime < transitionDuration)
+            {
+                elapsedTime += Time.deltaTime;
+                mainMenuButtonsGroup.alpha = elapsedTime / transitionDuration;
+                yield return null;
+            }
+
+            mainMenuButtonsGroup.alpha = 1f;
+            mainMenuButtonsGroup.interactable = true;
+
+            GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
+        }
+
+        #endregion
+
+        #region Cleanup
+
+        private void OnDestroy()
+        {
+            if (statusMessageCoroutine != null)
+                StopCoroutine(statusMessageCoroutine);
+
+            UnsubscribeFromEvents();
+            backButton.onClick.RemoveListener(HandleBackButton);
 
             foreach (var card in instantiatedCards)
             {
                 if (card != null)
                 {
-                    cardsToRemove.Add(card);
+                    var cardController = card.GetComponent<ProfileCardController>();
+                    if (cardController != null)
+                    {
+                        cardController.OnProfileSelected -= HandleProfileSelection;
+                        cardController.OnProfileDeleted -= HandleProfileDeletion;
+                    }
                 }
             }
-
-            foreach (var card in cardsToRemove)
-            {
-                instantiatedCards.Remove(card);
-                Destroy(card);
-            }
-
-            instantiatedCards.Clear();
-            Debug.Log($"Cleared {cardsToRemove.Count} profile cards");
         }
 
-        private void OnDestroy()
-        {
-            UnsubscribeFromEvents();
-
-            backButton.onClick.RemoveListener(HandleBackButton);
-        }
+        #endregion
     }
 }
+

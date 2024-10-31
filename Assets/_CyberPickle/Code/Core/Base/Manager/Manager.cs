@@ -10,32 +10,35 @@ namespace CyberPickle.Core.Management
     {
         private static T instance;
         private static readonly object lockObject = new object();
-        private static bool isQuitting = false;
 
         public static T Instance
         {
             get
             {
-                if (isQuitting)
+                if (instance == null)
                 {
-                    Debug.LogWarning($"[{typeof(T).Name}] Instance will not be returned because the application is quitting.");
-                    return null;
-                }
-
-                lock (lockObject)
-                {
-                    if (instance == null)
+                    // Check if we're quitting or in play mode
+                    if (!Application.isPlaying)
                     {
-                        instance = FindObjectOfType<T>();
+                        Debug.LogWarning($"[{typeof(T).Name}] Instance will not be created because the application is not in play mode.");
+                        return null;
+                    }
+
+                    lock (lockObject)
+                    {
                         if (instance == null)
                         {
-                            GameObject go = new GameObject($"[{typeof(T).Name}]");
-                            instance = go.AddComponent<T>();
-                            DontDestroyOnLoad(go);
+                            instance = FindObjectOfType<T>();
+                            if (instance == null)
+                            {
+                                GameObject go = new GameObject($"[{typeof(T).Name}]");
+                                instance = go.AddComponent<T>();
+                                DontDestroyOnLoad(go);
+                            }
                         }
                     }
-                    return instance;
                 }
+                return instance;
             }
         }
 
@@ -64,9 +67,34 @@ namespace CyberPickle.Core.Management
             }
         }
 
-        protected virtual void OnApplicationQuit()
+        protected virtual void OnEnable()
         {
-            isQuitting = true;
+            OnManagerEnabled();
         }
+
+        protected virtual void OnDisable()
+        {
+            OnManagerDisabled();
+        }
+
+        protected virtual void OnDestroy()
+        {
+            if (instance == this)
+            {
+                OnManagerDestroyed();
+                instance = null;
+            }
+        }
+
+        // Virtual methods for derived classes to override
+        protected virtual void OnManagerEnabled() { }
+        protected virtual void OnManagerDisabled() { }
+        protected virtual void OnManagerDestroyed() { }
+
+        // Helper method to check if this is the active instance
+        protected bool IsActiveInstance => instance == this;
+
+        // Helper method to check if the application is quitting
+        protected bool IsQuitting => Application.isPlaying && !Application.isEditor && (Time.frameCount == 0 || !enabled);
     }
 }

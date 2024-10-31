@@ -23,6 +23,8 @@ namespace CyberPickle.Core.Services.Authentication.Data
         private int highestScore;
         [SerializeField]
         private float furthestDistance;
+        [SerializeField]
+        private int level; // Added Level field
 
         // Session Data
         [SerializeField]
@@ -42,9 +44,10 @@ namespace CyberPickle.Core.Services.Authentication.Data
         public float TotalPlayTime => totalPlayTime;
         public int HighestScore => highestScore;
         public float FurthestDistance => furthestDistance;
+        public int Level => level; // Level property
         public bool IsActive => isActive;
         public DateTime CreatedAt => new DateTime(createdAtTicks);
-        public DateTime LastLoginAt => new DateTime(lastLoginAtTicks);
+        public DateTime LastLoginTime => new DateTime(lastLoginAtTicks); // LastLoginTime property
 
         // Constructors
         public ProfileData(string profileId, string playerId, string displayName)
@@ -59,6 +62,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
             this.totalPlayTime = 0f;
             this.highestScore = 0;
             this.furthestDistance = 0f;
+            this.level = 1; // Initialize Level to 1
         }
 
         // Methods to Update Profile Data
@@ -75,11 +79,12 @@ namespace CyberPickle.Core.Services.Authentication.Data
             }
         }
 
-        public void UpdateProgress(float playTime, int score, float distance)
+        public void UpdateProgress(float playTime, int score, float distance, int level)
         {
             totalPlayTime = playTime;
             if (score > highestScore) highestScore = score;
             if (distance > furthestDistance) furthestDistance = distance;
+            this.level = level;
             hasSaveData = true;
         }
 
@@ -88,6 +93,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
             totalPlayTime = 0f;
             highestScore = 0;
             furthestDistance = 0f;
+            level = 1; // Reset Level to 1
             hasSaveData = false;
         }
 
@@ -97,3 +103,4 @@ namespace CyberPickle.Core.Services.Authentication.Data
         }
     }
 }
+

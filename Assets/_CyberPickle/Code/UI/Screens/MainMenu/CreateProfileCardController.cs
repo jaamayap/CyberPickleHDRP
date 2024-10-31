@@ -10,9 +10,12 @@ using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 using System.Collections;
-using CyberPickle.Core.Services.Authentication;
-using CyberPickle.Core.Events;
 using System;
+using System.Threading.Tasks;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Flow.Commands;
+using CyberPickle.Core.Events;
+using CyberPickle.Core.Services.Authentication.Flow;
 
 namespace CyberPickle.UI.Screens.MainMenu
 {
@@ -36,16 +39,20 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         [Header("Animation Settings")]
         [SerializeField] private float transitionDuration = 0.5f;
+        [SerializeField] private float statusMessageDuration = 3f;
 
         private bool isProcessing;
         private ProfileManager profileManager;
         private AuthenticationManager authManager;
-        private string pendingDisplayName;
+        private AuthenticationFlowManager flowManager;
+        private Coroutine statusMessageCoroutine;
 
         private void Awake()
         {
             profileManager = ProfileManager.Instance;
             authManager = AuthenticationManager.Instance;
+            flowManager = AuthenticationFlowManager.Instance;
+
             InitializeComponents();
             SetInitialState();
             SubscribeToEvents();
@@ -53,26 +60,36 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void InitializeComponents()
         {
-            // Setup CanvasGroups
+            InitializeCanvasGroups();
+            InitializeButtons();
+            InitializeInputField();
+        }
+
+        private void InitializeCanvasGroups()
+        {
             if (cardContentCanvasGroup == null && cardContent != null)
                 cardContentCanvasGroup = cardContent.GetComponent<CanvasGroup>() ?? cardContent.gameObject.AddComponent<CanvasGroup>();
 
             if (terminalCanvasGroup == null && terminalInterface != null)
                 terminalCanvasGroup = terminalInterface.GetComponent<CanvasGroup>() ?? terminalInterface.gameObject.AddComponent<CanvasGroup>();
+        }
 
-            // Setup button listeners
-            Button cardButton = cardContent.GetComponent<Button>();
-            if (cardButton == null)
-                cardButton = cardContent.gameObject.AddComponent<Button>();
-
+        private void InitializeButtons()
+        {
+            // Setup card button
+            Button cardButton = cardContent.GetComponent<Button>() ?? cardContent.gameObject.AddComponent<Button>();
             cardButton.onClick.AddListener(StartProfileCreation);
 
+            // Setup other buttons
             if (confirmButton != null)
-                confirmButton.onClick.AddListener(HandleProfileConfirmation);
+                confirmButton.onClick.AddListener(HandleProfileConfirmationAsync);
 
             if (cancelButton != null)
                 cancelButton.onClick.AddListener(CancelProfileCreation);
+        }
 
+        private void InitializeInputField()
+        {
             if (inputField != null)
                 inputField.onValueChanged.AddListener(ValidateInput);
         }
@@ -85,22 +102,12 @@ namespace CyberPickle.UI.Screens.MainMenu
             }
         }
 
-        private void UnsubscribeFromEvents()
-        {
-            if (profileManager != null)
-            {
-                profileManager.UnsubscribeFromNewProfileCreated(HandleProfileCreated);
-            }
-        }
-
         private void SetInitialState()
         {
-            // Ensure CardContent is visible and active
             SetCardContentActive(true);
             if (cardContent != null)
                 cardContent.SetActive(true);
 
-            // Ensure Terminal Interface is hidden initially
             SetTerminalInterfaceActive(false);
             if (terminalInterface != null)
                 terminalInterface.SetActive(false);
@@ -114,7 +121,6 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (isProcessing) return;
             isProcessing = true;
 
-            // Activate terminal interface but with 0 alpha
             if (terminalInterface != null)
             {
                 terminalInterface.SetActive(true);
@@ -125,9 +131,79 @@ namespace CyberPickle.UI.Screens.MainMenu
             StartCoroutine(TransitionToTerminal());
         }
 
+        private async void HandleProfileConfirmationAsync()
+        {
+            if (string.IsNullOrWhiteSpace(inputField.text)) return;
+
+            string displayName = inputField.text.Trim();
+            SetInteractable(false);
+            UpdateStatus("Creating profile...");
+
+            try
+            {
+                var command = new CreateProfileCommand(profileManager, displayName);
+                await flowManager.ExecuteCommand(command);
+
+                // Success will be handled in HandleProfileCreated
+            }
+            catch (Exception ex)
+            {
+                SetInteractable(true);
+                ShowTemporaryStatus($"Failed to create profile: {ex.Message}", isError: true);
+                Debug.LogError($"[CreateProfileCard] Error creating profile: {ex.Message}");
+            }
+        }
+
+        private void HandleProfileCreated(string profileId)
+        {
+            if (!gameObject.activeInHierarchy) return;
+
+            ShowTemporaryStatus("Profile created successfully!");
+            StartCoroutine(DelayedTransition());
+        }
+
+        private void ShowTemporaryStatus(string message, bool isError = false)
+        {
+            if (statusMessageCoroutine != null)
+                StopCoroutine(statusMessageCoroutine);
+
+            statusMessageCoroutine = StartCoroutine(ShowStatusMessageRoutine(message, isError));
+        }
+
+        private IEnumerator ShowStatusMessageRoutine(string message, bool isError)
+        {
+            UpdateStatus(message);
+            if (statusText != null)
+                statusText.color = isError ? Color.red : Color.white;
+
+            yield return new WaitForSeconds(statusMessageDuration);
+
+            if (statusText != null)
+            {
+                statusText.text = "";
+                statusText.color = Color.white;
+            }
+        }
+
+        private void ValidateInput(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                SetConfirmButtonState(false);
+                return;
+            }
+
+            bool isValid = true;
+            isValid &= input.Length >= 3 && input.Length <= 20;
+            isValid &= System.Text.RegularExpressions.Regex.IsMatch(input, "^[a-zA-Z0-9_]+$");
+
+            SetConfirmButtonState(isValid);
+            UpdateValidationMessages(input);
+        }
+
         private IEnumerator TransitionToTerminal()
         {
-            Debug.Log("Starting transition to terminal interface");
+            Debug.Log("[CreateProfileCard] Starting transition to terminal interface");
 
             float elapsedTime = 0f;
             while (elapsedTime < transitionDuration)
@@ -141,14 +217,11 @@ namespace CyberPickle.UI.Screens.MainMenu
                 yield return null;
             }
 
-            // Ensure final states
             if (cardContent != null)
                 cardContent.SetActive(false);
 
             FinalizeTransition();
-
             isProcessing = false;
-            Debug.Log("Terminal interface transition completed");
         }
 
         private void FinalizeTransition()
@@ -167,76 +240,10 @@ namespace CyberPickle.UI.Screens.MainMenu
                 validationSection.SetActive(true);
         }
 
-        private void ValidateInput(string input)
-        {
-            if (string.IsNullOrEmpty(input))
-            {
-                SetConfirmButtonState(false);
-                return;
-            }
-
-            bool isValid = true;
-
-            // Length check (3-20 characters)
-            isValid &= input.Length >= 3 && input.Length <= 20;
-
-            // Character check (letters, numbers, underscore)
-            isValid &= System.Text.RegularExpressions.Regex.IsMatch(input, "^[a-zA-Z0-9_]+$");
-
-            SetConfirmButtonState(isValid);
-            UpdateValidationMessages(input);
-        }
-
-        private void HandleProfileConfirmation()
-        {
-            if (string.IsNullOrWhiteSpace(inputField.text)) return;
-
-            pendingDisplayName = inputField.text.Trim();
-
-            // Disable input during profile creation
-            SetInteractable(false);
-            UpdateStatus("Creating profile...");
-
-            try
-            {
-                // Generate profileId
-                string profileId = $"{pendingDisplayName.ToLower()}_{DateTime.UtcNow.Ticks}";
-
-                // Get playerId from AuthenticationManager
-                string playerId = authManager.CurrentPlayerId;
-
-                // Create the profile
-                profileManager.CreateProfile(profileId, playerId, pendingDisplayName);
-
-                // Success will be handled in HandleProfileCreated
-            }
-            catch (Exception ex)
-            {
-                SetInteractable(true);
-                UpdateStatus("Failed to create profile. Please try again.");
-                Debug.LogError($"Error creating profile: {ex.Message}");
-            }
-        }
-
-        private void HandleProfileCreated(string profileId)
-        {
-            // Only process if we have a valid status text component
-            if (statusText == null) return;
-
-            UpdateStatus("Profile created successfully!");
-            if (gameObject != null && gameObject.activeInHierarchy)
-            {
-                // Instead of immediately starting the coroutine, delay it slightly
-                StartCoroutine(DelayedTransition());
-            }
-        }
-
         private IEnumerator DelayedTransition()
         {
-            // Small delay to ensure all state changes are completed
             yield return new WaitForSeconds(0.1f);
 
-            // Check again if the object is still active
             if (gameObject != null && gameObject.activeInHierarchy)
             {
                 StartCoroutine(TransitionToCard());
@@ -268,22 +275,20 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void SetCardContentActive(bool active, float alpha = 1f)
         {
-            if (cardContentCanvasGroup != null)
-            {
-                cardContentCanvasGroup.alpha = alpha;
-                cardContentCanvasGroup.interactable = active;
-                cardContentCanvasGroup.blocksRaycasts = active;
-            }
+            if (cardContentCanvasGroup == null) return;
+
+            cardContentCanvasGroup.alpha = alpha;
+            cardContentCanvasGroup.interactable = active;
+            cardContentCanvasGroup.blocksRaycasts = active;
         }
 
         private void SetTerminalInterfaceActive(bool active, float alpha = 1f)
         {
-            if (terminalCanvasGroup != null)
-            {
-                terminalCanvasGroup.alpha = alpha;
-                terminalCanvasGroup.interactable = active;
-                terminalCanvasGroup.blocksRaycasts = active;
-            }
+            if (terminalCanvasGroup == null) return;
+
+            terminalCanvasGroup.alpha = alpha;
+            terminalCanvasGroup.interactable = active;
+            terminalCanvasGroup.blocksRaycasts = active;
         }
 
         private void SetConfirmButtonState(bool enabled)
@@ -313,7 +318,6 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (validationMessages == null || validationMessages.Length == 0)
                 return;
 
-            // Update validation messages based on current input
             if (validationMessages.Length > 0)
                 validationMessages[0].text = input.Length >= 3 && input.Length <= 20 ?
                     "Length: Valid" : "Length: Must be 3-20 characters";
@@ -325,8 +329,23 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void OnDestroy()
         {
-            UnsubscribeFromEvents();
+            if (statusMessageCoroutine != null)
+                StopCoroutine(statusMessageCoroutine);
 
+            UnsubscribeFromEvents();
+            CleanupEventListeners();
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            if (profileManager != null)
+            {
+                profileManager.UnsubscribeFromNewProfileCreated(HandleProfileCreated);
+            }
+        }
+
+        private void CleanupEventListeners()
+        {
             if (cardContent != null)
             {
                 var button = cardContent.GetComponent<Button>();
@@ -335,7 +354,7 @@ namespace CyberPickle.UI.Screens.MainMenu
             }
 
             if (confirmButton != null)
-                confirmButton.onClick.RemoveListener(HandleProfileConfirmation);
+                confirmButton.onClick.RemoveListener(HandleProfileConfirmationAsync);
 
             if (cancelButton != null)
                 cancelButton.onClick.RemoveListener(CancelProfileCreation);

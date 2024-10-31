@@ -463,6 +463,7 @@ GameObject:
   - component: {fileID: 1747609623402628546}
   - component: {fileID: 5766480536154073423}
   - component: {fileID: 5150418689252061818}
+  - component: {fileID: 8612256642767182009}
   m_Layer: 5
   m_Name: ProfileCardTemplate
   m_TagString: Untagged
@@ -573,6 +574,25 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &8612256642767182009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2394198781493418043}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f2a97ced5c59faa4ca601f926b3dd8b0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  profileNameText: {fileID: 1847167133713649347}
+  lastLoginText: {fileID: 7611555306317751930}
+  levelValueText: {fileID: 1952299256793647835}
+  timeValueText: {fileID: 4254977936488992803}
+  scoreValueText: {fileID: 5606729560554063589}
+  selectButton: {fileID: 6374615765491145824}
+  deleteButton: {fileID: 8062598332386960204}
 --- !u!1 &3960187728028997458
 GameObject:
   m_ObjectHideFlags: 0

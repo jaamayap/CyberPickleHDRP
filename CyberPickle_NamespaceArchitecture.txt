@@ -164,6 +164,12 @@ Namespace: CyberPickle.Core.Events
    Field: public static GameEvent<GameState> OnGameStateChanged
    Field: public static GameEvent OnAuthenticationRequested
    Field: public static GameEvent OnProfileLoadRequested
+   Field: public static GameEvent<List<ProfileData>> OnProfilesLoaded
+   Field: public static GameEvent OnProfilesCleared
+   Field: public static GameEvent<string> OnProfileSelected
+   Field: public static GameEvent<string> OnProfileCreated
+   Field: public static GameEvent<string> OnProfileDeleted
+   Field: public static GameEvent<string> OnProfileRestored
 Namespace: CyberPickle.Core.Input
  Class: InputManager : Manager<InputManager>, IInitializable
    Field: private float mouseSensitivity
@@ -205,8 +211,17 @@ Namespace: CyberPickle.Core.Management
    Constructor: private Manager<T>()
    Method: protected virtual void Awake()
    Method: protected virtual void OnManagerAwake()
+   Method: protected virtual void OnEnable()
+   Method: protected virtual void OnDisable()
+   Method: protected virtual void OnDestroy()
    Method: protected virtual void OnApplicationQuit()
+   Method: protected virtual void OnManagerEnabled()
+   Method: protected virtual void OnManagerDisabled()
+   Method: protected virtual void OnManagerDestroyed()
+   Method: protected virtual void OnManagerApplicationQuit()
+   Property: protected bool IsQuitting { get; }
    Property: public static T Instance { get; }
+   Property: protected bool IsActiveInstance { get; }
 Namespace: CyberPickle.Core.Pool
  Class: PoolManager : Manager<PoolManager>, IInitializable
    Constructor: public PoolManager()
@@ -218,8 +233,7 @@ Namespace: CyberPickle.Core.SaveSystem
 Namespace: CyberPickle.Core.Services.Authentication
  Class: AuthenticationManager : Manager<AuthenticationManager>, IInitializable
    Field: private AuthenticationState currentState
-   Field: private ProfileContainer profileContainer
-   Field: private AuthenticationEvents events
+   Field: private AuthenticationEvents authEvents
    Field: private bool isInitialized
    Constructor: public AuthenticationManager()
    Method: protected override void OnManagerAwake()
@@ -227,43 +241,37 @@ Namespace: CyberPickle.Core.Services.Authentication
    Method: private void SubscribeToAuthEvents()
    Method: private void UnsubscribeFromAuthEvents()
    Method: public async Task<bool> SignInAnonymouslyAsync()
-   Method: public async Task<bool> SwitchProfileAsync(string profileId)
    Method: public void SignOut()
-   Method: private ProfileData CreateNewProfile(string profileId, string playerId)
-   Method: public void UpdateProfileProgress(float playTime, int score, float distance)
-   Method: public void ClearProfileProgress(string profileId)
-   Method: public IReadOnlyList<ProfileData> GetAllProfiles()
    Method: private void OnSignedIn()
    Method: private void OnSignedOut()
    Method: private void OnSessionExpired()
    Method: private void HandleAuthenticationError(AuthenticationException e)
    Method: private void HandleRequestError(RequestFailedException e)
    Method: private void SetState(AuthenticationState newState)
+   Method: public void SubscribeToAuthenticationStateChanged(Action<AuthenticationState> callback)
+   Method: public void UnsubscribeFromAuthenticationStateChanged(Action<AuthenticationState> callback)
    Method: public void SubscribeToAuthenticationCompleted(Action<string> callback)
    Method: public void UnsubscribeFromAuthenticationCompleted(Action<string> callback)
    Method: public void SubscribeToAuthenticationFailed(Action<string> callback)
    Method: public void UnsubscribeFromAuthenticationFailed(Action<string> callback)
-   Method: public void SubscribeToProfileSwitched(Action<string> callback)
-   Method: public void UnsubscribeFromProfileSwitched(Action<string> callback)
+   Method: public void SubscribeToSessionTokenFound(Action<string> callback)
+   Method: public void UnsubscribeFromSessionTokenFound(Action<string> callback)
+   Method: public void SubscribeToSessionExpired(Action callback)
+   Method: public void UnsubscribeFromSessionExpired(Action callback)
+   Method: public void SubscribeToSignedOut(Action callback)
+   Method: public void UnsubscribeFromSignedOut(Action callback)
    Method: private void OnDestroy()
    Property: public AuthenticationState CurrentState { get; }
    Property: public bool IsSignedIn { get; }
    Property: public string CurrentPlayerId { get; }
-   Property: public ProfileData CurrentProfile { get; }
  Class: AuthenticationEvents
    Constructor: public AuthenticationEvents()
-   Method: internal void InvokeProfileLoaded(string profileId)
-   Method: internal void InvokeProfileSwitched(string profileId)
-   Method: internal void InvokeNewProfileCreated(string profileId)
    Method: internal void InvokeAuthenticationStateChanged(AuthenticationState state)
    Method: internal void InvokeAuthenticationCompleted(string playerId)
    Method: internal void InvokeAuthenticationFailed(string error)
    Method: internal void InvokeSessionTokenFound(string token)
    Method: internal void InvokeSessionExpired()
    Method: internal void InvokeSignedOut()
-   Event: public Action<string> OnProfileLoaded
-   Event: public Action<string> OnProfileSwitched
-   Event: public Action<string> OnNewProfileCreated
    Event: public Action<AuthenticationState> OnAuthenticationStateChanged
    Event: public Action<string> OnAuthenticationCompleted
    Event: public Action<string> OnAuthenticationFailed
@@ -278,10 +286,58 @@ Namespace: CyberPickle.Core.Services.Authentication
    Value: AuthenticationFailed = 4
    Value: ProfileSwitchInProgress = 5
    Value: SessionExpired = 6
+ Class: ProfileManagementEvents
+   Constructor: public ProfileManagementEvents()
+   Method: internal void InvokeProfileLoaded(string profileId)
+   Method: internal void InvokeProfileSwitched(string profileId)
+   Method: internal void InvokeNewProfileCreated(string profileId)
+   Method: internal void InvokeProfileDeleted(string profileId)
+   Event: public Action<string> OnProfileLoaded
+   Event: public Action<string> OnProfileSwitched
+   Event: public Action<string> OnNewProfileCreated
+   Event: public Action<string> OnProfileDeleted
+ Class: ProfileOperationResult
+   Constructor: private ProfileOperationResult(bool success, string message, Exception error)
+   Method: public static ProfileOperationResult Succeeded(string message)
+   Method: public static ProfileOperationResult Failed(string message, Exception error)
+   Property: public bool Success { get; }
+   Property: public string Message { get; }
+   Property: public Exception Error { get; }
+ Class: ProfileManager : Manager<ProfileManager>, IInitializable
+   Field: private ProfileContainer profileContainer
+   Field: private ProfileManagementEvents profileEvents
+   Field: private bool isInitialized
+   Field: private bool isAutosaveEnabled
+   Field: private object saveLock
+   Constructor: public ProfileManager()
+   Method: public sealed void Initialize()
+   Method: protected override void OnManagerAwake()
+   Method: private void ValidateState()
+   Method: public async Task<ProfileOperationResult> CreateProfileAsync(string profileId, string playerId, string displayName)
+   Method: public ProfileData GetProfile(string profileId)
+   Method: public async Task<ProfileOperationResult> AddProfileAsync(ProfileData profile)
+   Method: public async Task<ProfileOperationResult> DeleteProfileAsync(string profileId)
+   Method: public async Task<ProfileOperationResult> UpdateProfileAsync(ProfileData profile)
+   Method: public async Task<ProfileOperationResult> SwitchActiveProfileAsync(string profileId)
+   Method: public IReadOnlyList<ProfileData> GetAllProfiles()
+   Method: public async Task<ProfileOperationResult> UpdateActiveProfileProgressAsync(float playTime, int score, float distance, int level)
+   Method: private async Task SaveProfilesAsync()
+   Method: public async Task<ProfileOperationResult> ClearAllProfilesAsync()
+   Method: public void SubscribeToProfileLoaded(Action<string> callback)
+   Method: public void UnsubscribeFromProfileLoaded(Action<string> callback)
+   Method: public void SubscribeToProfileSwitched(Action<string> callback)
+   Method: public void UnsubscribeFromProfileSwitched(Action<string> callback)
+   Method: public void SubscribeToNewProfileCreated(Action<string> callback)
+   Method: public void UnsubscribeFromNewProfileCreated(Action<string> callback)
+   Method: public void SubscribeToProfileDeleted(Action<string> callback)
+   Method: public void UnsubscribeFromProfileDeleted(Action<string> callback)
+   Method: protected override void OnDestroy()
+   Property: public bool IsInitialized { get; }
+   Property: public ProfileData ActiveProfile { get; }
 Namespace: CyberPickle.Core.Services.Authentication.Data
  Class: ProfileContainer
    Field: private List<ProfileData> profiles
-   Field: private static string PROFILES_PREFS_KEY
+   Field: private static string profilesFilePath
    Constructor: public ProfileContainer()
    Method: public void AddProfile(ProfileData profile)
    Method: public ProfileData GetProfile(string profileId)
@@ -291,29 +347,135 @@ Namespace: CyberPickle.Core.Services.Authentication.Data
    Method: public void SaveProfiles()
    Method: public static ProfileContainer Load()
    Method: public void ClearAll()
+   Property: private static string ProfilesFilePath { get; }
    Property: public IReadOnlyList<ProfileData> Profiles { get; }
    Property: public ProfileData ActiveProfile { get; }
  Class: ProfileData
-   Constructor: public ProfileData(string profileId, string playerId)
+   Field: private string profileId
+   Field: private string playerId
+   Field: private string displayName
+   Field: private bool hasSaveData
+   Field: private float totalPlayTime
+   Field: private int highestScore
+   Field: private float furthestDistance
+   Field: private int level
+   Field: private bool isActive
+   Field: private long createdAtTicks
+   Field: private long lastLoginAtTicks
+   Constructor: public ProfileData(string profileId, string playerId, string displayName)
    Method: public void UpdateLoginTime()
-   Method: public void UpdateSessionToken(string token)
    Method: public void UpdateDisplayName(string name)
-   Method: public void UpdateProgress(float playTime, int score, float distance)
+   Method: public void UpdateProgress(float playTime, int score, float distance, int level)
    Method: public void ClearProgress()
    Method: public void SetActive(bool active)
-   Method: public string ToJson()
-   Method: public static ProfileData FromJson(string json)
-   Property: public string ProfileId { get; set; }
-   Property: public string PlayerId { get; set; }
-   Property: public DateTime CreatedAt { get; set; }
-   Property: public DateTime LastLoginAt { get; set; }
-   Property: public string DisplayName { get; set; }
-   Property: public bool HasSaveData { get; set; }
-   Property: public float TotalPlayTime { get; set; }
-   Property: public int HighestScore { get; set; }
-   Property: public float FurthestDistance { get; set; }
-   Property: public string SessionToken { get; set; }
-   Property: public bool IsActive { get; set; }
+   Property: public string ProfileId { get; }
+   Property: public string PlayerId { get; }
+   Property: public string DisplayName { get; }
+   Property: public bool HasSaveData { get; }
+   Property: public float TotalPlayTime { get; }
+   Property: public int HighestScore { get; }
+   Property: public float FurthestDistance { get; }
+   Property: public int Level { get; }
+   Property: public bool IsActive { get; }
+   Property: public DateTime CreatedAt { get; }
+   Property: public DateTime LastLoginTime { get; }
+Namespace: CyberPickle.Core.Services.Authentication.Flow
+ Class: AuthenticationFlowManager : Manager<AuthenticationFlowManager>, IInitializable
+   Field: private IAuthenticationState currentState
+   Field: private Stack<IAuthCommand> executedCommands
+   Field: private Dictionary<Type, IAuthenticationState> states
+   Field: private bool isInitialized
+   Constructor: public AuthenticationFlowManager()
+   Method: public sealed void Initialize()
+   Method: private void InitializeStates()
+   Method: public async Task ExecuteCommand(IAuthCommand command)
+   Method: public void TransitionTo()
+   Method: public bool IsInState()
+   Property: public IAuthenticationState CurrentState { get; }
+   Event: public Action<IAuthenticationState> OnStateChanged
+ Interface: IAuthenticationState
+   Method: public abstract void Enter()
+   Method: public abstract void Exit()
+   Method: public abstract void Update()
+   Method: public abstract bool CanTransitionTo(IAuthenticationState nextState)
+Namespace: CyberPickle.Core.Services.Authentication.Flow.Commands
+ Class: CreateProfileCommand : IAuthCommand
+   Field: private ProfileManager profileManager
+   Field: private string displayName
+   Field: private string createdProfileId
+   Field: private bool wasSuccessful
+   Constructor: public CreateProfileCommand(ProfileManager profileManager, string displayName)
+   Method: public sealed async Task Execute()
+   Method: public sealed void Undo()
+ Class: DeleteProfileCommand : IAuthCommand
+   Field: private ProfileManager profileManager
+   Field: private string profileId
+   Field: private ProfileData deletedProfileBackup
+   Field: private bool wasActiveProfile
+   Constructor: public DeleteProfileCommand(ProfileManager profileManager, string profileId)
+   Method: public sealed async Task Execute()
+   Method: private async Task SwitchToDefaultOrFirstAvailable()
+   Method: public sealed void Undo()
+ Interface: IAuthCommand
+   Method: public abstract async Task Execute()
+   Method: public abstract void Undo()
+ Class: LoadProfilesCommand : IAuthCommand
+   Field: private ProfileManager profileManager
+   Field: private List<ProfileData> loadedProfiles
+   Constructor: public LoadProfilesCommand(ProfileManager profileManager)
+   Method: public sealed async Task Execute()
+   Method: public sealed void Undo()
+ Class: RestoreProfileCommand : IAuthCommand
+   Field: private ProfileManager profileManager
+   Field: private ProfileData profileToRestore
+   Field: private ProfileData existingProfileBackup
+   Constructor: public RestoreProfileCommand(ProfileManager profileManager, ProfileData profileToRestore)
+   Method: public sealed async Task Execute()
+   Method: public sealed void Undo()
+ Class: SelectProfileCommand : IAuthCommand
+   Field: private ProfileManager profileManager
+   Field: private string profileId
+   Field: private string previousProfileId
+   Constructor: public SelectProfileCommand(ProfileManager profileManager, string profileId)
+   Method: public sealed async Task Execute()
+   Method: public sealed void Undo()
+ Class: StartAuthenticationCommand : IAuthCommand
+   Field: private AuthenticationManager authManager
+   Field: private bool isAuthenticated
+   Constructor: public StartAuthenticationCommand(AuthenticationManager authManager)
+   Method: public sealed async Task Execute()
+   Method: public sealed void Undo()
+Namespace: CyberPickle.Core.Services.Authentication.Flow.States
+ Class: AuthenticatingState : IAuthenticationState
+   Field: private AuthenticationFlowManager flowManager
+   Field: private AuthenticationManager authManager
+   Constructor: public AuthenticatingState(AuthenticationFlowManager flowManager)
+   Method: public sealed void Enter()
+   Method: public sealed void Exit()
+   Method: public sealed void Update()
+   Method: public sealed bool CanTransitionTo(IAuthenticationState nextState)
+ Class: InitialState : IAuthenticationState
+   Field: private AuthenticationFlowManager flowManager
+   Constructor: public InitialState(AuthenticationFlowManager flowManager)
+   Method: public sealed void Enter()
+   Method: public sealed void Exit()
+   Method: public sealed void Update()
+   Method: public sealed bool CanTransitionTo(IAuthenticationState nextState)
+ Class: MainMenuState : IAuthenticationState
+   Field: private AuthenticationFlowManager flowManager
+   Constructor: public MainMenuState(AuthenticationFlowManager flowManager)
+   Method: public sealed void Enter()
+   Method: public sealed void Exit()
+   Method: public sealed void Update()
+   Method: public sealed bool CanTransitionTo(IAuthenticationState nextState)
+ Class: ProfileSelectionState : IAuthenticationState
+   Field: private AuthenticationFlowManager flowManager
+   Field: private ProfileManager profileManager
+   Constructor: public ProfileSelectionState(AuthenticationFlowManager flowManager)
+   Method: public sealed void Enter()
+   Method: public sealed void Exit()
+   Method: public sealed void Update()
+   Method: public sealed bool CanTransitionTo(IAuthenticationState nextState)
 Namespace: CyberPickle.Core.Services.Leaderboard
  Class: LeaderboardManager : Manager<LeaderboardManager>, IInitializable
    Constructor: public LeaderboardManager()
@@ -383,43 +545,50 @@ Namespace: CyberPickle.UI.Effects.Config
 Namespace: CyberPickle.UI.Screens.MainMenu
  Class: CreateProfileCardController : MonoBehaviour
    Field: private GameObject cardContent
-   Field: private TextMeshProUGUI plusIcon
-   Field: private TextMeshProUGUI headerText
-   Field: private TextMeshProUGUI descriptionText
-   Field: private CanvasGroup terminalInterface
-   Field: private Image scanlineEffect
-   Field: private Image glitchOverlay
-   Field: private TextMeshProUGUI statusText
-   Field: private TextMeshProUGUI promptText
+   Field: private CanvasGroup cardContentCanvasGroup
+   Field: private GameObject terminalInterface
+   Field: private CanvasGroup terminalCanvasGroup
    Field: private TMP_InputField inputField
-   Field: private Image blinkingCursor
-   Field: private GameObject validationSection
-   Field: private TextMeshProUGUI[] validationTexts
-   Field: private Image[] validationIcons
    Field: private Button confirmButton
    Field: private Button cancelButton
-   Field: private TextMeshProUGUI compilationText
-   Field: private Image progressBar
-   Field: private float typewriterSpeed
-   Field: private float validationCheckDelay
-   Field: private AuthenticationManager authManager
+   Field: private TextMeshProUGUI statusText
+   Field: private GameObject validationSection
+   Field: private TextMeshProUGUI[] validationMessages
+   Field: private float transitionDuration
+   Field: private float statusMessageDuration
    Field: private bool isProcessing
-   Field: private Coroutine currentTypewriter
+   Field: private ProfileManager profileManager
+   Field: private AuthenticationManager authManager
+   Field: private AuthenticationFlowManager flowManager
+   Field: private Coroutine statusMessageCoroutine
    Constructor: public CreateProfileCardController()
    Method: private void Awake()
-   Method: private void InitializeUI()
+   Method: private void InitializeComponents()
+   Method: private void InitializeCanvasGroups()
+   Method: private void InitializeButtons()
+   Method: private void InitializeInputField()
+   Method: private void SubscribeToEvents()
+   Method: private void SetInitialState()
    Method: public void StartProfileCreation()
-   Method: private IEnumerator ProfileCreationSequence()
-   Method: private void OnInputChanged(string value)
-   Method: private IEnumerator ValidateInput(string input)
-   Method: private void UpdateValidation(int index, bool isValid, string message)
-   Method: private void OnConfirmProfile()
-   Method: private IEnumerator CreateProfileSequence()
-   Method: private void OnCancelProfile()
-   Method: private void ResetCard()
-   Method: private IEnumerator TypewriterEffect(TextMeshProUGUI textComponent, string message)
+   Method: private void HandleProfileConfirmationAsync()
+   Method: private void HandleProfileCreated(string profileId)
+   Method: private void ShowTemporaryStatus(string message, bool isError)
+   Method: private IEnumerator ShowStatusMessageRoutine(string message, bool isError)
+   Method: private void ValidateInput(string input)
+   Method: private IEnumerator TransitionToTerminal()
+   Method: private void FinalizeTransition()
+   Method: private IEnumerator DelayedTransition()
+   Method: private void CancelProfileCreation()
+   Method: private IEnumerator TransitionToCard()
+   Method: private void SetCardContentActive(bool active, float alpha)
+   Method: private void SetTerminalInterfaceActive(bool active, float alpha)
+   Method: private void SetConfirmButtonState(bool enabled)
+   Method: private void SetInteractable(bool interactable)
+   Method: private void UpdateStatus(string message)
+   Method: private void UpdateValidationMessages(string input)
    Method: private void OnDestroy()
-   Event: public Action<string, string> OnProfileCreated
+   Method: private void UnsubscribeFromEvents()
+   Method: private void CleanupEventListeners()
  Class: MainMenuController : MonoBehaviour
    Field: private TextMeshProUGUI pressAnyButtonText
    Field: private GameObject authPanel
@@ -445,6 +614,25 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Method: public void OnOptionsButtonClicked()
    Method: public void OnQuitButtonClicked()
    Method: private void OnDestroy()
+ Class: ProfileCardController : MonoBehaviour
+   Field: private TextMeshProUGUI profileNameText
+   Field: private TextMeshProUGUI lastLoginText
+   Field: private TextMeshProUGUI levelValueText
+   Field: private TextMeshProUGUI timeValueText
+   Field: private TextMeshProUGUI scoreValueText
+   Field: private Button selectButton
+   Field: private Button deleteButton
+   Field: private ProfileData profileData
+   Constructor: public ProfileCardController()
+   Method: public void Initialize(ProfileData profile)
+   Method: private void OnSelectButtonClicked()
+   Method: private void OnDeleteButtonClicked()
+   Method: private string FormatLastLoginTime(DateTime lastLoginTime)
+   Method: private string FormatPlayTime(float playTimeInSeconds)
+   Method: private void OnDestroy()
+   Property: public ProfileData ProfileData { get; }
+   Event: public Action<ProfileData> OnProfileSelected
+   Event: public Action<ProfileData> OnProfileDeleted
  Class: ProfileSelectionController : MonoBehaviour
    Field: private GameObject profileSelectionPanel
    Field: private Transform profilesContainer
@@ -455,26 +643,45 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Field: private TextMeshProUGUI titleText
    Field: private Button backButton
    Field: private CanvasGroup mainMenuButtonsGroup
+   Field: private float transitionDuration
+   Field: private Vector3 cornerPosition
+   Field: private Vector3 cornerScale
+   Field: private float statusMessageDuration
+   Field: private Canvas mainCanvas
    Field: private AuthenticationManager authManager
+   Field: private ProfileManager profileManager
+   Field: private AuthenticationFlowManager flowManager
    Field: private List<GameObject> instantiatedCards
    Field: private CreateProfileCardController createProfileCard
    Field: private bool isTransitioning
+   Field: private Coroutine statusMessageCoroutine
    Constructor: public ProfileSelectionController()
    Method: private void Awake()
    Method: private void Start()
+   Method: private void InitializeManagers()
+   Method: private bool ValidateManagers()
+   Method: private void ValidateReferences()
    Method: private void InitializeUI()
-   Method: private void UpdateHeaderInfo()
+   Method: private void InitializeCreateProfileCard()
+   Method: private void SubscribeToEvents()
+   Method: private void UnsubscribeFromEvents()
+   Method: private void HandleAuthStateChanged(AuthenticationState state)
+   Method: private void HandleAuthenticationCompleted(string playerId)
+   Method: private void HandleProfileCreated(string profileId)
+   Method: private void HandleProfileSwitched(string profileId)
    Method: private void LoadProfiles()
-   Method: private void CreateProfileCard(ProfileData profile)
-   Method: private void ConfigureProfileCard(GameObject card, ProfileData profile)
-   Method: private void HandleProfileCreated(string profileId, string displayName)
-   Method: private void HandleProfileSelection(GameObject card, ProfileData profile)
-   Method: private IEnumerator TransitionToMainMenu(GameObject selectedCard, ProfileData profile)
-   Method: private IEnumerator FadeInMainMenuButtons()
+   Method: private void HandleProfileSelection(ProfileData profile)
    Method: private void HandleProfileDeletion(ProfileData profile)
-   Method: private void HandleBackButton()
-   Method: private IEnumerator TransitionBackToAuth()
    Method: private void ClearExistingProfiles()
+   Method: private void CreateProfileCard(ProfileData profile)
+   Method: private void UpdateHeaderInfo()
+   Method: private void UpdateUIState()
+   Method: private void ShowTemporaryStatus(string message, bool isError)
+   Method: private IEnumerator ShowStatusMessageRoutine(string message, bool isError)
+   Method: private void HandleBackButton()
+   Method: private IEnumerator AnimateProfileCard(ProfileData profile)
+   Method: private IEnumerator TransitionBackToAuth()
+   Method: private IEnumerator FadeInMainMenuButtons()
    Method: private void OnDestroy()
 Namespace: CyberPickle.UI.Windows.Auth
  Class: AuthPanelController : MonoBehaviour
@@ -488,6 +695,7 @@ Namespace: CyberPickle.UI.Windows.Auth
    Field: private float messageDisplayDuration
    Field: private float panelFadeInDuration
    Field: private AuthenticationManager authManager
+   Field: private ProfileManager profileManager
    Field: private bool isInitialized
    Field: private Coroutine currentTypewriterCoroutine
    Field: private Coroutine loadingCoroutine

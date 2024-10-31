@@ -247,10 +247,22 @@ namespace CyberPickle.Core
                 PauseGame();
             }
         }
-
-        private void OnApplicationQuit()
+        protected override void OnManagerDestroyed()
         {
-            SaveProgress();
+            if (!IsActiveInstance) return;
+
+            try
+            {
+                SaveProgress();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error saving progress during shutdown: {e.Message}");
+            }
+
+            // Cleanup event listeners
+            GameEvents.OnPlayerDied.RemoveListener(HandlePlayerDeath);
+            GameEvents.OnLevelCompleted.RemoveListener(HandleLevelCompleted);
         }
     }
 }

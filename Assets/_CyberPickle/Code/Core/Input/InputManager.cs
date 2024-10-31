@@ -4,7 +4,6 @@ using CyberPickle.Core.Events;
 using CyberPickle.Core.Interfaces;
 using CyberPickle.Core.States;
 
-
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
@@ -15,9 +14,21 @@ namespace CyberPickle.Core.Input
     public class InputManager : Manager<InputManager>, IInitializable
     {
         [Header("Input Settings")]
-        [SerializeField] private float mouseSensitivity = 1.5f;
-        [SerializeField] private float touchSensitivity = 1.5f;
-        [SerializeField] private float keyboardSensitivity = 0.1f;
+        [SerializeField, Tooltip("Mouse sensitivity multiplier for horizontal movement")]
+        private float mouseSensitivity = 1.5f;
+
+        [SerializeField, Tooltip("Touch sensitivity multiplier for horizontal movement")]
+        private float touchSensitivity = 1.5f;
+
+        [SerializeField, Tooltip("Keyboard sensitivity multiplier for horizontal movement")]
+        private float keyboardSensitivity = 0.1f;
+
+        [Header("Dead Zones")]
+        [SerializeField, Tooltip("Minimum mouse movement required to trigger input")]
+        private float mouseDeadZone = 0.01f;
+
+        [SerializeField, Tooltip("Minimum touch movement required to trigger input")]
+        private float touchDeadZone = 0.001f;
 
         private GameState currentGameState;
         private bool isInputEnabled = true;
@@ -28,7 +39,11 @@ namespace CyberPickle.Core.Input
         private InputAction anyKeyAction;
         private InputAction touchPositionAction;
         private InputAction touchPressAction;
+        private InputAction mousePositionAction;
+        private InputAction mouseButtonAction;
         private Vector2 previousTouchPosition;
+        private Vector2 previousMousePosition;
+        private bool isMousePressed;
 #endif
 
         public void Initialize()
@@ -66,6 +81,13 @@ namespace CyberPickle.Core.Input
             anyKeyAction.AddBinding("<Mouse>/leftButton");
             anyKeyAction.performed += ctx => HandleAnyKeyPress();
 
+            // Mouse input
+            mousePositionAction = new InputAction("MousePosition", InputActionType.Value, "<Mouse>/position");
+            mouseButtonAction = new InputAction("MouseButton", InputActionType.Button, "<Mouse>/leftButton");
+
+            mouseButtonAction.started += _ => { isMousePressed = true; previousMousePosition = mousePositionAction.ReadValue<Vector2>(); };
+            mouseButtonAction.canceled += _ => isMousePressed = false;
+
             // Touch input
             touchPositionAction = new InputAction("TouchPosition");
             touchPositionAction.AddBinding("<Touchscreen>/position");
@@ -76,23 +98,27 @@ namespace CyberPickle.Core.Input
 #endif
         }
 
-        private void OnEnable()
+        protected override void OnManagerEnabled()
         {
 #if ENABLE_INPUT_SYSTEM
             moveAction?.Enable();
             anyKeyAction?.Enable();
             touchPositionAction?.Enable();
             touchPressAction?.Enable();
+            mousePositionAction?.Enable();
+            mouseButtonAction?.Enable();
 #endif
         }
 
-        private void OnDisable()
+        protected override void OnManagerDisabled()
         {
 #if ENABLE_INPUT_SYSTEM
             moveAction?.Disable();
             anyKeyAction?.Disable();
             touchPositionAction?.Disable();
             touchPressAction?.Disable();
+            mousePositionAction?.Disable();
+            mouseButtonAction?.Disable();
 #endif
         }
 
@@ -101,7 +127,7 @@ namespace CyberPickle.Core.Input
             if (!isInputEnabled || currentGameState != GameState.Playing) return;
 
             float horizontalInput = movement.x * keyboardSensitivity;
-            if (Mathf.Abs(horizontalInput) > 0.01f)
+            if (Mathf.Abs(horizontalInput) > mouseDeadZone)
             {
                 GameEvents.OnHorizontalInput.Invoke(horizontalInput);
             }
@@ -134,9 +160,28 @@ namespace CyberPickle.Core.Input
             }
         }
 
+        private void HandleMouseInput()
+        {
+            if (!isMousePressed || !isInputEnabled) return;
+
+            Vector2 currentMousePosition = mousePositionAction.ReadValue<Vector2>();
+            Vector2 mouseDelta = currentMousePosition - previousMousePosition;
+            float normalizedDelta = mouseDelta.x / Screen.width * mouseSensitivity;
+
+            if (Mathf.Abs(normalizedDelta) > mouseDeadZone && currentGameState == GameState.Playing)
+            {
+                GameEvents.OnHorizontalInput.Invoke(normalizedDelta);
+            }
+
+            previousMousePosition = currentMousePosition;
+        }
+
         private void Update()
         {
             if (!isInputEnabled) return;
+
+            // Handle mouse movement
+            HandleMouseInput();
 
             // Handle touch movement
             if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
@@ -145,7 +190,7 @@ namespace CyberPickle.Core.Input
                 Vector2 delta = currentPosition - previousTouchPosition;
                 float normalizedDelta = delta.x / Screen.width * touchSensitivity;
 
-                if (Mathf.Abs(normalizedDelta) > 0.001f && currentGameState == GameState.Playing)
+                if (Mathf.Abs(normalizedDelta) > touchDeadZone && currentGameState == GameState.Playing)
                 {
                     GameEvents.OnHorizontalInput.Invoke(normalizedDelta);
                 }
@@ -190,6 +235,8 @@ namespace CyberPickle.Core.Input
             anyKeyAction?.Enable();
             touchPositionAction?.Enable();
             touchPressAction?.Enable();
+            mousePositionAction?.Enable();
+            mouseButtonAction?.Enable();
 #endif
         }
 
@@ -201,10 +248,12 @@ namespace CyberPickle.Core.Input
             anyKeyAction?.Disable();
             touchPositionAction?.Disable();
             touchPressAction?.Disable();
+            mousePositionAction?.Disable();
+            mouseButtonAction?.Disable();
 #endif
         }
 
-        private void OnDestroy()
+        protected override void OnManagerDestroyed()
         {
             // Clean up events
             GameEvents.OnGameStateChanged.RemoveListener(HandleGameStateChanged);
@@ -217,6 +266,8 @@ namespace CyberPickle.Core.Input
             anyKeyAction?.Dispose();
             touchPositionAction?.Dispose();
             touchPressAction?.Dispose();
+            mousePositionAction?.Dispose();
+            mouseButtonAction?.Dispose();
 #endif
         }
     }

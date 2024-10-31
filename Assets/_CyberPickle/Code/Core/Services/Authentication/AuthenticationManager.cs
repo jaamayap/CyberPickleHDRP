@@ -138,9 +138,10 @@ namespace CyberPickle.Core.Services.Authentication
 
         private void OnSignedIn()
         {
+            Debug.Log("[AuthManager] SignedIn event received");
             SetState(AuthenticationState.Authenticated);
             authEvents.InvokeAuthenticationCompleted(AuthenticationService.Instance.PlayerId);
-            Debug.Log($"Signed in successfully. Player ID: {AuthenticationService.Instance.PlayerId}");
+            Debug.Log($"[AuthManager] Signed in successfully. Player ID: {AuthenticationService.Instance.PlayerId}");
         }
 
         private void OnSignedOut()
@@ -183,6 +184,7 @@ namespace CyberPickle.Core.Services.Authentication
         {
             if (currentState != newState)
             {
+                Debug.Log($"[AuthManager] State changing from {currentState} to {newState}");
                 currentState = newState;
                 authEvents.InvokeAuthenticationStateChanged(newState);
             }
@@ -229,10 +231,28 @@ namespace CyberPickle.Core.Services.Authentication
 
         #endregion
 
-        private void OnDestroy()
+        protected override void OnManagerDestroyed()
         {
-            UnsubscribeFromAuthEvents();
-            // No profile container to save
+            if (!IsActiveInstance) return;
+
+            try
+            {
+                // Ensure clean sign out if necessary
+                if (AuthenticationService.Instance != null && AuthenticationService.Instance.IsSignedIn)
+                {
+                    AuthenticationService.Instance.SignOut();
+                }
+
+                // Unsubscribe from events
+                UnsubscribeFromAuthEvents();
+
+                Debug.Log("[AuthManager] Cleanup completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[AuthManager] Error during cleanup: {ex.Message}");
+            }
         }
+
     }
 }

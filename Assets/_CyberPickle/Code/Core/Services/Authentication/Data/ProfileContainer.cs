@@ -94,17 +94,17 @@ namespace CyberPickle.Core.Services.Authentication.Data
             {
                 if (!File.Exists(ProfilesFilePath))
                 {
-                    Debug.Log("Profiles file does not exist. Returning new ProfileContainer.");
+                    Debug.Log($"[ProfileContainer] No profile file found at: {ProfilesFilePath}");
                     return new ProfileContainer();
                 }
 
                 var json = File.ReadAllText(ProfilesFilePath);
-                Debug.Log($"Profiles loaded from {ProfilesFilePath}:\n{json}");
+                Debug.Log($"[ProfileContainer] Loaded JSON: {json}");
                 return JsonUtility.FromJson<ProfileContainer>(json);
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to load profiles: {e.Message}");
+                Debug.LogError($"[ProfileContainer] Error loading profiles: {e}");
                 return new ProfileContainer();
             }
         }

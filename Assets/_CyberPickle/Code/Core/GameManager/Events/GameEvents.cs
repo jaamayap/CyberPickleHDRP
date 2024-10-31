@@ -1,4 +1,6 @@
+using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.States;
+using System.Collections.Generic;
 
 namespace CyberPickle.Core.Events
 {
@@ -38,5 +40,13 @@ namespace CyberPickle.Core.Events
         // Authentication events
         public static readonly GameEvent OnAuthenticationRequested = new GameEvent();
         public static readonly GameEvent OnProfileLoadRequested = new GameEvent();
+
+        // Profile-related events
+        public static readonly GameEvent<List<ProfileData>> OnProfilesLoaded = new GameEvent<List<ProfileData>>();
+        public static readonly GameEvent OnProfilesCleared = new GameEvent();
+        public static readonly GameEvent<string> OnProfileSelected = new GameEvent<string>();
+        public static readonly GameEvent<string> OnProfileCreated = new GameEvent<string>();
+        public static readonly GameEvent<string> OnProfileDeleted = new GameEvent<string>();
+        public static readonly GameEvent<string> OnProfileRestored = new GameEvent<string>();
     }
 }
