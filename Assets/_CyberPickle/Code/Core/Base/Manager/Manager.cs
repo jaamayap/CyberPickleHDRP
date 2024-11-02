@@ -1,5 +1,6 @@
 using UnityEngine;
 using CyberPickle.Core.Interfaces;
+using System.Threading;
 
 namespace CyberPickle.Core.Management
 {
@@ -10,6 +11,8 @@ namespace CyberPickle.Core.Management
     {
         private static T instance;
         private static readonly object lockObject = new object();
+        private static bool isQuitting = false;
+        protected CancellationTokenSource cancellationTokenSource;
 
         public static T Instance
         {
@@ -48,6 +51,7 @@ namespace CyberPickle.Core.Management
             {
                 instance = (T)this;
                 DontDestroyOnLoad(gameObject);
+                cancellationTokenSource = new CancellationTokenSource();
                 OnManagerAwake();
             }
             else if (instance != this)
@@ -69,6 +73,10 @@ namespace CyberPickle.Core.Management
 
         protected virtual void OnEnable()
         {
+            if (cancellationTokenSource == null || cancellationTokenSource.IsCancellationRequested)
+            {
+                cancellationTokenSource = new CancellationTokenSource();
+            }
             OnManagerEnabled();
         }
 
@@ -83,13 +91,35 @@ namespace CyberPickle.Core.Management
             {
                 OnManagerDestroyed();
                 instance = null;
+
+                // Cancel any pending async operations
+                if (cancellationTokenSource != null)
+                {
+                    cancellationTokenSource.Cancel();
+                    cancellationTokenSource.Dispose();
+                    cancellationTokenSource = null;
+                }
             }
+        }
+
+        protected virtual void OnApplicationQuit()
+        {
+            isQuitting = true;
+
+            // Cancel any pending async operations
+            if (cancellationTokenSource != null && !cancellationTokenSource.IsCancellationRequested)
+            {
+                cancellationTokenSource.Cancel();
+            }
+
+            OnManagerApplicationQuit();
         }
 
         // Virtual methods for derived classes to override
         protected virtual void OnManagerEnabled() { }
         protected virtual void OnManagerDisabled() { }
         protected virtual void OnManagerDestroyed() { }
+        protected virtual void OnManagerApplicationQuit() { }
 
         // Helper method to check if this is the active instance
         protected bool IsActiveInstance => instance == this;

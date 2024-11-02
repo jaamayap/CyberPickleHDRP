@@ -8,6 +8,7 @@ using System.Linq;
 using CyberPickle.Core.Management;
 using CyberPickle.Core.Interfaces;
 using CyberPickle.Core.Services.Authentication.Data;
+using System.Threading;
 
 namespace CyberPickle.Core.Services.Authentication
 {
@@ -267,19 +268,40 @@ namespace CyberPickle.Core.Services.Authentication
 
             try
             {
+                // Get the cancellation token
+                var token = cancellationTokenSource?.Token ?? CancellationToken.None;
+
+                // Check for cancellation
+                if (token.IsCancellationRequested)
+                {
+                    Debug.Log("[ProfileManager] Save operation cancelled due to application quit");
+                    return;
+                }
+
                 await Task.Run(() =>
                 {
+                    // Check cancellation again inside the task
+                    if (token.IsCancellationRequested) return;
+
                     lock (saveLock)
                     {
-                        profileContainer.SaveProfiles();
+                        if (!IsQuitting)  // Only save if not quitting
+                        {
+                            profileContainer.SaveProfiles();
+                        }
                     }
-                });
-                Debug.Log("[ProfileManager] Final profile save completed successfully");
+                }, token);
+
+                Debug.Log("[ProfileManager] Profile save completed successfully");
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.Log("[ProfileManager] Save operation was cancelled");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ProfileManager] Failed to save profiles during cleanup: {ex.Message}");
-                throw;
+                Debug.LogError($"[ProfileManager] Failed to save profiles: {ex.Message}");
+                // Don't rethrow during cleanup
             }
         }
 
@@ -340,7 +362,11 @@ namespace CyberPickle.Core.Services.Authentication
             {
                 try
                 {
-                    SaveProfilesAsync().GetAwaiter().GetResult();
+                    // Don't wait for async operations during cleanup
+                    if (!IsQuitting)
+                    {
+                        SaveProfilesAsync().GetAwaiter().GetResult();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -352,6 +378,8 @@ namespace CyberPickle.Core.Services.Authentication
                     profileEvents = null;
                 }
             }
+
+            base.OnDestroy();
         }
     }
 }

@@ -34,7 +34,6 @@ namespace CyberPickle.Core.Boot.UI
             if (loadingBarSlider != null)
             {
                 loadingBarSlider.value = progress;
-                Debug.Log($"[BootUIController] Progress updated: {progress:P0}");
             }
         }
 
