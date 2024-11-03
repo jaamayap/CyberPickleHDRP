@@ -48,5 +48,10 @@ namespace CyberPickle.Core.Events
         public static readonly GameEvent<string> OnProfileCreated = new GameEvent<string>();
         public static readonly GameEvent<string> OnProfileDeleted = new GameEvent<string>();
         public static readonly GameEvent<string> OnProfileRestored = new GameEvent<string>();
+
+        // UI Animation Events
+        public static readonly GameEvent OnUIAnimationStarted = new GameEvent();
+        public static readonly GameEvent OnUIAnimationCompleted = new GameEvent();
+        public static readonly GameEvent OnProfileUIReady = new GameEvent();
     }
 }

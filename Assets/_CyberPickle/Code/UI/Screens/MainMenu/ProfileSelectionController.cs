@@ -61,6 +61,7 @@ namespace CyberPickle.UI.Screens.MainMenu
         private CreateProfileCardController createProfileCard;
         private bool isTransitioning;
         private Coroutine statusMessageCoroutine;
+        
 
         #region Initialization
 
@@ -169,6 +170,7 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (state == AuthenticationState.Authenticated)
             {
                 Debug.Log("[ProfileSelection] Authentication completed, loading profiles");
+                
                 LoadProfiles();
             }
         }

@@ -27,5 +27,7 @@ EditorBuildSettings:
     path: Assets/_CyberPickle/Scenes/PostGame/PostGame.unity
     guid: 8006866ebc7c436458ab378e9b26f0d5
   m_configObjects:
+    com.unity.addressableassets: {fileID: 11400000, guid: 44bc5351db271d7428b04710dcce1c49,
+      type: 2}
     com.unity.input.settings: {fileID: 11400000, guid: a6ffd0909900f934b83aa7ed859a5ba1,
       type: 2}

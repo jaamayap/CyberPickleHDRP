@@ -11,9 +11,8 @@ namespace CyberPickle.Core
 {
     public class GameManager : Manager<GameManager>, IInitializable
     {
-        [Header("Configuration")]
-        [SerializeField] private GameConfig gameConfig;
 
+        private GameConfig gameConfig;
         private GameState currentState = GameState.None;
         private GameState previousState = GameState.None;
         private bool isInitialized;
@@ -28,8 +27,14 @@ namespace CyberPickle.Core
         {
             if (isInitialized) return;
 
-            RegisterEventListeners();
             LoadGameConfig();
+            if (gameConfig == null)
+            {
+                Debug.LogError("<color=red>[GameManager] Failed to load GameConfig. Cannot initialize!</color>");
+                return;
+            }
+
+            RegisterEventListeners();
             isInitialized = true;
 
             GameEvents.OnGameInitialized.Invoke();
@@ -44,13 +49,25 @@ namespace CyberPickle.Core
 
         private void LoadGameConfig()
         {
-            if (gameConfig == null)
+            try
             {
-                gameConfig = Resources.Load<GameConfig>("Configs/GameConfig");
+                var configRegistry = ConfigRegistry.Instance;
+                if (configRegistry == null)
+                {
+                    throw new System.Exception("ConfigRegistry not initialized!");
+                }
+
+                gameConfig = configRegistry.GetConfig<GameConfig>();
                 if (gameConfig == null)
                 {
-                    Debug.LogError("GameConfig not found! Please create a GameConfig asset.");
+                    throw new System.Exception("GameConfig not found in registry!");
                 }
+
+                Debug.Log("<color=green>[GameManager] GameConfig loaded successfully!</color>");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"<color=red>[GameManager] Failed to load GameConfig: {e.Message}</color>");
             }
         }
 
@@ -237,6 +254,7 @@ namespace CyberPickle.Core
 
         protected override void OnManagerAwake()
         {
+            Debug.Log("<color=yellow>[GameManager] Initializing...</color>");
             Initialize();
         }
 

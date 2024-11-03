@@ -35,7 +35,7 @@ Namespace: CyberPickle.Core
    Method: public void ToggleDebugMode()
    Method: protected override void OnManagerAwake()
    Method: private void OnApplicationPause(bool pauseStatus)
-   Method: private void OnApplicationQuit()
+   Method: protected override void OnManagerDestroyed()
    Property: public GameState CurrentState { get; }
    Property: public bool IsPaused { get; }
 Namespace: CyberPickle.Core.Analytics
@@ -48,20 +48,23 @@ Namespace: CyberPickle.Core.Audio
    Method: public sealed void Initialize()
 Namespace: CyberPickle.Core.Boot
  Class: BootManager : Manager<BootManager>, IInitializable
-   Field: private BootConfig bootConfig
    Field: private BootUIController uiController
    Field: private float minimumLoadTime
    Field: private float delayBeforeScene
    Field: private float startTime
+   Field: private ConfigRegistry configRegistry
    Constructor: public BootManager()
    Method: protected override void OnManagerAwake()
+   Method: private void ValidateRequirements()
    Method: public sealed void Initialize()
    Method: private IEnumerator InitializeGameSystems()
+   Method: private IEnumerator InitializeConfigRegistry(Action<bool> onComplete)
    Method: private IEnumerator InitializeCore()
    Method: private IEnumerator InitializeServices()
    Method: private IEnumerator InitializeGameplay()
    Method: private IEnumerator InitializeManager(string systemName, float startProgress, float endProgress)
-   Method: private void LoadMainMenuScene()
+   Method: private IEnumerator CompleteInitialization()
+   Method: private void LoadMainMenuScene(string sceneName)
  Class: BootSceneManager : Manager<BootSceneManager>
    Field: private CanvasGroup logoCanvasGroup
    Field: private TextMeshProUGUI companyNameText
@@ -106,6 +109,21 @@ Namespace: CyberPickle.Core.Config
    Field: public bool waitForInput
    Field: public string[] loadingTips
    Constructor: public BootConfig()
+ Class: ConfigRegistry : Manager<ConfigRegistry>
+   Field: private Dictionary<Type, ScriptableObject> configs
+   Field: private Dictionary<Type, AsyncOperationHandle> operationHandles
+   Field: private bool isInitialized
+   Field: private static string BOOT_CONFIG_KEY
+   Field: private static string GAME_CONFIG_KEY
+   Constructor: public ConfigRegistry()
+   Method: protected override void OnManagerAwake()
+   Method: public async Task InitializeAsync()
+   Method: private async Task LoadCoreConfigs()
+   Method: private async Task LoadUIConfigs()
+   Method: private async Task<T> LoadConfigAsync(string key)
+   Method: private void RegisterConfig(T config)
+   Method: public T GetConfig()
+   Method: protected override void OnManagerDestroyed()
  Class: GameConfig : ScriptableObject
    Field: public string mainMenuSceneName
    Field: public string characterSelectSceneName
@@ -175,6 +193,8 @@ Namespace: CyberPickle.Core.Input
    Field: private float mouseSensitivity
    Field: private float touchSensitivity
    Field: private float keyboardSensitivity
+   Field: private float mouseDeadZone
+   Field: private float touchDeadZone
    Field: private GameState currentGameState
    Field: private bool isInputEnabled
    Field: private bool isInitialized
@@ -182,21 +202,26 @@ Namespace: CyberPickle.Core.Input
    Field: private InputAction anyKeyAction
    Field: private InputAction touchPositionAction
    Field: private InputAction touchPressAction
+   Field: private InputAction mousePositionAction
+   Field: private InputAction mouseButtonAction
    Field: private Vector2 previousTouchPosition
+   Field: private Vector2 previousMousePosition
+   Field: private bool isMousePressed
    Constructor: public InputManager()
    Method: public sealed void Initialize()
    Method: private void SetupInputActions()
-   Method: private void OnEnable()
-   Method: private void OnDisable()
+   Method: protected override void OnManagerEnabled()
+   Method: protected override void OnManagerDisabled()
    Method: private void HandleMovement(Vector2 movement)
    Method: private void HandleAnyKeyPress()
    Method: private void HandleTouchPress(float pressed)
+   Method: private void HandleMouseInput()
    Method: private void Update()
    Method: private void RegisterEvents()
    Method: private void HandleGameStateChanged(GameState newState)
    Method: public void EnableInput()
    Method: public void DisableInput()
-   Method: private void OnDestroy()
+   Method: protected override void OnManagerDestroyed()
 Namespace: CyberPickle.Core.Interfaces
  Interface: ICleanable
    Method: public abstract void Cleanup()
@@ -207,6 +232,7 @@ Namespace: CyberPickle.Core.Management
    Field: private static T instance
    Field: private static object lockObject
    Field: private static bool isQuitting
+   Field: protected CancellationTokenSource cancellationTokenSource
    Constructor: protected Manager<T>()
    Constructor: private Manager<T>()
    Method: protected virtual void Awake()
@@ -219,9 +245,9 @@ Namespace: CyberPickle.Core.Management
    Method: protected virtual void OnManagerDisabled()
    Method: protected virtual void OnManagerDestroyed()
    Method: protected virtual void OnManagerApplicationQuit()
-   Property: protected bool IsQuitting { get; }
    Property: public static T Instance { get; }
    Property: protected bool IsActiveInstance { get; }
+   Property: protected bool IsQuitting { get; }
 Namespace: CyberPickle.Core.Pool
  Class: PoolManager : Manager<PoolManager>, IInitializable
    Constructor: public PoolManager()
@@ -260,7 +286,7 @@ Namespace: CyberPickle.Core.Services.Authentication
    Method: public void UnsubscribeFromSessionExpired(Action callback)
    Method: public void SubscribeToSignedOut(Action callback)
    Method: public void UnsubscribeFromSignedOut(Action callback)
-   Method: private void OnDestroy()
+   Method: protected override void OnManagerDestroyed()
    Property: public AuthenticationState CurrentState { get; }
    Property: public bool IsSignedIn { get; }
    Property: public string CurrentPlayerId { get; }

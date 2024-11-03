@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Configs
+  m_EditorClassIdentifier: 
+  m_GroupName: Configs
+  m_Data:
+    m_SerializedData: []
+  m_GUID: 7f5f36ee805c8854594eaa27a358dc54
+  m_SerializeEntries:
+  - m_GUID: 12ebbd898351eb740b7cd269f38fdcbc
+    m_Address: config/boot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - config-core
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eff71fba439510f4182b07f484c17e2e
+    m_Address: config/game
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - config-core
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aec7a184b22e7ea44b3e8ac3e94bec64
+    m_Address: config/ui/drgs-glitch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - config-ui
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 56539ed170e75a045b0e6589d50db7d9
+    m_Address: config/ui/pabts-glitch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - config-ui
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8d8800a23fdd4c4bb9258981e6068c4
+    m_Address: config/ui/title-glitch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - config-ui
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: a94d9961289a91f47aeaff6b5c61d38c, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 90ff173e287224f43b1c85ef06d0c084, type: 2}
+    - {fileID: 11400000, guid: e835231c3dc2f6d4ea82c6e1cb79e783, type: 2}

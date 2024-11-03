@@ -1,4 +1,10 @@
 // File: Assets/Code/Core/Boot/BootManager.cs
+//
+// Purpose: Manages the game's boot sequence, initializing all core systems, services,
+// and gameplay managers in the correct order while providing visual feedback.
+//
+// Created: 2024-02-11
+// Updated: 2024-02-11
 
 using UnityEngine;
 using System.Collections;
@@ -19,50 +25,59 @@ using CyberPickle.Progression;
 using CyberPickle.Achievements;
 using UnityEngine.SceneManagement;
 
+
+
 namespace CyberPickle.Core.Boot
 {
     public class BootManager : Manager<BootManager>, IInitializable
     {
-        [Header("Configuration")]
-        [SerializeField] private BootConfig bootConfig;
+        [Header("UI")]
         [SerializeField] private BootUIController uiController;
-        [SerializeField] private float minimumLoadTime = 2f; // Minimum time to show the boot screen
-        [SerializeField] private float delayBeforeScene = 0.5f; // Short delay before loading main scene
+
+        [Header("Timing")]
+        [SerializeField] private float minimumLoadTime = 2f;
+        [SerializeField] private float delayBeforeScene = 0.5f;
 
         private float startTime;
+        private ConfigRegistry configRegistry;
 
         protected override void OnManagerAwake()
         {
             Debug.Log("<color=yellow>[BootManager] Awake called</color>");
-            if (uiController == null)
-            {
-                Debug.LogError("<color=red>[BootManager] UI Controller is not assigned!</color>");
-                return;
-            }
+            ValidateRequirements();
             startTime = Time.time;
             Initialize();
         }
 
-        public void Initialize()
+        private void ValidateRequirements()
         {
-            Debug.Log("<color=yellow>[BootManager] Starting initialization sequence...</color>");
-            // Verify UI Controller again
             if (uiController == null)
             {
-                Debug.LogError("<color=red>[BootManager] UI Controller is not assigned!</color>");
-                return;
+                throw new System.Exception("<color=red>[BootManager] UI Controller is not assigned!</color>");
             }
+        }
 
-            // Test UI Controller
+        public void Initialize()
+        {
+            Debug.Log("<color=yellow>[BootManager] Starting initialize sequence...</color>");
             uiController.UpdateLoadingText("Starting initialization...");
             uiController.UpdateProgress(0f);
-
             StartCoroutine(InitializeGameSystems());
         }
 
         private IEnumerator InitializeGameSystems()
         {
             Debug.Log("<color=yellow>[BootManager] Starting initialization sequence...</color>");
+
+            // Initialize ConfigRegistry first
+            bool configSuccess = false;
+            yield return StartCoroutine(InitializeConfigRegistry(success => configSuccess = success));
+
+            if (!configSuccess)
+            {
+                Debug.LogError("<color=red>[BootManager] Failed to initialize configs. Aborting boot sequence.</color>");
+                yield break;
+            }
 
             // Initialize core systems
             yield return StartCoroutine(InitializeCore());
@@ -73,29 +88,73 @@ namespace CyberPickle.Core.Boot
             // Initialize gameplay
             yield return StartCoroutine(InitializeGameplay());
 
-            // Ensure loading bar reaches 100%
-            uiController.UpdateProgress(1f);
-            uiController.UpdateLoadingText("Loading Complete");
+            yield return StartCoroutine(CompleteInitialization());
+        }
 
-            // Ensure minimum display time
-            float elapsedTime = Time.time - startTime;
-            if (elapsedTime < minimumLoadTime)
+        // Custom class to handle initialization result
+        private class ConfigInitializationResult : CustomYieldInstruction
+        {
+            public bool Success { get; private set; }
+
+            public ConfigInitializationResult(bool success)
             {
-                yield return new WaitForSeconds(minimumLoadTime - elapsedTime);
+                Success = success;
             }
 
-            // Small delay before scene transition
-            yield return new WaitForSeconds(delayBeforeScene);
+            public override bool keepWaiting => false;
+        }
 
-            // Load main scene
-            LoadMainMenuScene();
+        private IEnumerator InitializeConfigRegistry(System.Action<bool> onComplete)
+        {
+            uiController.UpdateLoadingText("Loading Configurations...");
+            float progress = 0f;
+            uiController.UpdateProgress(progress);
+
+            configRegistry = ConfigRegistry.Instance;
+            if (configRegistry == null)
+            {
+                Debug.LogError("<color=red>[BootManager] Failed to create ConfigRegistry!</color>");
+                onComplete?.Invoke(false);
+                yield break;
+            }
+
+            bool initComplete = false;
+            bool initSuccess = false;
+
+            // Start async initialization
+            configRegistry.InitializeAsync().ContinueWith(task =>
+            {
+                initComplete = true;
+                initSuccess = !task.IsFaulted;
+
+                if (task.IsFaulted)
+                {
+                    Debug.LogError($"<color=red>[BootManager] Config initialization failed: {task.Exception.GetBaseException().Message}</color>");
+                }
+            }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+
+            // Show progress while waiting
+            while (!initComplete)
+            {
+                progress = Mathf.PingPong(Time.time * 0.5f, 0.1f);
+                uiController.UpdateProgress(progress);
+                yield return null;
+            }
+
+            if (initSuccess)
+            {
+                Debug.Log("<color=green>[BootManager] Configurations loaded successfully!</color>");
+                uiController.UpdateProgress(0.1f); // Move to 10% progress
+            }
+
+            onComplete?.Invoke(initSuccess);
         }
 
         private IEnumerator InitializeCore()
         {
             uiController.UpdateLoadingText("Initializing Core Systems...");
-            float progressStart = 0f;
-            float progressEnd = 0.3f;
+            float progressStart = 0.1f;
+            float progressEnd = 0.4f;
             float step = (progressEnd - progressStart) / 4f;
 
             // Initialize Input Manager first
@@ -110,9 +169,9 @@ namespace CyberPickle.Core.Boot
         private IEnumerator InitializeServices()
         {
             uiController.UpdateLoadingText("Initializing Services...");
-            float progressStart = 0.3f;
-            float progressEnd = 0.6f;
-            float step = (progressEnd - progressStart) / 5f; // Updated to 5 systems
+            float progressStart = 0.4f;
+            float progressEnd = 0.7f;
+            float step = (progressEnd - progressStart) / 5f;
 
             yield return InitializeManager<AuthenticationManager>("Authentication", progressStart, progressStart + step);
             yield return InitializeManager<ProfileManager>("Profile Manager", progressStart + step, progressStart + (step * 2));
@@ -124,9 +183,9 @@ namespace CyberPickle.Core.Boot
         private IEnumerator InitializeGameplay()
         {
             uiController.UpdateLoadingText("Initializing Gameplay Systems...");
-            float progressStart = 0.6f;
-            float progressEnd = 1f;
-            float step = (progressEnd - progressStart) / 4f; // 4 systems
+            float progressStart = 0.7f;
+            float progressEnd = 0.9f;
+            float step = (progressEnd - progressStart) / 4f;
 
             yield return InitializeManager<GameManager>("Game System", progressStart, progressStart + step);
             yield return InitializeManager<CharacterManager>("Character System", progressStart + step, progressStart + (step * 2));
@@ -140,12 +199,13 @@ namespace CyberPickle.Core.Boot
             Debug.Log($"<color=yellow>[BootManager] Initializing {systemName}...</color>");
 
             M manager = null;
+            bool success = false;
 
-            // Get manager instance
             try
             {
                 manager = Manager<M>.Instance;
                 manager.Initialize();
+                success = true;
                 Debug.Log($"<color=green>[BootManager] {systemName} initialized successfully!</color>");
             }
             catch (System.Exception e)
@@ -154,24 +214,45 @@ namespace CyberPickle.Core.Boot
                 yield break;
             }
 
-            // Update progress after initialization
-            float elapsed = 0f;
-            float duration = 0.5f;
-
-            while (elapsed < duration)
+            if (success)
             {
-                elapsed += Time.deltaTime;
-                float normalizedTime = elapsed / duration;
-                float currentProgress = Mathf.Lerp(startProgress, endProgress, normalizedTime);
-                uiController.UpdateProgress(currentProgress);
-                yield return null;
+                float elapsed = 0f;
+                float duration = 0.5f;
+
+                while (elapsed < duration)
+                {
+                    elapsed += Time.deltaTime;
+                    float normalizedTime = elapsed / duration;
+                    float currentProgress = Mathf.Lerp(startProgress, endProgress, normalizedTime);
+                    uiController.UpdateProgress(currentProgress);
+                    yield return null;
+                }
             }
         }
 
-        private void LoadMainMenuScene()
+        private IEnumerator CompleteInitialization()
         {
-            Debug.Log("<color=green>[BootManager] Loading main menu scene...</color>");
-            SceneManager.LoadScene(bootConfig.mainMenuSceneName);
+            uiController.UpdateLoadingText("Loading Complete");
+            uiController.UpdateProgress(1f);
+
+            // Ensure minimum display time
+            float elapsedTime = Time.time - startTime;
+            if (elapsedTime < minimumLoadTime)
+            {
+                yield return new WaitForSeconds(minimumLoadTime - elapsedTime);
+            }
+
+            yield return new WaitForSeconds(delayBeforeScene);
+
+            // Get mainMenuSceneName from config
+            var bootConfig = configRegistry.GetConfig<BootConfig>();
+            LoadMainMenuScene(bootConfig.mainMenuSceneName);
+        }
+
+        private void LoadMainMenuScene(string sceneName)
+        {
+            Debug.Log($"<color=green>[BootManager] Loading main menu scene: {sceneName}</color>");
+            SceneManager.LoadScene(sceneName);
         }
     }
 }
