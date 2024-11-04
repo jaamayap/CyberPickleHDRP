@@ -21,6 +21,12 @@ namespace CyberPickle.Core.Services.Authentication.Flow.States
             Debug.Log("[AuthenticatingState] Starting authentication");
             var command = new StartAuthenticationCommand(authManager);
             await flowManager.ExecuteCommand(command);
+
+            // Only transition to ProfileSelectionState after successful authentication
+            if (authManager.IsSignedIn)
+            {
+                flowManager.TransitionTo<ProfileSelectionState>();
+            }
         }
 
         public void Exit()
@@ -32,6 +38,7 @@ namespace CyberPickle.Core.Services.Authentication.Flow.States
 
         public bool CanTransitionTo(IAuthenticationState nextState)
         {
+            // Can only transition to ProfileSelectionState if authenticated
             return nextState is ProfileSelectionState && authManager.IsSignedIn;
         }
     }

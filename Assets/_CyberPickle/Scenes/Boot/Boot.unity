@@ -605,9 +605,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3ce13688876617c4582deb750ac5fa24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  bootConfig: {fileID: 11400000, guid: 12ebbd898351eb740b7cd269f38fdcbc, type: 2}
   uiController: {fileID: 2062058657}
-  minimumLoadTime: 2
+  minimumLoadTime: 0.5
   delayBeforeScene: 0.5
 --- !u!1 &631153567
 GameObject:

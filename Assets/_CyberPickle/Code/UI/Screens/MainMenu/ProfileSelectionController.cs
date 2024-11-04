@@ -25,6 +25,7 @@ using CyberPickle.Core.Services.Authentication.Flow.Commands;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
 using System;
+using CyberPickle.Core.Services.Authentication.Flow.States;
 
 namespace CyberPickle.UI.Screens.MainMenu
 {
@@ -44,6 +45,7 @@ namespace CyberPickle.UI.Screens.MainMenu
         [Header("UI Elements")]
         [SerializeField] private Button backButton;
         [SerializeField] private CanvasGroup mainMenuButtonsGroup;
+        [SerializeField] private CanvasGroup deleteConfirmationDialog;
 
         [Header("Animation Settings")]
         [SerializeField] private float transitionDuration = 0.5f;
@@ -53,6 +55,7 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         [Header("Canvas References")]
         [SerializeField] private Canvas mainCanvas;
+        
 
         private AuthenticationManager authManager;
         private ProfileManager profileManager;
@@ -67,6 +70,12 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void Awake()
         {
+            if (deleteConfirmationDialog != null)
+            {
+                deleteConfirmationDialog.alpha = 0f;
+                deleteConfirmationDialog.interactable = false;
+                deleteConfirmationDialog.blocksRaycasts = false;
+            }
             Debug.Log("[ProfileSelection] Awake called");
             InitializeManagers();
             ValidateReferences();
@@ -110,12 +119,18 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void InitializeUI()
         {
+            if (!ValidateManagers()) return;
+
+            Debug.Log("[ProfileSelection] Initializing UI");
+
+            // Only handle the profile-specific UI elements
             mainMenuButtonsGroup.alpha = 0f;
             mainMenuButtonsGroup.interactable = false;
 
             UpdateHeaderInfo();
             backButton.onClick.AddListener(HandleBackButton);
 
+            // Initialize cards container
             InitializeCreateProfileCard();
         }
 
@@ -169,16 +184,48 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             if (state == AuthenticationState.Authenticated)
             {
-                Debug.Log("[ProfileSelection] Authentication completed, loading profiles");
-                
-                LoadProfiles();
+                Debug.Log("[ProfileSelection] Authentication completed, waiting for UI readiness");
+                GameEvents.OnUIAnimationCompleted.AddListener(OnPanelTransitionComplete);
             }
         }
 
+        private void OnPanelTransitionComplete()
+        {
+            GameEvents.OnUIAnimationCompleted.RemoveListener(OnPanelTransitionComplete);
+
+            // Only load profiles if our container is active
+            if (profilesContainer != null && profilesContainer.gameObject.activeInHierarchy)
+            {
+                Debug.Log("[ProfileSelection] Panel transition complete, loading profiles");
+                LoadProfiles();
+            }
+        }
+       
+
+
+        private IEnumerator ExecuteCommandCoroutine(IAuthCommand command)
+        {
+            Task commandTask = flowManager.ExecuteCommand(command);
+
+            while (!commandTask.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (commandTask.IsFaulted)
+            {
+                Debug.LogError($"[ProfileSelection] Failed to load profiles: {commandTask.Exception?.InnerException?.Message}");
+                ShowTemporaryStatus("Failed to load profiles", true);
+                yield break;
+            }
+
+            // After profiles are loaded successfully, update UI
+            UpdateUIState();
+        }
         private void HandleAuthenticationCompleted(string playerId)
         {
             Debug.Log($"[ProfileSelection] Authentication completed for player: {playerId}");
-            LoadProfiles();
+            // Remove this LoadProfiles() call since HandleAuthStateChanged will handle it
         }
 
         private void HandleProfileCreated(string profileId)
@@ -214,9 +261,9 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void LoadProfiles()
         {
-            if (isTransitioning || !gameObject.activeInHierarchy)
+            if (isTransitioning)
             {
-                Debug.LogWarning("[ProfileSelection] Cannot load profiles - transitioning or inactive");
+                Debug.LogWarning("[ProfileSelection] Cannot load profiles - transitioning");
                 return;
             }
 
@@ -243,9 +290,11 @@ namespace CyberPickle.UI.Screens.MainMenu
             }
         }
 
+
+
         private async void HandleProfileSelection(ProfileData profile)
         {
-            if (isTransitioning || !gameObject.activeInHierarchy) return;
+            if (isTransitioning) return;
 
             try
             {
@@ -253,12 +302,18 @@ namespace CyberPickle.UI.Screens.MainMenu
                 var command = new SelectProfileCommand(profileManager, profile.ProfileId);
                 await flowManager.ExecuteCommand(command);
                 StartCoroutine(AnimateProfileCard(profile));
+
+                // Let MainMenuController handle the state change
+                GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[ProfileSelection] Error selecting profile: {ex.Message}");
-                isTransitioning = false;
                 ShowTemporaryStatus("Failed to select profile", true);
+            }
+            finally
+            {
+                isTransitioning = false;
             }
         }
 
@@ -266,19 +321,18 @@ namespace CyberPickle.UI.Screens.MainMenu
         {
             if (profile == null) return;
 
+            // Show confirmation dialog first
+            var confirmed = await ShowDeleteConfirmationDialog(profile.DisplayName);
+            if (!confirmed) return;
+
             try
             {
+                // Execute the delete command
                 var command = new DeleteProfileCommand(profileManager, profile.ProfileId);
                 await flowManager.ExecuteCommand(command);
 
-                if (profileManager.ActiveProfile?.ProfileId == profile.ProfileId)
-                {
-                    await profileManager.ClearAllProfilesAsync();
-                    authManager.SignOut();
-                }
-
+                // Just refresh the profiles list
                 LoadProfiles();
-                UpdateUIState();
                 ShowTemporaryStatus("Profile deleted successfully");
             }
             catch (Exception ex)
@@ -288,6 +342,64 @@ namespace CyberPickle.UI.Screens.MainMenu
             }
         }
 
+        private async Task<bool> ShowDeleteConfirmationDialog(string profileName)
+        {
+            // Create a TaskCompletionSource to handle the async dialog result
+            var tcs = new TaskCompletionSource<bool>();
+
+            // Find the dialog in your scene
+            var dialogPanel = GameObject.Find("DeleteConfirmationDialog")?.GetComponent<CanvasGroup>();
+            if (dialogPanel == null)
+            {
+                Debug.LogError("[ProfileSelection] DeleteConfirmationDialog not found in scene!");
+                return false;
+            }
+
+            // Get button references from the dialog panel
+            var confirmButton = dialogPanel.GetComponentInChildren<Button>(true);
+            var cancelButton = dialogPanel.GetComponentsInChildren<Button>(true)[1];
+            var messageText = dialogPanel.GetComponentInChildren<TextMeshProUGUI>(true);
+
+            // Show dialog
+            dialogPanel.alpha = 1f;
+            dialogPanel.interactable = true;
+            dialogPanel.blocksRaycasts = true;
+
+            // Set message
+            messageText.text = $"Are you sure you want to delete profile {profileName}?";
+
+            // Setup button listeners
+            void OnConfirm()
+            {
+                tcs.SetResult(true);
+                CleanupDialog();
+            }
+
+            void OnCancel()
+            {
+                tcs.SetResult(false);
+                CleanupDialog();
+            }
+
+            void CleanupDialog()
+            {
+                // Remove listeners
+                confirmButton.onClick.RemoveListener(OnConfirm);
+                cancelButton.onClick.RemoveListener(OnCancel);
+
+                // Hide dialog
+                dialogPanel.alpha = 0f;
+                dialogPanel.interactable = false;
+                dialogPanel.blocksRaycasts = false;
+            }
+
+            // Add listeners
+            confirmButton.onClick.AddListener(OnConfirm);
+            cancelButton.onClick.AddListener(OnCancel);
+
+            // Return the task
+            return await tcs.Task;
+        }
         private void ClearExistingProfiles()
         {
             foreach (var card in instantiatedCards.Where(card => card != null))
@@ -390,7 +502,9 @@ namespace CyberPickle.UI.Screens.MainMenu
         private void HandleBackButton()
         {
             if (isTransitioning) return;
-            StartCoroutine(TransitionBackToAuth());
+
+            // Instead of handling the transition, just notify the main menu controller
+            GameEvents.OnProfileLoadRequested.Invoke();
         }
 
         #endregion
@@ -500,7 +614,9 @@ namespace CyberPickle.UI.Screens.MainMenu
             }
 
             profileSelectionPanel.SetActive(false);
-            authManager.SignOut();
+
+            // Instead of directly signing out, use the flow manager
+            flowManager.TransitionTo<AuthenticatingState>();
 
             var authPanel = GameObject.Find("AuthPanel");
             if (authPanel != null)

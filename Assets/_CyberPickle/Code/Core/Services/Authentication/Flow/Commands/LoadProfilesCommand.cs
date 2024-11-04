@@ -25,10 +25,17 @@ namespace CyberPickle.Core.Services.Authentication.Flow.Commands
 
             try
             {
+                // Wait for profile container to load
+                await Task.Yield(); // Ensure we're not blocking the main thread
+
                 loadedProfiles = profileManager.GetAllProfiles().ToList();
                 Debug.Log($"[LoadProfilesCommand] Successfully loaded {loadedProfiles.Count} profiles");
 
+                // Notify UI that profiles are loaded
                 GameEvents.OnProfilesLoaded?.Invoke(loadedProfiles);
+
+                // Give time for any UI updates to complete
+                await Task.Yield();
             }
             catch (Exception ex)
             {
@@ -39,6 +46,7 @@ namespace CyberPickle.Core.Services.Authentication.Flow.Commands
 
         public void Undo()
         {
+            Debug.Log("[LoadProfilesCommand] Undoing profile load");
             GameEvents.OnProfilesCleared?.Invoke();
         }
     }

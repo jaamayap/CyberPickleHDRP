@@ -26,6 +26,7 @@ namespace CyberPickle.Core.Services.Authentication.Flow.States
 
         public bool CanTransitionTo(IAuthenticationState nextState)
         {
+            // Allow transition to AuthenticatingState only
             return nextState is AuthenticatingState;
         }
     }

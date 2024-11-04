@@ -34,22 +34,11 @@ namespace CyberPickle.Core.Services.Authentication.Flow.Commands
                     throw new Exception($"Profile not found: {profileId}");
                 }
 
-                // Check if this is the active profile
-                wasActiveProfile = profileManager.ActiveProfile?.ProfileId == profileId;
-
                 // Create backup
                 deletedProfileBackup = profileToDelete;
 
-                // If this is the active profile, we need to handle that
-                if (wasActiveProfile)
-                {
-                    Debug.Log("[DeleteProfileCommand] Deleting active profile, switching to default if available");
-                    await SwitchToDefaultOrFirstAvailable();
-                }
-
                 // Execute the delete operation
                 var result = await profileManager.DeleteProfileAsync(profileId);
-
                 if (!result.Success)
                 {
                     throw new Exception(result.Message);
@@ -57,8 +46,6 @@ namespace CyberPickle.Core.Services.Authentication.Flow.Commands
 
                 // Notify that the profile was deleted
                 GameEvents.OnProfileDeleted.Invoke(profileId);
-
-                Debug.Log($"[DeleteProfileCommand] Profile deleted successfully: {profileId}");
             }
             catch (Exception ex)
             {
@@ -67,17 +54,6 @@ namespace CyberPickle.Core.Services.Authentication.Flow.Commands
             }
         }
 
-        private async Task SwitchToDefaultOrFirstAvailable()
-        {
-            var profiles = profileManager.GetAllProfiles();
-            var nextProfile = profiles.FirstOrDefault(p => p.ProfileId != profileId);
-
-            if (nextProfile != null)
-            {
-                var switchCommand = new SelectProfileCommand(profileManager, nextProfile.ProfileId);
-                await switchCommand.Execute();
-            }
-        }
 
         public void Undo()
         {

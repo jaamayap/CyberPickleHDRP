@@ -24,6 +24,7 @@ using CyberPickle.Characters;
 using CyberPickle.Progression;
 using CyberPickle.Achievements;
 using UnityEngine.SceneManagement;
+using CyberPickle.Core.Services.Authentication.Flow;
 
 
 
@@ -173,10 +174,14 @@ namespace CyberPickle.Core.Boot
             float progressEnd = 0.7f;
             float step = (progressEnd - progressStart) / 5f;
 
-            yield return InitializeManager<AuthenticationManager>("Authentication", progressStart, progressStart + step);
-            yield return InitializeManager<ProfileManager>("Profile Manager", progressStart + step, progressStart + (step * 2));
-            yield return InitializeManager<LeaderboardManager>("Leaderboard", progressStart + (step * 2), progressStart + (step * 3));
-            yield return InitializeManager<SteamManager>("Steam", progressStart + (step * 3), progressStart + (step * 4));
+            // Initialize AuthFlowManager first
+            yield return InitializeManager<AuthenticationFlowManager>("Auth Flow", progressStart, progressStart + step);
+
+            // Then the rest of the services
+            yield return InitializeManager<AuthenticationManager>("Authentication", progressStart + step, progressStart + (step * 2));
+            yield return InitializeManager<ProfileManager>("Profile Manager", progressStart + (step * 2), progressStart + (step * 3));
+            yield return InitializeManager<LeaderboardManager>("Leaderboard", progressStart + (step * 3), progressStart + (step * 4));
+            yield return InitializeManager<SteamManager>("Steam", progressStart + (step * 4), progressEnd);
             yield return InitializeManager<AnalyticsManager>("Analytics", progressStart + (step * 4), progressEnd);
         }
 

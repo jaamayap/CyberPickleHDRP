@@ -30,6 +30,7 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void Awake()
         {
+            Debug.Log("MainMenuControllerAwake");
             // Get or add CanvasGroup for fade effect
             pressButtonCanvasGroup = pressAnyButtonText.gameObject.GetComponent<CanvasGroup>();
             if (pressButtonCanvasGroup == null)
@@ -42,10 +43,12 @@ namespace CyberPickle.UI.Screens.MainMenu
         {
             InitializeUI();
             SubscribeToEvents();
+            Debug.Log("MainMenuControllerStart");
         }
 
         private void InitializeUI()
         {
+            Debug.Log("MainMenuController: InitializeUI Called");
             // Ensure proper initial state
             pressButtonCanvasGroup.alpha = 1f;
             isWaitingForInput = true;
@@ -54,6 +57,7 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (authPanel != null) authPanel.SetActive(false);
             if (profileSelectionPanel != null) profileSelectionPanel.SetActive(false);
             if (mainMenuButtonsPanel != null) mainMenuButtonsPanel.SetActive(false);
+            Debug.Log("MainMenuController: PanelsHidden");
         }
 
         private void SubscribeToEvents()
@@ -78,6 +82,9 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private IEnumerator TransitionToAuth()
         {
+            // Signal that UI transition is starting
+            GameEvents.OnUIAnimationStarted.Invoke();
+
             // Fade out "Press Any Button" text
             float elapsedTime = 0f;
             while (elapsedTime < fadeOutDuration)
@@ -94,12 +101,17 @@ namespace CyberPickle.UI.Screens.MainMenu
                 authPanel.SetActive(true);
             }
 
+            // Signal that UI transition is complete
+            Debug.Log("[MainMenu] UI transition complete");
+            GameEvents.OnUIAnimationCompleted.Invoke();
+
             // Trigger authentication start event
             GameEvents.OnAuthenticationRequested.Invoke();
         }
 
         private void HandleProfileLoadRequested()
         {
+            Debug.Log("[MainMenu] Profile load requested, transitioning to profile selection panel");
             StartCoroutine(TransitionToPanels(authPanel, profileSelectionPanel));
         }
 
@@ -121,16 +133,18 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private IEnumerator TransitionToPanels(GameObject panelToHide, GameObject panelToShow)
         {
+            // Signal start of transition
+            GameEvents.OnUIAnimationStarted.Invoke();
+
             if (panelToHide != null)
             {
-                // Get or add CanvasGroup to the panel to hide
+                // Existing fade out code...
                 CanvasGroup hideCanvasGroup = panelToHide.GetComponent<CanvasGroup>();
                 if (hideCanvasGroup == null)
                 {
                     hideCanvasGroup = panelToHide.AddComponent<CanvasGroup>();
                 }
 
-                // Fade out
                 float elapsedTime = 0f;
                 while (elapsedTime < panelTransitionDuration)
                 {
@@ -144,16 +158,15 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             if (panelToShow != null)
             {
-                // Get or add CanvasGroup to the panel to show
+                // Existing fade in code...
                 CanvasGroup showCanvasGroup = panelToShow.GetComponent<CanvasGroup>();
                 if (showCanvasGroup == null)
                 {
                     showCanvasGroup = panelToShow.AddComponent<CanvasGroup>();
                 }
 
-                // Show and fade in
-                panelToShow.SetActive(true);
                 showCanvasGroup.alpha = 0f;
+                panelToShow.SetActive(true);
 
                 float elapsedTime = 0f;
                 while (elapsedTime < panelTransitionDuration)
@@ -162,8 +175,15 @@ namespace CyberPickle.UI.Screens.MainMenu
                     showCanvasGroup.alpha = Mathf.Lerp(0f, 1f, elapsedTime / panelTransitionDuration);
                     yield return null;
                 }
+
+                showCanvasGroup.alpha = 1f;
+
+                // Signal completion of transition and which panel is now active
+                Debug.Log($"[MainMenu] Panel transition complete: {panelToShow.name} now active");
+                GameEvents.OnUIAnimationCompleted.Invoke();
             }
         }
+
 
         private void HideAllPanels()
         {
