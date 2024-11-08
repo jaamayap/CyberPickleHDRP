@@ -1,3 +1,4 @@
+using CyberPickle.Core.GameFlow.States.ProfileCard;
 using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.States;
 using System.Collections.Generic;
@@ -53,5 +54,12 @@ namespace CyberPickle.Core.Events
         public static readonly GameEvent OnUIAnimationStarted = new GameEvent();
         public static readonly GameEvent OnUIAnimationCompleted = new GameEvent();
         public static readonly GameEvent OnProfileUIReady = new GameEvent();
+
+        // Profile Card UI Events
+        public static readonly GameEvent<ProfileCardState> OnProfileCardStateChanged = new GameEvent<ProfileCardState>();
+        public static readonly GameEvent OnProfileCardClicked = new GameEvent();
+        public static readonly GameEvent OnProfileCardTransitionComplete = new GameEvent();
+        public static readonly GameEvent<bool> OnProfileCardInteractionEnabled = new GameEvent<bool>();
+
     }
 }

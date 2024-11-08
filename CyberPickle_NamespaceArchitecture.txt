@@ -188,6 +188,19 @@ Namespace: CyberPickle.Core.Events
    Field: public static GameEvent<string> OnProfileCreated
    Field: public static GameEvent<string> OnProfileDeleted
    Field: public static GameEvent<string> OnProfileRestored
+   Field: public static GameEvent OnUIAnimationStarted
+   Field: public static GameEvent OnUIAnimationCompleted
+   Field: public static GameEvent OnProfileUIReady
+   Field: public static GameEvent<ProfileCardState> OnProfileCardStateChanged
+   Field: public static GameEvent OnProfileCardClicked
+   Field: public static GameEvent OnProfileCardTransitionComplete
+   Field: public static GameEvent<bool> OnProfileCardInteractionEnabled
+Namespace: CyberPickle.Core.GameFlow.States.ProfileCard
+ Enum: ProfileCardState
+   Value: Hidden = 0
+   Value: Minimized = 1
+   Value: Expanded = 2
+   Value: Transitioning = 3
 Namespace: CyberPickle.Core.Input
  Class: InputManager : Manager<InputManager>, IInitializable
    Field: private float mouseSensitivity
@@ -425,6 +438,12 @@ Namespace: CyberPickle.Core.Services.Authentication.Flow
    Method: public abstract void Update()
    Method: public abstract bool CanTransitionTo(IAuthenticationState nextState)
 Namespace: CyberPickle.Core.Services.Authentication.Flow.Commands
+ Class: ClearProfilesCommand : IAuthCommand
+   Field: private ProfileManager profileManager
+   Field: private List<ProfileData> backupProfiles
+   Constructor: public ClearProfilesCommand(ProfileManager profileManager)
+   Method: public sealed async Task Execute()
+   Method: public sealed void Undo()
  Class: CreateProfileCommand : IAuthCommand
    Field: private ProfileManager profileManager
    Field: private string displayName
@@ -440,7 +459,6 @@ Namespace: CyberPickle.Core.Services.Authentication.Flow.Commands
    Field: private bool wasActiveProfile
    Constructor: public DeleteProfileCommand(ProfileManager profileManager, string profileId)
    Method: public sealed async Task Execute()
-   Method: private async Task SwitchToDefaultOrFirstAvailable()
    Method: public sealed void Undo()
  Interface: IAuthCommand
    Method: public abstract async Task Execute()
@@ -526,6 +544,94 @@ Namespace: CyberPickle.Progression
  Class: ProgressionManager : Manager<ProgressionManager>, IInitializable
    Constructor: public ProgressionManager()
    Method: public sealed void Initialize()
+Namespace: CyberPickle.UI.Components.ProfileCard
+ Class: ProfileCardExpanded : MonoBehaviour
+   Field: private Image backgroundPanel
+   Field: private Image neonBorder
+   Field: private TextMeshProUGUI profileNameText
+   Field: private TextMeshProUGUI lastLoginText
+   Field: private Image avatarImage
+   Field: private GridLayoutGroup statsGrid
+   Field: private TextMeshProUGUI levelStatValue
+   Field: private TextMeshProUGUI timeStatValue
+   Field: private TextMeshProUGUI scoreStatValue
+   Field: private Button minimizeButton
+   Field: private TextMeshProUGUI minimizeButtonText
+   Field: private Button switchProfileButton
+   Field: private TextMeshProUGUI switchProfileButtonText
+   Field: private ProfileData currentProfile
+   Field: private CanvasGroup canvasGroup
+   Constructor: public ProfileCardExpanded()
+   Method: private void Awake()
+   Method: private void OnEnable()
+   Method: private void OnDisable()
+   Method: private void ValidateReferences()
+   Method: private void SetupButtons()
+   Method: private void SubscribeToEvents()
+   Method: private void UnsubscribeFromEvents()
+   Method: public void UpdateDisplay(ProfileData profileData)
+   Method: private void HandleSwitchProfileClick()
+   Method: public void SetInteractable(bool interactable)
+   Method: private string FormatPlayTime(float playTimeInSeconds)
+   Method: private string FormatLastLoginTime(DateTime lastLoginTime)
+   Method: private void OnDestroy()
+ Class: ProfileCardManager : Manager<ProfileCardManager>, IInitializable
+   Field: private GameObject minimalCardPrefab
+   Field: private GameObject expandedCardPrefab
+   Field: private Canvas mainCanvas
+   Field: private float transitionDuration
+   Field: private float cornerPadding
+   Field: private ProfileCardState currentState
+   Field: private GameObject currentCardInstance
+   Field: private ProfileData currentProfileData
+   Field: private bool isTransitioning
+   Field: private Vector2 minimizedPosition
+   Field: private Vector2 expandedPosition
+   Field: private bool isInitialized
+   Constructor: public ProfileCardManager()
+   Method: public sealed void Initialize()
+   Method: private void ValidateReferences()
+   Method: private void SubscribeToEvents()
+   Method: private void HandleProfileLoadRequested()
+   Method: private void CalculatePositions()
+   Method: public void SetProfile(ProfileData profileData)
+   Method: private void UpdateCardDisplay()
+   Method: private void UpdateMinimalCard()
+   Method: private void UpdateExpandedCard()
+   Method: private void CreateMinimalCard()
+   Method: private void CreateExpandedCard()
+   Method: private void SetupCardTransform(RectTransform cardRect, Vector2 position)
+   Method: public void TransitionToState(ProfileCardState newState)
+   Method: private IEnumerator TransitionRoutine(ProfileCardState targetState)
+   Method: private void HandleCardClicked()
+   Method: private void HandleProfileSelected(string profileId)
+   Method: private void HandleGameStateChanged(GameState newState)
+   Method: protected override void OnManagerDestroyed()
+   Property: public ProfileCardState CurrentState { get; }
+   Property: public bool IsTransitioning { get; }
+   Property: public ProfileData CurrentProfileData { get; }
+ Class: ProfileCardMinimal : MonoBehaviour
+   Field: private TextMeshProUGUI playerNameText
+   Field: private TextMeshProUGUI levelText
+   Field: private Image avatarImage
+   Field: private Button cardButton
+   Field: private CanvasGroup canvasGroup
+   Field: private float hoverScaleMultiplier
+   Field: private Vector3 originalScale
+   Field: private ProfileData currentProfile
+   Constructor: public ProfileCardMinimal()
+   Method: private void Awake()
+   Method: private void OnEnable()
+   Method: private void OnDisable()
+   Method: private void ValidateReferences()
+   Method: private void SetupInteractions()
+   Method: private void SubscribeToEvents()
+   Method: private void UnsubscribeFromEvents()
+   Method: public void UpdateDisplay(ProfileData profileData)
+   Method: public void SetInteractable(bool interactable)
+   Method: private void OnDestroy()
+   Method: public void OnPointerEnter()
+   Method: public void OnPointerExit()
 Namespace: CyberPickle.UI.Effects
  Class: GlitchTextEffect : MonoBehaviour
    Field: private GlitchTextConfig config
@@ -669,6 +775,7 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Field: private TextMeshProUGUI titleText
    Field: private Button backButton
    Field: private CanvasGroup mainMenuButtonsGroup
+   Field: private CanvasGroup deleteConfirmationDialog
    Field: private float transitionDuration
    Field: private Vector3 cornerPosition
    Field: private Vector3 cornerScale
@@ -676,6 +783,7 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Field: private Canvas mainCanvas
    Field: private AuthenticationManager authManager
    Field: private ProfileManager profileManager
+   Field: private ProfileCardManager profileCardManager
    Field: private AuthenticationFlowManager flowManager
    Field: private List<GameObject> instantiatedCards
    Field: private CreateProfileCardController createProfileCard
@@ -692,12 +800,15 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Method: private void SubscribeToEvents()
    Method: private void UnsubscribeFromEvents()
    Method: private void HandleAuthStateChanged(AuthenticationState state)
+   Method: private void OnPanelTransitionComplete()
+   Method: private IEnumerator ExecuteCommandCoroutine(IAuthCommand command)
    Method: private void HandleAuthenticationCompleted(string playerId)
    Method: private void HandleProfileCreated(string profileId)
    Method: private void HandleProfileSwitched(string profileId)
    Method: private void LoadProfiles()
    Method: private void HandleProfileSelection(ProfileData profile)
    Method: private void HandleProfileDeletion(ProfileData profile)
+   Method: private async Task<bool> ShowDeleteConfirmationDialog(string profileName)
    Method: private void ClearExistingProfiles()
    Method: private void CreateProfileCard(ProfileData profile)
    Method: private void UpdateHeaderInfo()
@@ -705,8 +816,6 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Method: private void ShowTemporaryStatus(string message, bool isError)
    Method: private IEnumerator ShowStatusMessageRoutine(string message, bool isError)
    Method: private void HandleBackButton()
-   Method: private IEnumerator AnimateProfileCard(ProfileData profile)
-   Method: private IEnumerator TransitionBackToAuth()
    Method: private IEnumerator FadeInMainMenuButtons()
    Method: private void OnDestroy()
 Namespace: CyberPickle.UI.Windows.Auth

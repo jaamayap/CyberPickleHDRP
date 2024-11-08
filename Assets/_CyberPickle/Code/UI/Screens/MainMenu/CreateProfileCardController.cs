@@ -16,6 +16,7 @@ using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Authentication.Flow.Commands;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.Services.Authentication.Flow;
+using CyberPickle.Core.States;
 
 namespace CyberPickle.UI.Screens.MainMenu
 {
@@ -159,7 +160,9 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (!gameObject.activeInHierarchy) return;
 
             ShowTemporaryStatus("Profile created successfully!");
-            StartCoroutine(DelayedTransition());
+
+            // Transition to main menu state just like when selecting a profile
+            GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
         }
 
         private void ShowTemporaryStatus(string message, bool isError = false)

@@ -26,6 +26,8 @@ using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
 using System;
 using CyberPickle.Core.Services.Authentication.Flow.States;
+using CyberPickle.UI.Components.ProfileCard;
+using CyberPickle.Core.GameFlow.States.ProfileCard;
 
 namespace CyberPickle.UI.Screens.MainMenu
 {
@@ -59,6 +61,7 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private AuthenticationManager authManager;
         private ProfileManager profileManager;
+        private ProfileCardManager profileCardManager;
         private AuthenticationFlowManager flowManager;
         private List<GameObject> instantiatedCards = new List<GameObject>();
         private CreateProfileCardController createProfileCard;
@@ -95,11 +98,12 @@ namespace CyberPickle.UI.Screens.MainMenu
             authManager = AuthenticationManager.Instance;
             profileManager = ProfileManager.Instance;
             flowManager = AuthenticationFlowManager.Instance;
+            profileCardManager = ProfileCardManager.Instance;
         }
 
         private bool ValidateManagers()
         {
-            if (authManager == null || profileManager == null || flowManager == null)
+            if (authManager == null || profileManager == null || flowManager == null || profileCardManager == null)
             {
                 Debug.LogError("[ProfileSelection] Required managers are null!");
                 return false;
@@ -240,13 +244,15 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (newProfile != null)
             {
                 CreateProfileCard(newProfile);
-                var card = instantiatedCards.LastOrDefault();
-                if (card != null && card.activeInHierarchy)
-                {
-                    Debug.Log($"[ProfileSelection] Starting animation for new profile card: {newProfile.DisplayName}");
-                    StartCoroutine(AnimateProfileCard(newProfile));
-                }
+                profileCardManager.SetProfile(newProfile);
+                profileCardManager.TransitionToState(ProfileCardState.Minimized);
             }
+            if (profileSelectionPanel != null)
+            {
+                profileSelectionPanel.SetActive(false);
+            }
+
+            StartCoroutine(FadeInMainMenuButtons());
         }
 
         private void HandleProfileSwitched(string profileId)
@@ -301,9 +307,10 @@ namespace CyberPickle.UI.Screens.MainMenu
                 isTransitioning = true;
                 var command = new SelectProfileCommand(profileManager, profile.ProfileId);
                 await flowManager.ExecuteCommand(command);
-                StartCoroutine(AnimateProfileCard(profile));
+                profileCardManager.SetProfile(profile);
+                profileCardManager.TransitionToState(ProfileCardState.Minimized);
 
-                // Let MainMenuController handle the state change
+                // Let's let the MainMenuController handle the state change
                 GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
             }
             catch (Exception ex)
@@ -503,7 +510,12 @@ namespace CyberPickle.UI.Screens.MainMenu
         {
             if (isTransitioning) return;
 
-            // Instead of handling the transition, just notify the main menu controller
+            // If there's an active profile, ensure the card is hidden
+            if (profileCardManager.CurrentState != ProfileCardState.Hidden)
+            {
+                profileCardManager.TransitionToState(ProfileCardState.Hidden);
+            }
+
             GameEvents.OnProfileLoadRequested.Invoke();
         }
 
@@ -511,122 +523,96 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         #region UI Transitions
 
-        private IEnumerator AnimateProfileCard(ProfileData profile)
-        {
-            isTransitioning = true;
 
-            var selectedCardController = instantiatedCards
-                .Select(c => c.GetComponent<ProfileCardController>())
-                .FirstOrDefault(controller => controller != null && controller.ProfileData.ProfileId == profile.ProfileId);
 
-            if (selectedCardController == null)
-            {
-                Debug.LogError("[ProfileSelection] Cannot animate: Selected card not found");
-                isTransitioning = false;
-                yield break;
-            }
+        //private IEnumerator AnimateProfileCard(ProfileData profile)
+        //{
+        //    isTransitioning = true;
 
-            GameObject selectedCard = selectedCardController.gameObject;
+        //    var selectedCardController = instantiatedCards
+        //        .Select(c => c.GetComponent<ProfileCardController>())
+        //        .FirstOrDefault(controller => controller != null &&
+        //                       controller.ProfileData.ProfileId == profile.ProfileId);
 
-            Debug.Log($"[ProfileSelection] Starting profile card animation for {selectedCard.name}");
+        //    if (selectedCardController == null)
+        //    {
+        //        Debug.LogError("[ProfileSelection] Cannot animate: Selected card not found");
+        //        isTransitioning = false;
+        //        yield break;
+        //    }
 
-            // Hide other cards
-            foreach (var card in instantiatedCards)
-            {
-                if (card != null && card != selectedCard)
-                {
-                    card.SetActive(false);
-                }
-            }
+        //    GameObject selectedCard = selectedCardController.gameObject;
+        //    Debug.Log($"[ProfileSelection] Starting profile card animation for {selectedCard.name}");
 
-            // Hide create profile card
-            if (createProfileCard != null && createProfileCard.gameObject != null)
-            {
-                createProfileCard.gameObject.SetActive(false);
-            }
+        //    // Hide other cards
+        //    foreach (var card in instantiatedCards)
+        //    {
+        //        if (card != null && card != selectedCard)
+        //        {
+        //            card.SetActive(false);
+        //        }
+        //    }
 
-            // Reparent the selected card to the main canvas
-            selectedCard.transform.SetParent(mainCanvas.transform, false);
+        //    if (createProfileCard != null && createProfileCard.gameObject != null)
+        //    {
+        //        createProfileCard.gameObject.SetActive(false);
+        //    }
 
-            // Get the RectTransform
-            RectTransform rectTransform = selectedCard.GetComponent<RectTransform>();
-            if (rectTransform == null)
-            {
-                Debug.LogError("[ProfileSelection] Selected card does not have a RectTransform");
-                isTransitioning = false;
-                yield break;
-            }
+        //    RectTransform cardRect = selectedCard.GetComponent<RectTransform>();
+        //    if (cardRect == null)
+        //    {
+        //        Debug.LogError("[ProfileSelection] Selected card does not have a RectTransform");
+        //        isTransitioning = false;
+        //        yield break;
+        //    }
 
-            // Cache initial values
-            Vector2 startAnchoredPosition = rectTransform.anchoredPosition;
-            Vector3 startScale = rectTransform.localScale;
+        //    // Store the current world position before any changes
+        //    Vector3 startWorldPos = cardRect.position;
+        //    Vector3 originalScale = cardRect.localScale;
 
-            // Target position and scale
-            Vector2 targetAnchoredPosition = Vector2.zero; // Top-right corner
-            Vector3 targetScale = cornerScale;
+        //    // Set up the final state immediately
+        //    cardRect.SetParent(mainCanvas.transform, false);  // false to prevent keeping world position
+        //    cardRect.anchorMin = Vector2.one;
+        //    cardRect.anchorMax = Vector2.one;
+        //    cardRect.pivot = Vector2.one;
 
-            float elapsedTime = 0f;
-            while (elapsedTime < transitionDuration && selectedCard != null)
-            {
-                elapsedTime += Time.deltaTime;
-                float t = Mathf.Clamp01(elapsedTime / transitionDuration);
-                float smoothT = t * t * (3f - 2f * t); // Smooth step interpolation
+        //    // Calculate target position
+        //    float padding = 20f;
+        //    Vector2 targetAnchoredPosition = new Vector2(-padding, -padding);
 
-                rectTransform.anchoredPosition = Vector2.Lerp(startAnchoredPosition, targetAnchoredPosition, smoothT);
-                rectTransform.localScale = Vector3.Lerp(startScale, targetScale, smoothT);
+        //    // Get the target world position
+        //    cardRect.anchoredPosition = targetAnchoredPosition;
+        //    Vector3 targetWorldPos = cardRect.position;
 
-                yield return null;
-            }
+        //    // Reset to start position
+        //    cardRect.position = startWorldPos;
 
-            // Ensure final position and scale
-            if (selectedCard != null)
-            {
-                rectTransform.anchoredPosition = targetAnchoredPosition;
-                rectTransform.localScale = targetScale;
-                selectedCard.SetActive(true);
+        //    float elapsedTime = 0f;
+        //    while (elapsedTime < transitionDuration)
+        //    {
+        //        elapsedTime += Time.deltaTime;
+        //        float t = elapsedTime / transitionDuration;
+        //        float smoothT = t * t * (3f - 2f * t);
 
-                Debug.Log("[ProfileSelection] Profile card animation completed successfully");
-            }
+        //        // Directly interpolate world position
+        //        cardRect.position = Vector3.Lerp(startWorldPos, targetWorldPos, smoothT);
+        //        cardRect.localScale = Vector3.Lerp(originalScale, cornerScale, smoothT);
 
-            // Hide the profile selection panel
-            if (profileSelectionPanel != null)
-            {
-                profileSelectionPanel.SetActive(false);
-            }
+        //        yield return null;
+        //    }
 
-            yield return FadeInMainMenuButtons();
-            isTransitioning = false;
-        }
+        //    // Ensure final position
+        //    cardRect.anchoredPosition = targetAnchoredPosition;
+        //    cardRect.localScale = cornerScale;
 
-        private IEnumerator TransitionBackToAuth()
-        {
-            isTransitioning = true;
+        //    if (profileSelectionPanel != null)
+        //    {
+        //        profileSelectionPanel.SetActive(false);
+        //    }
 
-            var containerCanvasGroup = profilesContainer.GetComponent<CanvasGroup>()
-                ?? profilesContainer.gameObject.AddComponent<CanvasGroup>();
-
-            float elapsed = 0f;
-            while (elapsed < transitionDuration)
-            {
-                elapsed += Time.deltaTime;
-                containerCanvasGroup.alpha = 1 - (elapsed / transitionDuration);
-                yield return null;
-            }
-
-            profileSelectionPanel.SetActive(false);
-
-            // Instead of directly signing out, use the flow manager
-            flowManager.TransitionTo<AuthenticatingState>();
-
-            var authPanel = GameObject.Find("AuthPanel");
-            if (authPanel != null)
-            {
-                authPanel.SetActive(true);
-                GameEvents.OnAuthenticationRequested.Invoke();
-            }
-
-            isTransitioning = false;
-        }
+        //    yield return FadeInMainMenuButtons();
+        //    isTransitioning = false;
+        //}
 
         private IEnumerator FadeInMainMenuButtons()
         {
