@@ -532,14 +532,15 @@ Namespace: CyberPickle.Core.States
  Enum: GameState
    Value: None = 0
    Value: Loading = 1
-   Value: MainMenu = 2
-   Value: CharacterSelect = 3
-   Value: EquipmentSelect = 4
-   Value: LevelSelect = 5
-   Value: Playing = 6
-   Value: Paused = 7
-   Value: PostGame = 8
-   Value: GameOver = 9
+   Value: ProfileSelection = 2
+   Value: MainMenu = 3
+   Value: CharacterSelect = 4
+   Value: EquipmentSelect = 5
+   Value: LevelSelect = 6
+   Value: Playing = 7
+   Value: Paused = 8
+   Value: PostGame = 9
+   Value: GameOver = 10
 Namespace: CyberPickle.Progression
  Class: ProgressionManager : Manager<ProgressionManager>, IInitializable
    Constructor: public ProgressionManager()
@@ -695,6 +696,7 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Field: private Coroutine statusMessageCoroutine
    Constructor: public CreateProfileCardController()
    Method: private void Awake()
+   Method: public void ResetCard()
    Method: private void InitializeComponents()
    Method: private void InitializeCanvasGroups()
    Method: private void InitializeButtons()
@@ -709,7 +711,6 @@ Namespace: CyberPickle.UI.Screens.MainMenu
    Method: private void ValidateInput(string input)
    Method: private IEnumerator TransitionToTerminal()
    Method: private void FinalizeTransition()
-   Method: private IEnumerator DelayedTransition()
    Method: private void CancelProfileCreation()
    Method: private IEnumerator TransitionToCard()
    Method: private void SetCardContentActive(bool active, float alpha)

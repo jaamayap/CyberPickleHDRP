@@ -121,8 +121,19 @@ namespace CyberPickle.UI.Screens.MainMenu
             {
                 case GameState.MainMenu:
                     StartCoroutine(TransitionToPanels(profileSelectionPanel, mainMenuButtonsPanel));
+                    if (mainMenuButtonsPanel != null)
+                    {
+                        var canvasGroup = mainMenuButtonsPanel.GetComponent<CanvasGroup>();
+                        if (canvasGroup != null)
+                        {
+                            canvasGroup.interactable = true;
+                            canvasGroup.blocksRaycasts = true;
+                        }
+                    }
                     break;
-
+                case GameState.ProfileSelection:
+                    StartCoroutine(TransitionToPanels(mainMenuButtonsPanel, profileSelectionPanel));
+                    break;
                 case GameState.CharacterSelect:
                 case GameState.EquipmentSelect:
                 case GameState.LevelSelect:

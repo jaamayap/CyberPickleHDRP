@@ -34,7 +34,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -1.9001, y: 8.7699}
+  m_AnchoredPosition: {x: -1.9001, y: 22.8}
   m_SizeDelta: {x: 723.8, y: 17.54}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &6561233400505322449
@@ -74,8 +74,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+    rgba: 4278190335
+  m_fontColor: {r: 1, g: 0, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -92,8 +92,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 23.35
+  m_fontSizeBase: 23.35
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -367,7 +367,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.120666504, g: 1, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1378,7 +1378,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 18.750002}
+  m_AnchoredPosition: {x: 0, y: 20.2}
   m_SizeDelta: {x: 720, y: 37.5}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &6768815932952897725
@@ -1418,8 +1418,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+    rgba: 4294901769
+  m_fontColor: {r: 0.034784317, g: 0, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1968,8 +1968,11 @@ MonoBehaviour:
   cancelButton: {fileID: 1836986232651116268}
   statusText: {fileID: 1690037396828199775}
   validationSection: {fileID: 7199816897706229438}
-  validationMessages: []
+  validationMessages:
+  - {fileID: 8228504037761775014}
+  - {fileID: 85613804299411497}
   transitionDuration: 0.5
+  statusMessageDuration: 3
 --- !u!1 &6332478760144467070
 GameObject:
   m_ObjectHideFlags: 0

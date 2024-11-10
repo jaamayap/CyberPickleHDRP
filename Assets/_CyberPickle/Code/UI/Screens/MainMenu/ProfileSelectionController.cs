@@ -150,18 +150,18 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void SubscribeToEvents()
         {
-            Debug.Log("[ProfileSelection] Subscribing to events");
+            Debug.Log("[ProfileSelectionController] Subscribing to events");
 
             if (authManager != null)
             {
-                Debug.Log("[ProfileSelection] Subscribing to AuthManager events");
+                Debug.Log("[ProfileSelectionController] Subscribing to AuthManager events");
                 authManager.SubscribeToAuthenticationStateChanged(HandleAuthStateChanged);
                 authManager.SubscribeToAuthenticationCompleted(HandleAuthenticationCompleted);
             }
 
             if (profileManager != null)
             {
-                Debug.Log("[ProfileSelection] Subscribing to ProfileManager events");
+                Debug.Log("[ProfileSelectionController] Subscribing to ProfileManager events");
                 profileManager.SubscribeToNewProfileCreated(HandleProfileCreated);
                 profileManager.SubscribeToProfileSwitched(HandleProfileSwitched);
             }
@@ -184,11 +184,11 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void HandleAuthStateChanged(AuthenticationState state)
         {
-            Debug.Log($"[ProfileSelection] Auth state changed to: {state}");
+            Debug.Log($"[ProfileSelectionController] Auth state changed to: {state}");
 
             if (state == AuthenticationState.Authenticated)
             {
-                Debug.Log("[ProfileSelection] Authentication completed, waiting for UI readiness");
+                Debug.Log("[ProfileSelectionController] Authentication completed, waiting for UI readiness");
                 GameEvents.OnUIAnimationCompleted.AddListener(OnPanelTransitionComplete);
             }
         }
@@ -243,15 +243,16 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             if (newProfile != null)
             {
-                CreateProfileCard(newProfile);
+                
                 profileCardManager.SetProfile(newProfile);
                 profileCardManager.TransitionToState(ProfileCardState.Minimized);
             }
+
             if (profileSelectionPanel != null)
             {
                 profileSelectionPanel.SetActive(false);
             }
-
+            GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
             StartCoroutine(FadeInMainMenuButtons());
         }
 
@@ -269,21 +270,21 @@ namespace CyberPickle.UI.Screens.MainMenu
         {
             if (isTransitioning)
             {
-                Debug.LogWarning("[ProfileSelection] Cannot load profiles - transitioning");
+                Debug.LogWarning("[ProfileSelectionController] Cannot load profiles - transitioning");
                 return;
             }
 
-            Debug.Log("[ProfileSelection] Starting LoadProfiles");
+            Debug.Log("[ProfileSelectionController] Starting LoadProfiles");
             ClearExistingProfiles();
 
             var profiles = profileManager.GetAllProfiles();
             if (profiles == null)
             {
-                Debug.LogError("[ProfileSelection] GetAllProfiles returned null!");
+                Debug.LogError("[ProfileSelectionController] GetAllProfiles returned null!");
                 return;
             }
 
-            Debug.Log($"[ProfileSelection] Found {profiles.Count} profiles");
+            Debug.Log($"[ProfileSelectionController] Found {profiles.Count} profiles");
 
             var sortedProfiles = profiles
                 .OrderBy(p => p.ProfileId == "default" ? 0 : 1)
@@ -523,97 +524,6 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         #region UI Transitions
 
-
-
-        //private IEnumerator AnimateProfileCard(ProfileData profile)
-        //{
-        //    isTransitioning = true;
-
-        //    var selectedCardController = instantiatedCards
-        //        .Select(c => c.GetComponent<ProfileCardController>())
-        //        .FirstOrDefault(controller => controller != null &&
-        //                       controller.ProfileData.ProfileId == profile.ProfileId);
-
-        //    if (selectedCardController == null)
-        //    {
-        //        Debug.LogError("[ProfileSelection] Cannot animate: Selected card not found");
-        //        isTransitioning = false;
-        //        yield break;
-        //    }
-
-        //    GameObject selectedCard = selectedCardController.gameObject;
-        //    Debug.Log($"[ProfileSelection] Starting profile card animation for {selectedCard.name}");
-
-        //    // Hide other cards
-        //    foreach (var card in instantiatedCards)
-        //    {
-        //        if (card != null && card != selectedCard)
-        //        {
-        //            card.SetActive(false);
-        //        }
-        //    }
-
-        //    if (createProfileCard != null && createProfileCard.gameObject != null)
-        //    {
-        //        createProfileCard.gameObject.SetActive(false);
-        //    }
-
-        //    RectTransform cardRect = selectedCard.GetComponent<RectTransform>();
-        //    if (cardRect == null)
-        //    {
-        //        Debug.LogError("[ProfileSelection] Selected card does not have a RectTransform");
-        //        isTransitioning = false;
-        //        yield break;
-        //    }
-
-        //    // Store the current world position before any changes
-        //    Vector3 startWorldPos = cardRect.position;
-        //    Vector3 originalScale = cardRect.localScale;
-
-        //    // Set up the final state immediately
-        //    cardRect.SetParent(mainCanvas.transform, false);  // false to prevent keeping world position
-        //    cardRect.anchorMin = Vector2.one;
-        //    cardRect.anchorMax = Vector2.one;
-        //    cardRect.pivot = Vector2.one;
-
-        //    // Calculate target position
-        //    float padding = 20f;
-        //    Vector2 targetAnchoredPosition = new Vector2(-padding, -padding);
-
-        //    // Get the target world position
-        //    cardRect.anchoredPosition = targetAnchoredPosition;
-        //    Vector3 targetWorldPos = cardRect.position;
-
-        //    // Reset to start position
-        //    cardRect.position = startWorldPos;
-
-        //    float elapsedTime = 0f;
-        //    while (elapsedTime < transitionDuration)
-        //    {
-        //        elapsedTime += Time.deltaTime;
-        //        float t = elapsedTime / transitionDuration;
-        //        float smoothT = t * t * (3f - 2f * t);
-
-        //        // Directly interpolate world position
-        //        cardRect.position = Vector3.Lerp(startWorldPos, targetWorldPos, smoothT);
-        //        cardRect.localScale = Vector3.Lerp(originalScale, cornerScale, smoothT);
-
-        //        yield return null;
-        //    }
-
-        //    // Ensure final position
-        //    cardRect.anchoredPosition = targetAnchoredPosition;
-        //    cardRect.localScale = cornerScale;
-
-        //    if (profileSelectionPanel != null)
-        //    {
-        //        profileSelectionPanel.SetActive(false);
-        //    }
-
-        //    yield return FadeInMainMenuButtons();
-        //    isTransitioning = false;
-        //}
-
         private IEnumerator FadeInMainMenuButtons()
         {
             float elapsedTime = 0f;
@@ -628,6 +538,7 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             mainMenuButtonsGroup.alpha = 1f;
             mainMenuButtonsGroup.interactable = true;
+            mainMenuButtonsGroup.blocksRaycasts = true;
 
             GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
         }

@@ -12,6 +12,7 @@ using System;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Core.States;
 
 namespace CyberPickle.UI.Components.ProfileCard
 {
@@ -129,7 +130,7 @@ namespace CyberPickle.UI.Components.ProfileCard
 
         private void HandleSwitchProfileClick()
         {
-            // Trigger profile selection screen
+            GameEvents.OnGameStateChanged.Invoke(GameState.ProfileSelection);
             GameEvents.OnProfileLoadRequested.Invoke();
 
         }

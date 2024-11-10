@@ -50,6 +50,7 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void Awake()
         {
+            
             profileManager = ProfileManager.Instance;
             authManager = AuthenticationManager.Instance;
             flowManager = AuthenticationFlowManager.Instance;
@@ -57,6 +58,29 @@ namespace CyberPickle.UI.Screens.MainMenu
             InitializeComponents();
             SetInitialState();
             SubscribeToEvents();
+            Debug.Log($"[CreateProfileCardController]: Awake");
+        }
+
+        public void ResetCard()
+        {
+            // Cancel any ongoing transitions or coroutines
+            if (statusMessageCoroutine != null)
+                StopCoroutine(statusMessageCoroutine);
+
+            // Reset processing flag
+            isProcessing = false;
+
+            // Clear input field
+            if (inputField != null)
+                inputField.text = string.Empty;
+
+            // Reset status
+            if (statusText != null)
+                statusText.text = string.Empty;
+
+            // Return to initial state
+            SetInitialState();
+            Debug.Log("CreateProfileControler : Create card reset");
         }
 
         private void InitializeComponents()
@@ -105,14 +129,29 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void SetInitialState()
         {
-            SetCardContentActive(true);
+            // Show card content
+            SetCardContentActive(true, 1f);
             if (cardContent != null)
+            {
                 cardContent.SetActive(true);
+                var button = cardContent.GetComponent<Button>();
+                if (button != null)
+                    button.interactable = true;
+            }
 
-            SetTerminalInterfaceActive(false);
+            // Hide and reset terminal interface
+            SetTerminalInterfaceActive(false, 0f);
             if (terminalInterface != null)
+            {
                 terminalInterface.SetActive(false);
+                if (inputField != null)
+                {
+                    inputField.text = string.Empty;
+                    inputField.DeactivateInputField();
+                }
+            }
 
+            // Hide validation section
             if (validationSection != null)
                 validationSection.SetActive(false);
         }
@@ -161,6 +200,8 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             ShowTemporaryStatus("Profile created successfully!");
 
+            ResetCard();
+            
             // Transition to main menu state just like when selecting a profile
             GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
         }
@@ -243,15 +284,6 @@ namespace CyberPickle.UI.Screens.MainMenu
                 validationSection.SetActive(true);
         }
 
-        private IEnumerator DelayedTransition()
-        {
-            yield return new WaitForSeconds(0.1f);
-
-            if (gameObject != null && gameObject.activeInHierarchy)
-            {
-                StartCoroutine(TransitionToCard());
-            }
-        }
 
         private void CancelProfileCreation()
         {

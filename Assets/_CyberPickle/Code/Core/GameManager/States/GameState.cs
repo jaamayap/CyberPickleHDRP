@@ -4,6 +4,7 @@ namespace CyberPickle.Core.States
     {
         None,
         Loading,
+        ProfileSelection,
         MainMenu,
         CharacterSelect,
         EquipmentSelect,

@@ -12,8 +12,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [SerializeField]
         private List<ProfileData> profiles = new List<ProfileData>();
 
-        // Removed static readonly initialization
-        // private static readonly string ProfilesFilePath = Path.Combine(Application.persistentDataPath, "profiles.json");
+       
 
         // Use a private static field without initialization
         private static string profilesFilePath;

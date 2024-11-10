@@ -13,6 +13,7 @@ using CyberPickle.Core.Events;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.GameFlow.States.ProfileCard;
+using CyberPickle.Core.States;
 
 namespace CyberPickle.UI.Components.ProfileCard
 {
@@ -368,11 +369,26 @@ namespace CyberPickle.UI.Components.ProfileCard
             }
         }
 
-        private void HandleGameStateChanged(Core.States.GameState newState)
+        private void HandleGameStateChanged(GameState newState)
         {
-            // Handle any specific state requirements
-            // For example, hiding the card during certain game states
-            UpdateCardDisplay();
+            switch (newState)
+            {
+                case GameState.MainMenu:
+                    if (currentProfileData != null && currentState == ProfileCardState.Hidden)
+                    {
+                        TransitionToState(ProfileCardState.Minimized);
+                    }
+                    break;
+                case GameState.ProfileSelection:
+                    // Don't hide the card when returning to profile selection
+                    // Just minimize it if it's expanded
+                    if (currentState == ProfileCardState.Expanded)
+                    {
+                        TransitionToState(ProfileCardState.Minimized);
+                    }
+                    break;
+                    // ... other states ...
+            }
         }
 
         protected override void OnManagerDestroyed()
