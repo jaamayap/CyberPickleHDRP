@@ -41,6 +41,7 @@ namespace CyberPickle.Core.Input
         private InputAction touchPressAction;
         private InputAction mousePositionAction;
         private InputAction mouseButtonAction;
+        private InputAction profileNavigationAction;
         private Vector2 previousTouchPosition;
         private Vector2 previousMousePosition;
         private bool isMousePressed;
@@ -95,9 +96,24 @@ namespace CyberPickle.Core.Input
             touchPressAction = new InputAction("TouchPress");
             touchPressAction.AddBinding("<Touchscreen>/primaryTouch/press");
             touchPressAction.performed += ctx => HandleTouchPress(ctx.ReadValue<float>());
+
+            // Add this new action for profile navigation
+            profileNavigationAction = new InputAction("ProfileNavigation");
+            profileNavigationAction.AddCompositeBinding("1DAxis")
+                .With("Positive", "<Keyboard>/downArrow")
+                .With("Negative", "<Keyboard>/upArrow");
+            profileNavigationAction.performed += ctx => HandleProfileNavigation(ctx.ReadValue<float>());
 #endif
         }
+        private void HandleProfileNavigation(float direction)
+        {
+            if (!isInputEnabled) return;
 
+            if (currentGameState == GameState.ProfileSelection)
+            {
+                GameEvents.OnProfileNavigationInput.Invoke(direction);
+            }
+        }
         protected override void OnManagerEnabled()
         {
 #if ENABLE_INPUT_SYSTEM
@@ -107,6 +123,7 @@ namespace CyberPickle.Core.Input
             touchPressAction?.Enable();
             mousePositionAction?.Enable();
             mouseButtonAction?.Enable();
+            profileNavigationAction?.Enable();
 #endif
         }
 
@@ -119,6 +136,7 @@ namespace CyberPickle.Core.Input
             touchPressAction?.Disable();
             mousePositionAction?.Disable();
             mouseButtonAction?.Disable();
+            profileNavigationAction?.Enable();
 #endif
         }
 
@@ -268,6 +286,7 @@ namespace CyberPickle.Core.Input
             touchPressAction?.Dispose();
             mousePositionAction?.Dispose();
             mouseButtonAction?.Dispose();
+            profileNavigationAction?.Dispose();
 #endif
         }
     }

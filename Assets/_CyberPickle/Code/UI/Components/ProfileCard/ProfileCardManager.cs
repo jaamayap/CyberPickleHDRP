@@ -79,6 +79,7 @@ namespace CyberPickle.UI.Components.ProfileCard
                 Debug.Log("[ProfileCardManager] Profile load requested, hiding card");
                 currentCardInstance.SetActive(false);
                 currentState = ProfileCardState.Hidden;
+                Debug.Log($"[ProfileCardManagerHandleprofileloadrequested] Card active hidden");
             }
         }
 
@@ -88,13 +89,14 @@ namespace CyberPickle.UI.Components.ProfileCard
             if (mainCanvas == null) return;
 
             RectTransform canvasRect = mainCanvas.GetComponent<RectTransform>();
-            minimizedPosition = new Vector2(
-                canvasRect.rect.width / 2f - cornerPadding,
-                canvasRect.rect.height / 2f - cornerPadding
-            );
 
-            // Expanded position will be centered
-            expandedPosition = Vector2.zero;
+            // Top-right corner positioning
+            float padding = 20f;
+            minimizedPosition = new Vector2(-padding, -padding);
+
+            // Expanded position also in top-right
+            float expandedPadding = 40f;
+            expandedPosition = new Vector2(-expandedPadding, -expandedPadding);
         }
 
         public void SetProfile(ProfileData profileData)
@@ -226,85 +228,67 @@ namespace CyberPickle.UI.Components.ProfileCard
             cardRect.anchoredPosition = new Vector2(-padding, -padding);
         }
 
-        public void TransitionToState(ProfileCardState newState)
+        public void TransitionToState(ProfileCardState targetState)
         {
-            if (currentState == newState || isTransitioning) return;
-
-            StartCoroutine(TransitionRoutine(newState));
+            if (currentState == targetState || isTransitioning) return;
+            StartCoroutine(TransitionRoutine(targetState));
         }
 
         private IEnumerator TransitionRoutine(ProfileCardState targetState)
         {
             isTransitioning = true;
-            var previousState = currentState;
             currentState = ProfileCardState.Transitioning;
-
             GameEvents.OnProfileCardStateChanged.Invoke(ProfileCardState.Transitioning);
             GameEvents.OnProfileCardInteractionEnabled.Invoke(false);
 
-            // Store the current card's position
             Vector3 startPosition = currentCardInstance != null ?
                 currentCardInstance.transform.position : Vector3.zero;
 
             // Create and set up the target state card
             GameObject targetCard = null;
             RectTransform targetRect = null;
-            Vector2 targetPosition;
 
             switch (targetState)
             {
                 case ProfileCardState.Minimized:
-                    Debug.Log("[ProfileCardManager] Creating minimal card in transition");
                     targetCard = Instantiate(minimalCardPrefab, mainCanvas.transform);
                     targetRect = targetCard.GetComponent<RectTransform>();
-                    SetupCardTransform(targetRect, minimizedPosition);
+                    SetupMinimizedCardPosition(targetRect);
                     var minimalCard = targetCard.GetComponent<ProfileCardMinimal>();
                     if (minimalCard != null && currentProfileData != null)
                     {
                         minimalCard.UpdateDisplay(currentProfileData);
                     }
-                    targetPosition = new Vector2(-cornerPadding, -cornerPadding); // Top-right with padding
-                    Debug.Log($"[ProfileCardManager] Minimal card created in transition. Active: {targetCard.activeSelf}");
                     break;
 
                 case ProfileCardState.Expanded:
-                    Debug.Log("[ProfileCardManager] Creating expanded card in transition");
                     targetCard = Instantiate(expandedCardPrefab, mainCanvas.transform);
                     targetRect = targetCard.GetComponent<RectTransform>();
-                    targetRect.anchorMin = new Vector2(0.5f, 0.5f);
-                    targetRect.anchorMax = new Vector2(0.5f, 0.5f);
-                    targetRect.pivot = new Vector2(0.5f, 0.5f);
+                    SetupExpandedCardPosition(targetRect);
                     var expandedCard = targetCard.GetComponent<ProfileCardExpanded>();
                     if (expandedCard != null && currentProfileData != null)
                     {
                         expandedCard.UpdateDisplay(currentProfileData);
                     }
-                    targetPosition = Vector2.zero; // Center
-                    Debug.Log($"[ProfileCardManager] Expanded card created in transition. Active: {targetCard.activeSelf}");
                     break;
-
-                default:
-                    isTransitioning = false;
-                    yield break;
             }
 
             if (targetCard != null)
             {
-                // Set initial position
+                // Set initial position to match current card
                 targetRect.position = startPosition;
+
+                // Get target position based on state
+                Vector2 targetPosition = targetState == ProfileCardState.Minimized ?
+                    minimizedPosition : expandedPosition;
 
                 // Perform transition
                 float elapsedTime = 0f;
                 while (elapsedTime < transitionDuration)
                 {
-                    if (!targetCard.activeSelf)
-                    {
-                        Debug.LogWarning("[ProfileCardManager] Card became inactive during transition! Reactivating...");
-                        targetCard.SetActive(true);
-                    }
                     elapsedTime += Time.deltaTime;
                     float t = elapsedTime / transitionDuration;
-                    float smoothT = t * t * (3f - 2f * t);
+                    float smoothT = t * t * (3f - 2f * t); // Smooth interpolation
 
                     targetRect.anchoredPosition = Vector2.Lerp(
                         targetRect.anchoredPosition,
@@ -318,14 +302,12 @@ namespace CyberPickle.UI.Components.ProfileCard
                 // Ensure final position
                 targetRect.anchoredPosition = targetPosition;
 
-                // Cleanup old card and set new one
+                // Cleanup old card
                 if (currentCardInstance != null && currentCardInstance != targetCard)
                 {
-                    Debug.Log("[ProfileCardManager] Destroying old card instance");
                     Destroy(currentCardInstance);
                 }
                 currentCardInstance = targetCard;
-                Debug.Log($"[ProfileCardManager] Transition complete. Card active state: {currentCardInstance.activeSelf}");
             }
 
             currentState = targetState;
@@ -334,9 +316,32 @@ namespace CyberPickle.UI.Components.ProfileCard
             GameEvents.OnProfileCardStateChanged.Invoke(currentState);
             GameEvents.OnProfileCardTransitionComplete.Invoke();
             GameEvents.OnProfileCardInteractionEnabled.Invoke(true);
-            Debug.Log($"[ProfileCardManager] Final state - {currentState}. Card active: {currentCardInstance?.activeSelf}");
         }
 
+        private void SetupMinimizedCardPosition(RectTransform cardRect)
+        {
+            // Set the anchors to top-right corner
+            cardRect.anchorMin = Vector2.one;
+            cardRect.anchorMax = Vector2.one;
+            cardRect.pivot = Vector2.one;
+
+            // Position from top-right corner with padding
+            float padding = 20f;
+            minimizedPosition = new Vector2(-padding, -padding);
+        }
+
+        private void SetupExpandedCardPosition(RectTransform cardRect)
+        {
+            // For expanded, keep it in the top-right but with more space
+            cardRect.anchorMin = Vector2.one;
+            cardRect.anchorMax = Vector2.one;
+            cardRect.pivot = new Vector2(1f, 1f);
+
+            // Calculate expanded position (still in top-right, but larger)
+            float xPadding = 40f;  // Increased padding for expanded state
+            float yPadding = 40f;
+            expandedPosition = new Vector2(-xPadding, -yPadding);
+        }
         private void HandleCardClicked()
         {
             if (isTransitioning) return;
@@ -379,15 +384,17 @@ namespace CyberPickle.UI.Components.ProfileCard
                         TransitionToState(ProfileCardState.Minimized);
                     }
                     break;
+
                 case GameState.ProfileSelection:
-                    // Don't hide the card when returning to profile selection
-                    // Just minimize it if it's expanded
-                    if (currentState == ProfileCardState.Expanded)
+                    // Hide the card completely
+                    if (currentCardInstance != null)
                     {
-                        TransitionToState(ProfileCardState.Minimized);
+                        Destroy(currentCardInstance);
+                        currentCardInstance = null;
                     }
+                    currentState = ProfileCardState.Hidden;
+                    Debug.Log($"[ProfileCardManagerHandleGameStateChanged] Card active hidden");
                     break;
-                    // ... other states ...
             }
         }
 

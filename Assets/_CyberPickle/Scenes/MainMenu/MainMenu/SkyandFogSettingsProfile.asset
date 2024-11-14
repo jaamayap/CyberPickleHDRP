@@ -363,8 +363,8 @@ MonoBehaviour:
     m_OverrideState: 0
     m_Value: 20000
   updateMode:
-    m_OverrideState: 0
-    m_Value: 0
+    m_OverrideState: 1
+    m_Value: 2
   updatePeriod:
     m_OverrideState: 0
     m_Value: 0
@@ -373,13 +373,13 @@ MonoBehaviour:
     m_Value: 0
   top:
     m_OverrideState: 1
-    m_Value: {r: 0, g: 0, b: 0, a: 1}
+    m_Value: {r: 0.57434916, g: 0, b: 0.4230809, a: 1}
   middle:
     m_OverrideState: 1
-    m_Value: {r: 0, g: 0, b: 0, a: 1}
+    m_Value: {r: 0.009618317, g: 0.008875092, b: 0, a: 1}
   bottom:
     m_OverrideState: 1
-    m_Value: {r: 0, g: 0, b: 0, a: 1}
+    m_Value: {r: 0, g: 0.012967032, b: 0.01674646, a: 1}
   gradientDiffusion:
     m_OverrideState: 0
     m_Value: 1
@@ -424,7 +424,7 @@ MonoBehaviour:
     m_Value: 1
   fixedExposure:
     m_OverrideState: 1
-    m_Value: 0
+    m_Value: -0.27636975
   compensation:
     m_OverrideState: 0
     m_Value: 0
@@ -599,7 +599,7 @@ MonoBehaviour:
     m_Value: 50
   meanFreePath:
     m_OverrideState: 1
-    m_Value: 164.2
+    m_Value: 164.93
   enableVolumetricFog:
     m_OverrideState: 1
     m_Value: 1
@@ -656,16 +656,16 @@ MonoBehaviour:
     m_OverrideState: 1
     m_Value: 3
   cloudType:
-    m_OverrideState: 0
+    m_OverrideState: 1
     m_Value: 0
   skyAmbientMode:
     m_OverrideState: 1
     m_Value: 1
   windOrientation:
-    m_OverrideState: 0
-    m_Value: 0
+    m_OverrideState: 1
+    m_Value: 60
   windSpeed:
-    m_OverrideState: 0
+    m_OverrideState: 1
     m_Value: 100
   fogType:
     m_OverrideState: 1

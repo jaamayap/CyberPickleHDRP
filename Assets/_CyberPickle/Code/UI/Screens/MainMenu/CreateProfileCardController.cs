@@ -63,24 +63,23 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         public void ResetCard()
         {
-            // Cancel any ongoing transitions or coroutines
             if (statusMessageCoroutine != null)
                 StopCoroutine(statusMessageCoroutine);
 
-            // Reset processing flag
             isProcessing = false;
 
-            // Clear input field
             if (inputField != null)
+            {
                 inputField.text = string.Empty;
+                inputField.interactable = true;
+                
+            }
 
-            // Reset status
             if (statusText != null)
                 statusText.text = string.Empty;
 
-            // Return to initial state
             SetInitialState();
-            Debug.Log("CreateProfileControler : Create card reset");
+            Debug.Log("[CreateProfileCardController] Card reset completed");
         }
 
         private void InitializeComponents()
@@ -129,8 +128,10 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void SetInitialState()
         {
-            // Show card content
+            // Show card content, hide terminal
             SetCardContentActive(true, 1f);
+            SetTerminalInterfaceActive(false, 0f);
+
             if (cardContent != null)
             {
                 cardContent.SetActive(true);
@@ -139,19 +140,9 @@ namespace CyberPickle.UI.Screens.MainMenu
                     button.interactable = true;
             }
 
-            // Hide and reset terminal interface
-            SetTerminalInterfaceActive(false, 0f);
             if (terminalInterface != null)
-            {
                 terminalInterface.SetActive(false);
-                if (inputField != null)
-                {
-                    inputField.text = string.Empty;
-                    inputField.DeactivateInputField();
-                }
-            }
 
-            // Hide validation section
             if (validationSection != null)
                 validationSection.SetActive(false);
         }
@@ -199,9 +190,9 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (!gameObject.activeInHierarchy) return;
 
             ShowTemporaryStatus("Profile created successfully!");
-
+            Debug.Log("CreateProfileControler : ProfileCreated");
             ResetCard();
-            
+            Debug.Log("CreateProfileControler : ProfileReset");
             // Transition to main menu state just like when selecting a profile
             GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
         }

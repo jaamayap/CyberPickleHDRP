@@ -87,10 +87,6 @@ namespace CyberPickle.UI.Components.ProfileCard
 
             if (levelText != null)
                 levelText.text = $"Level {profileData.Level}";
-
-            // Avatar implementation can be added later
-            if (avatarImage != null)
-                avatarImage.gameObject.SetActive(false);
         }
 
         public void SetInteractable(bool interactable)

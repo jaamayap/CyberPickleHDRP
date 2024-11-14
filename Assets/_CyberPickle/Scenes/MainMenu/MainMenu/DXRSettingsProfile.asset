@@ -15,10 +15,10 @@ MonoBehaviour:
   active: 1
   rayBias:
     m_OverrideState: 1
-    m_Value: 0.001
+    m_Value: 0.0042
   distantRayBias:
     m_OverrideState: 0
-    m_Value: 0.001
+    m_Value: 0.1
   extendShadowCulling:
     m_OverrideState: 1
     m_Value: 1
@@ -153,13 +153,13 @@ MonoBehaviour:
     m_Value: 1
   m_DenoiserRadius:
     m_OverrideState: 1
-    m_Value: 8
+    m_Value: 9
   m_AffectSmoothSurfaces:
     m_OverrideState: 0
     m_Value: 0
   mode:
     m_OverrideState: 1
-    m_Value: 1
+    m_Value: 2
   m_FullResolution:
     m_OverrideState: 1
     m_Value: 1

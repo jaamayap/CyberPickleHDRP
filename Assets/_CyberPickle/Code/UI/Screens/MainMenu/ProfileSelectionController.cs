@@ -25,7 +25,6 @@ using CyberPickle.Core.Services.Authentication.Flow.Commands;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
 using System;
-using CyberPickle.Core.Services.Authentication.Flow.States;
 using CyberPickle.UI.Components.ProfileCard;
 using CyberPickle.Core.GameFlow.States.ProfileCard;
 
@@ -165,6 +164,9 @@ namespace CyberPickle.UI.Screens.MainMenu
                 profileManager.SubscribeToNewProfileCreated(HandleProfileCreated);
                 profileManager.SubscribeToProfileSwitched(HandleProfileSwitched);
             }
+
+            GameEvents.OnProfileLoadRequested.AddListener(HandleProfileLoadRequested);
+            GameEvents.OnProfileNavigationInput.AddListener(HandleProfileNavigation);
         }
 
         private void UnsubscribeFromEvents()
@@ -180,6 +182,9 @@ namespace CyberPickle.UI.Screens.MainMenu
                 authManager.UnsubscribeFromAuthenticationStateChanged(HandleAuthStateChanged);
                 authManager.UnsubscribeFromAuthenticationCompleted(HandleAuthenticationCompleted);
             }
+
+            GameEvents.OnProfileLoadRequested.RemoveListener(HandleProfileLoadRequested);
+            GameEvents.OnProfileNavigationInput.RemoveListener(HandleProfileNavigation);
         }
 
         private void HandleAuthStateChanged(AuthenticationState state)
@@ -238,24 +243,23 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             Debug.Log($"[ProfileSelection] HandleProfileCreated called for profile: {profileId}");
 
+            // Get the new profile and set it as active
             var profiles = profileManager.GetAllProfiles();
             var newProfile = profiles.FirstOrDefault(p => p.ProfileId == profileId);
-
             if (newProfile != null)
             {
-                
                 profileCardManager.SetProfile(newProfile);
                 profileCardManager.TransitionToState(ProfileCardState.Minimized);
             }
 
-            if (profileSelectionPanel != null)
-            {
-                profileSelectionPanel.SetActive(false);
-            }
+            // Transition to main menu
             GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
-            StartCoroutine(FadeInMainMenuButtons());
         }
-
+        private void HandleProfileLoadRequested()
+        {
+            Debug.Log("[ProfileSelection] Profile load requested, reloading state");
+            ReloadProfileSelectionState();
+        }
         private void HandleProfileSwitched(string profileId)
         {
             if (isTransitioning) return;
@@ -265,6 +269,28 @@ namespace CyberPickle.UI.Screens.MainMenu
         #endregion
 
         #region Profile Management
+        private void ReloadProfileSelectionState()
+        {
+            Debug.Log("[ProfileSelectionController] Reloading profile selection state");
+
+            // Clear existing cards
+            ClearExistingProfiles();
+
+            // Reset create profile card
+            if (createProfileCard != null)
+            {
+                createProfileCard.ResetCard();
+            }
+
+            // Force reload all profiles from ProfileManager
+            var allProfiles = profileManager.GetAllProfiles();
+            Debug.Log($"[ProfileSelectionController] Found {allProfiles.Count} profiles to load");
+
+            foreach (var profile in allProfiles)
+            {
+                CreateProfileCard(profile);
+            }
+        }
 
         private void LoadProfiles()
         {
@@ -515,35 +541,79 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (profileCardManager.CurrentState != ProfileCardState.Hidden)
             {
                 profileCardManager.TransitionToState(ProfileCardState.Hidden);
+                Debug.Log($"[ProfileCardManagerHandlebackbutton] Card hidden");
             }
 
             GameEvents.OnProfileLoadRequested.Invoke();
         }
 
-        #endregion
-
-        #region UI Transitions
-
-        private IEnumerator FadeInMainMenuButtons()
+        private void HandleProfileNavigation(float direction)
         {
-            float elapsedTime = 0f;
-            mainMenuButtonsGroup.gameObject.SetActive(true);
+            if (instantiatedCards.Count == 0) return;
 
-            while (elapsedTime < transitionDuration)
+            int currentIndex = -1;
+
+            // Find currently selected card or first card if none selected
+            for (int i = 0; i < instantiatedCards.Count; i++)
             {
-                elapsedTime += Time.deltaTime;
-                mainMenuButtonsGroup.alpha = elapsedTime / transitionDuration;
-                yield return null;
+                var cardController = instantiatedCards[i].GetComponent<ProfileCardController>();
+                if (cardController?.ProfileData == profileManager.ActiveProfile)
+                {
+                    currentIndex = i;
+                    break;
+                }
             }
 
-            mainMenuButtonsGroup.alpha = 1f;
-            mainMenuButtonsGroup.interactable = true;
-            mainMenuButtonsGroup.blocksRaycasts = true;
+            if (currentIndex == -1)
+                currentIndex = 0;
 
-            GameEvents.OnGameStateChanged.Invoke(GameState.MainMenu);
+            // Calculate new index
+            int newIndex = currentIndex;
+            if (direction > 0) // Down arrow
+            {
+                newIndex = Mathf.Min(instantiatedCards.Count - 1, currentIndex + 1);
+            }
+            else if (direction < 0) // Up arrow
+            {
+                newIndex = Mathf.Max(0, currentIndex - 1);
+            }
+
+            if (newIndex != currentIndex)
+            {
+                var cardController = instantiatedCards[newIndex].GetComponent<ProfileCardController>();
+                if (cardController != null)
+                {
+                    // Scroll to the selected card
+                    ScrollToCard(instantiatedCards[newIndex]);
+                }
+            }
         }
+        private void ScrollToCard(GameObject cardObject)
+        {
+            if (cardObject == null) return;
 
+            // Get the ScrollRect component
+            var scrollRect = profilesContainer.GetComponentInParent<ScrollRect>();
+            if (scrollRect == null) return;
+
+            // Get the card's RectTransform
+            var cardRect = cardObject.GetComponent<RectTransform>();
+            if (cardRect == null) return;
+
+            // Calculate the card's position in the scroll view
+            var contentPanel = scrollRect.content;
+            var viewportHeight = scrollRect.viewport.rect.height;
+            var contentHeight = contentPanel.rect.height;
+
+            // Convert the card's position to normalized coordinates (0-1)
+            var cardPosition = contentPanel.InverseTransformPoint(cardRect.position);
+            var normalizedPosition = (cardPosition.y + contentHeight / 2) / contentHeight;
+
+            // Adjust scroll position to show the card
+            scrollRect.verticalNormalizedPosition = 1 - normalizedPosition;
+        }
         #endregion
+
 
         #region Cleanup
 

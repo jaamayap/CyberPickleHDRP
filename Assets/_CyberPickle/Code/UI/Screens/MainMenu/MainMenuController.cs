@@ -25,6 +25,12 @@ namespace CyberPickle.UI.Screens.MainMenu
         [SerializeField] private float fadeOutDuration = 0.5f;
         [SerializeField] private float panelTransitionDuration = 0.3f;
 
+        [Header("Title Animation")]
+        [SerializeField] private RectTransform titleRectTransform;
+        [SerializeField] private float titleAnimationDuration = 0.5f;
+        [SerializeField] private Vector2 titleMainMenuPosition = new Vector2(0, 500); // Your default position
+        [SerializeField] private Vector2 titleProfileSelectPosition = new Vector2(0, 954); // Your desired position
+
         private bool isWaitingForInput = true;
         private CanvasGroup pressButtonCanvasGroup;
 
@@ -113,6 +119,7 @@ namespace CyberPickle.UI.Screens.MainMenu
         {
             Debug.Log("[MainMenu] Profile load requested, transitioning to profile selection panel");
             StartCoroutine(TransitionToPanels(authPanel, profileSelectionPanel));
+            StartCoroutine(AnimateTitlePosition(titleProfileSelectPosition));
         }
 
         private void HandleGameStateChanged(GameState newState)
@@ -120,7 +127,10 @@ namespace CyberPickle.UI.Screens.MainMenu
             switch (newState)
             {
                 case GameState.MainMenu:
+
+                    StartCoroutine(AnimateTitlePosition(titleMainMenuPosition));
                     StartCoroutine(TransitionToPanels(profileSelectionPanel, mainMenuButtonsPanel));
+                    
                     if (mainMenuButtonsPanel != null)
                     {
                         var canvasGroup = mainMenuButtonsPanel.GetComponent<CanvasGroup>();
@@ -132,7 +142,9 @@ namespace CyberPickle.UI.Screens.MainMenu
                     }
                     break;
                 case GameState.ProfileSelection:
+                    StartCoroutine(AnimateTitlePosition(titleProfileSelectPosition));
                     StartCoroutine(TransitionToPanels(mainMenuButtonsPanel, profileSelectionPanel));
+                    
                     break;
                 case GameState.CharacterSelect:
                 case GameState.EquipmentSelect:
@@ -142,6 +154,29 @@ namespace CyberPickle.UI.Screens.MainMenu
             }
         }
 
+        private IEnumerator AnimateTitlePosition(Vector2 targetPosition)
+        {
+            if (titleRectTransform == null) yield break;
+
+            Vector2 startPosition = titleRectTransform.anchoredPosition;
+            float elapsedTime = 0f;
+
+            while (elapsedTime < titleAnimationDuration)
+            {
+                elapsedTime += Time.deltaTime;
+                float progress = elapsedTime / titleAnimationDuration;
+
+                // Use smooth step for more polished animation
+                float smoothProgress = Mathf.SmoothStep(0, 1, progress);
+
+                titleRectTransform.anchoredPosition = Vector2.Lerp(startPosition, targetPosition, smoothProgress);
+
+                yield return null;
+            }
+
+            // Ensure we reach the exact target position
+            titleRectTransform.anchoredPosition = targetPosition;
+        }
         private IEnumerator TransitionToPanels(GameObject panelToHide, GameObject panelToShow)
         {
             // Signal start of transition
