@@ -62,5 +62,8 @@ namespace CyberPickle.Core.Events
         public static readonly GameEvent OnProfileCardTransitionComplete = new GameEvent();
         public static readonly GameEvent<bool> OnProfileCardInteractionEnabled = new GameEvent<bool>();
 
+        //Camera Events
+        public static readonly GameEvent OnCameraTransitionComplete = new GameEvent();
+
     }
 }

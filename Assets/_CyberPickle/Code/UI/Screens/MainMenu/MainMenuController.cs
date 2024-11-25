@@ -8,7 +8,6 @@ using UnityEngine;
 using TMPro;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
-using CyberPickle.UI.Effects;
 using System.Collections;
 
 namespace CyberPickle.UI.Screens.MainMenu
@@ -28,16 +27,15 @@ namespace CyberPickle.UI.Screens.MainMenu
         [Header("Title Animation")]
         [SerializeField] private RectTransform titleRectTransform;
         [SerializeField] private float titleAnimationDuration = 0.5f;
-        [SerializeField] private Vector2 titleMainMenuPosition = new Vector2(0, 500); // Your default position
-        [SerializeField] private Vector2 titleProfileSelectPosition = new Vector2(0, 954); // Your desired position
+        [SerializeField] private Vector2 titleMainMenuPosition = new Vector2(0, 500);
+        [SerializeField] private Vector2 titleProfileSelectPosition = new Vector2(0, 954);
 
         private bool isWaitingForInput = true;
         private CanvasGroup pressButtonCanvasGroup;
 
         private void Awake()
         {
-            Debug.Log("MainMenuControllerAwake");
-            // Get or add CanvasGroup for fade effect
+            Debug.Log("[MainMenuController] Awake");
             pressButtonCanvasGroup = pressAnyButtonText.gameObject.GetComponent<CanvasGroup>();
             if (pressButtonCanvasGroup == null)
             {
@@ -49,27 +47,38 @@ namespace CyberPickle.UI.Screens.MainMenu
         {
             InitializeUI();
             SubscribeToEvents();
-            Debug.Log("MainMenuControllerStart");
+            Debug.Log("[MainMenuController] Start completed");
         }
 
         private void InitializeUI()
         {
-            Debug.Log("MainMenuController: InitializeUI Called");
-            // Ensure proper initial state
+            Debug.Log("[MainMenuController] Initializing UI");
             pressButtonCanvasGroup.alpha = 1f;
             isWaitingForInput = true;
 
             // Hide all panels initially
-            if (authPanel != null) authPanel.SetActive(false);
-            if (profileSelectionPanel != null) profileSelectionPanel.SetActive(false);
-            if (mainMenuButtonsPanel != null) mainMenuButtonsPanel.SetActive(false);
-            Debug.Log("MainMenuController: PanelsHidden");
+            if (authPanel != null)
+            {
+                authPanel.SetActive(false);
+                Debug.Log("[MainMenuController] Auth panel hidden");
+            }
+            if (profileSelectionPanel != null)
+            {
+                profileSelectionPanel.SetActive(false);
+                Debug.Log("[MainMenuController] Profile selection panel hidden");
+            }
+            if (mainMenuButtonsPanel != null)
+            {
+                mainMenuButtonsPanel.SetActive(false);
+                Debug.Log("[MainMenuController] Main menu buttons panel hidden");
+            }
         }
 
         private void SubscribeToEvents()
         {
             GameEvents.OnProfileLoadRequested.AddListener(HandleProfileLoadRequested);
             GameEvents.OnGameStateChanged.AddListener(HandleGameStateChanged);
+            Debug.Log("[MainMenuController] Events subscribed");
         }
 
         private void Update()
@@ -82,16 +91,16 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void HandleMainMenuInput()
         {
+            Debug.Log("[MainMenuController] Main menu input detected");
             isWaitingForInput = false;
             StartCoroutine(TransitionToAuth());
         }
 
         private IEnumerator TransitionToAuth()
         {
-            // Signal that UI transition is starting
+            Debug.Log("[MainMenuController] Starting transition to auth");
             GameEvents.OnUIAnimationStarted.Invoke();
 
-            // Fade out "Press Any Button" text
             float elapsedTime = 0f;
             while (elapsedTime < fadeOutDuration)
             {
@@ -100,52 +109,40 @@ namespace CyberPickle.UI.Screens.MainMenu
                 yield return null;
             }
 
-            // Disable the text and show auth panel
             pressAnyButtonText.gameObject.SetActive(false);
             if (authPanel != null)
             {
                 authPanel.SetActive(true);
+                Debug.Log("[MainMenuController] Auth panel activated");
             }
 
-            // Signal that UI transition is complete
-            Debug.Log("[MainMenu] UI transition complete");
+            Debug.Log("[MainMenuController] Auth transition complete");
             GameEvents.OnUIAnimationCompleted.Invoke();
-
-            // Trigger authentication start event
             GameEvents.OnAuthenticationRequested.Invoke();
         }
 
         private void HandleProfileLoadRequested()
         {
-            Debug.Log("[MainMenu] Profile load requested, transitioning to profile selection panel");
+            Debug.Log("[MainMenuController] Profile load requested");
             StartCoroutine(TransitionToPanels(authPanel, profileSelectionPanel));
             StartCoroutine(AnimateTitlePosition(titleProfileSelectPosition));
         }
 
         private void HandleGameStateChanged(GameState newState)
         {
+            Debug.Log($"[MainMenuController] Game state changed to: {newState}");
             switch (newState)
             {
                 case GameState.MainMenu:
-
                     StartCoroutine(AnimateTitlePosition(titleMainMenuPosition));
                     StartCoroutine(TransitionToPanels(profileSelectionPanel, mainMenuButtonsPanel));
-                    
-                    if (mainMenuButtonsPanel != null)
-                    {
-                        var canvasGroup = mainMenuButtonsPanel.GetComponent<CanvasGroup>();
-                        if (canvasGroup != null)
-                        {
-                            canvasGroup.interactable = true;
-                            canvasGroup.blocksRaycasts = true;
-                        }
-                    }
                     break;
+
                 case GameState.ProfileSelection:
                     StartCoroutine(AnimateTitlePosition(titleProfileSelectPosition));
                     StartCoroutine(TransitionToPanels(mainMenuButtonsPanel, profileSelectionPanel));
-                    
                     break;
+
                 case GameState.CharacterSelect:
                 case GameState.EquipmentSelect:
                 case GameState.LevelSelect:
@@ -158,6 +155,7 @@ namespace CyberPickle.UI.Screens.MainMenu
         {
             if (titleRectTransform == null) yield break;
 
+            Debug.Log($"[MainMenuController] Starting title animation to position: {targetPosition}");
             Vector2 startPosition = titleRectTransform.anchoredPosition;
             float elapsedTime = 0f;
 
@@ -165,30 +163,27 @@ namespace CyberPickle.UI.Screens.MainMenu
             {
                 elapsedTime += Time.deltaTime;
                 float progress = elapsedTime / titleAnimationDuration;
-
-                // Use smooth step for more polished animation
                 float smoothProgress = Mathf.SmoothStep(0, 1, progress);
-
                 titleRectTransform.anchoredPosition = Vector2.Lerp(startPosition, targetPosition, smoothProgress);
-
                 yield return null;
             }
 
-            // Ensure we reach the exact target position
             titleRectTransform.anchoredPosition = targetPosition;
+            Debug.Log("[MainMenuController] Title animation completed");
         }
+        //ASDF
         private IEnumerator TransitionToPanels(GameObject panelToHide, GameObject panelToShow)
         {
-            // Signal start of transition
+            Debug.Log($"[MainMenuController] Starting panel transition - Hide: {panelToHide?.name}, Show: {panelToShow?.name}");
             GameEvents.OnUIAnimationStarted.Invoke();
 
             if (panelToHide != null)
             {
-                // Existing fade out code...
                 CanvasGroup hideCanvasGroup = panelToHide.GetComponent<CanvasGroup>();
                 if (hideCanvasGroup == null)
                 {
                     hideCanvasGroup = panelToHide.AddComponent<CanvasGroup>();
+                    Debug.Log($"[MainMenuController] Added CanvasGroup to {panelToHide.name}");
                 }
 
                 float elapsedTime = 0f;
@@ -200,19 +195,24 @@ namespace CyberPickle.UI.Screens.MainMenu
                 }
 
                 panelToHide.SetActive(false);
+                Debug.Log($"[MainMenuController] Panel {panelToHide.name} hidden");
             }
 
             if (panelToShow != null)
             {
-                // Existing fade in code...
                 CanvasGroup showCanvasGroup = panelToShow.GetComponent<CanvasGroup>();
                 if (showCanvasGroup == null)
                 {
                     showCanvasGroup = panelToShow.AddComponent<CanvasGroup>();
+                    Debug.Log($"[MainMenuController] Added CanvasGroup to {panelToShow.name}");
                 }
 
                 showCanvasGroup.alpha = 0f;
                 panelToShow.SetActive(true);
+
+                // Important: Set these immediately when showing the panel
+                showCanvasGroup.interactable = true;
+                showCanvasGroup.blocksRaycasts = true;
 
                 float elapsedTime = 0f;
                 while (elapsedTime < panelTransitionDuration)
@@ -223,49 +223,28 @@ namespace CyberPickle.UI.Screens.MainMenu
                 }
 
                 showCanvasGroup.alpha = 1f;
-
-                // Signal completion of transition and which panel is now active
-                Debug.Log($"[MainMenu] Panel transition complete: {panelToShow.name} now active");
-                GameEvents.OnUIAnimationCompleted.Invoke();
+                Debug.Log($"[MainMenuController] Panel {panelToShow.name} shown and activated");
             }
-        }
 
+            GameEvents.OnUIAnimationCompleted.Invoke();
+            Debug.Log("[MainMenuController] Panel transition complete");
+        }
 
         private void HideAllPanels()
         {
+            Debug.Log("[MainMenuController] Hiding all panels");
             if (pressAnyButtonText != null) pressAnyButtonText.gameObject.SetActive(false);
             if (authPanel != null) authPanel.SetActive(false);
             if (profileSelectionPanel != null) profileSelectionPanel.SetActive(false);
             if (mainMenuButtonsPanel != null) mainMenuButtonsPanel.SetActive(false);
         }
 
-        // Public methods for button callbacks
-        public void OnPlayButtonClicked()
-        {
-            GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
-        }
-
-        public void OnOptionsButtonClicked()
-        {
-            // TODO: Implement options menu
-            Debug.Log("Options clicked");
-        }
-
-        public void OnQuitButtonClicked()
-        {
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
-        }
-
         private void OnDestroy()
         {
-            // Clean up event subscriptions
             GameEvents.OnProfileLoadRequested.RemoveListener(HandleProfileLoadRequested);
             GameEvents.OnGameStateChanged.RemoveListener(HandleGameStateChanged);
             StopAllCoroutines();
+            Debug.Log("[MainMenuController] Cleaned up and destroyed");
         }
     }
 }
