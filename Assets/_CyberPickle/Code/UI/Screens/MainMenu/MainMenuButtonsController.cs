@@ -5,6 +5,7 @@ using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
 using System.Collections;
 using CyberPickle.Core;
+using CyberPickle.Core.Services.Authentication;
 
 namespace CyberPickle.UI.Screens.MainMenu
 {
@@ -192,7 +193,8 @@ namespace CyberPickle.UI.Screens.MainMenu
         private void OnStartClicked()
         {
             Debug.Log("[MainMenuButtonsController] Start button clicked");
-            GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+            Debug.Log($"[MainMenu] Starting character select. Active profile: {ProfileManager.Instance.ActiveProfile?.ProfileId}");
+            GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);            
         }
 
         private void OnOptionsClicked()

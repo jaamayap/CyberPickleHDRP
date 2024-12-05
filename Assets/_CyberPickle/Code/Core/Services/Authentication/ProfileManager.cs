@@ -47,21 +47,28 @@ namespace CyberPickle.Core.Services.Authentication
         {
             if (isInitialized) return;
 
-            Debug.Log("[ProfileManager] Initializing");
+            Debug.Log("[ProfileManager] Starting initialization");
 
-            if (profileContainer == null)
+            try
             {
                 profileContainer = ProfileContainer.Load();
-            }
+                Debug.Log($"[ProfileManager] Loaded profile container. Has profiles: {profileContainer?.Profiles?.Count > 0}");
 
-            if (profileEvents == null)
-            {
+                if (profileContainer == null)
+                {
+                    profileContainer = new ProfileContainer();
+                    Debug.Log("[ProfileManager] Created new profile container");
+                }
+
                 profileEvents = new ProfileManagementEvents();
+                isInitialized = true;
+                Debug.Log("[ProfileManager] Initialization complete");
             }
-
-            isInitialized = true;
-            Debug.Log("[ProfileManager] Initialization completed");
-            Debug.Log($"[ProfileManager] Loaded {profileContainer?.Profiles.Count ?? 0} profiles");
+            catch (Exception e)
+            {
+                Debug.LogError($"[ProfileManager] Failed to initialize: {e.Message}");
+                throw;
+            }
         }
 
         protected override void OnManagerAwake()
@@ -212,7 +219,9 @@ namespace CyberPickle.Core.Services.Authentication
                 }
 
                 profileContainer.SetActiveProfile(profileId);
+                Debug.Log($"[ProfileManager] ActiveProfile set to {ActiveProfile?.ProfileId} at {Time.time}"); ;
                 await SaveProfilesAsync();
+
                 profileEvents.InvokeProfileSwitched(profileId);
 
                 return ProfileOperationResult.Succeeded($"Profile switched successfully: {profileId}");
@@ -269,20 +278,28 @@ namespace CyberPickle.Core.Services.Authentication
             try
             {
                 var token = cancellationTokenSource?.Token ?? CancellationToken.None;
-
                 if (token.IsCancellationRequested)
                 {
                     Debug.Log("[ProfileManager] Save operation cancelled due to application quit");
                     return;
                 }
 
-                lock (saveLock)
+                // Check IsQuitting on the main thread before starting the save operation
+                bool isQuitting = IsQuitting;
+                if (isQuitting)
                 {
-                    if (!IsQuitting)
+                    Debug.Log("[ProfileManager] Skipping save due to application quit");
+                    return;
+                }
+
+                // Run the save operation on a background thread
+                await Task.Run(() =>
+                {
+                    lock (saveLock)
                     {
                         profileContainer.SaveProfiles();
                     }
-                }
+                }, token);
 
                 Debug.Log("[ProfileManager] Profile save completed successfully");
             }

@@ -3,9 +3,174 @@ Namespace: CyberPickle.Achievements
    Constructor: public AchievementManager()
    Method: public sealed void Initialize()
 Namespace: CyberPickle.Characters
+ Class: CharacterDisplayManager : Manager<CharacterDisplayManager>
+   Field: private float transitionDuration
+   Field: private float idleAnimationSpeed
+   Field: private float hoverAnimationSpeed
+   Field: private float highlightIntensity
+   Field: private float dimmedIntensity
+   Field: private Material lockedMaterial
+   Field: private float spotlightIntensity
+   Field: private float spotlightRange
+   Field: private float spotlightAngle
+   Field: private Dictionary<GameObject, Animator> characterAnimators
+   Field: private Dictionary<GameObject, Material[]> originalMaterials
+   Field: private Dictionary<GameObject, SkinnedMeshRenderer> characterRenderers
+   Field: private bool isInitialized
+   Constructor: public CharacterDisplayManager()
+   Method: protected override void OnManagerAwake()
+   Method: public void Initialize()
+   Method: private void ValidateReferences()
+   Method: private void SetupPointerInteraction()
+   Method: public async Task<GameObject> SpawnCharacter(CharacterData characterData, Vector3 position, Quaternion rotation)
+   Method: private void CacheCharacterComponents(GameObject character)
+   Method: private async Task InitializeCharacterVisuals(GameObject character, CharacterData characterData)
+   Method: public void UpdateCharacterState(GameObject character, CharacterDisplayState state)
+   Method: private void UpdateAnimation(GameObject character, CharacterDisplayState state)
+   Method: private void UpdateMaterials(GameObject character, CharacterDisplayState state)
+   Method: private void UpdateLighting(GameObject character, CharacterDisplayState state)
+   Method: public async Task RotateSpotlight(Light spotlight, float targetRotation, float duration)
+   Method: public void Cleanup()
+   Method: protected override void OnManagerDestroyed()
  Class: CharacterManager : Manager<CharacterManager>, IInitializable
    Constructor: public CharacterManager()
    Method: public sealed void Initialize()
+ Class: CharacterPointerHandler : MonoBehaviour, IPointerClickHandler, IEventSystemHandler, IPointerEnterHandler, IPointerExitHandler
+   Field: private BoxCollider pointerCollider
+   Field: private string characterId
+   Field: private bool isInteractable
+   Constructor: public CharacterPointerHandler()
+   Method: private void Awake()
+   Method: public void Initialize(string characterId)
+   Method: public void SetInteractable(bool interactable)
+   Method: public sealed void OnPointerEnter(PointerEventData eventData)
+   Method: public sealed void OnPointerExit(PointerEventData eventData)
+   Method: public sealed void OnPointerClick(PointerEventData eventData)
+   Method: public void AdjustColliderSize(Vector3 size, Vector3 center)
+ Enum: CharacterDisplayState
+   Value: Hidden = 0
+   Value: Locked = 1
+   Value: Idle = 2
+   Value: Hover = 3
+   Value: Selected = 4
+   Value: Previewing = 5
+ Class: CharacterSelectionManager : Manager<CharacterSelectionManager>
+   Field: private Transform[] characterPositions
+   Field: private Light spotLight
+   Field: private float spotlightRotationDuration
+   Field: private CharacterData[] availableCharacters
+   Field: private CharacterDisplayManager displayManager
+   Field: private CharacterUIManager uiManager
+   Field: private ProfileManager profileManager
+   Field: private GameManager gameManager
+   Field: private InputManager inputManager
+   Field: private CameraManager cameraManager
+   Field: private Dictionary<string, GameObject> spawnedCharacters
+   Field: private Dictionary<string, CharacterDisplayState> characterStates
+   Field: private string currentlySelectedCharacterId
+   Field: private string currentlyHoveredCharacterId
+   Field: private bool isTransitioning
+   Field: private int currentSpotlightIndex
+   Constructor: public CharacterSelectionManager()
+   Method: public CharacterData GetCharacterData(string characterId)
+   Method: public bool IsCharacterUnlocked(string characterId)
+   Method: public async Task<bool> SelectCharacter(string characterId)
+   Method: protected override void OnManagerAwake()
+   Method: protected override void OnManagerEnabled()
+   Method: protected override void OnManagerDisabled()
+   Method: protected override void OnManagerDestroyed()
+   Method: private void InitializeManagerReferences()
+   Method: private bool EnsureManagerReferences()
+   Method: private bool ValidateManagerReferences()
+   Method: private void ValidateReferences()
+   Method: private void SubscribeToEvents()
+   Method: private void UnsubscribeFromEvents()
+   Method: private void HandleGameStateChanged(GameState newState)
+   Method: private void HandleProfileSelected(string profileId)
+   Method: private void HandleNavigationInput(float direction)
+   Method: private void InitializeCharacterSelection()
+   Method: private async Task SpawnCharacter(CharacterData characterData, Transform position)
+   Method: private void HandleCharacterHoverEnter(string characterId)
+   Method: private void HandleCharacterHoverExit(string characterId)
+   Method: private void HandleCharacterSelected(string characterId)
+   Method: private void HandleCharacterDetails(string characterId)
+   Method: private void LoadCharacterProgressionData(ProfileData profile)
+   Method: private void RotateSpotlightToIndex(int index)
+   Method: private void UpdateCharacterStates(int focusedIndex)
+   Method: private void SetCharacterState(string characterId, CharacterDisplayState newState)
+   Method: private void CleanupCharacterSelection()
+ Class: CharacterUIManager : Manager<CharacterUIManager>
+   Field: private CanvasGroup detailsPanel
+   Field: private TextMeshProUGUI detailsCharacterNameText
+   Field: private TextMeshProUGUI levelText
+   Field: private Transform statsContainer
+   Field: private TextMeshProUGUI loreText
+   Field: private GameObject statRowPrefab
+   Field: private CanvasGroup hoverPanel
+   Field: private TextMeshProUGUI hoverCharacterNameText
+   Field: private GameObject leftClickPrompt
+   Field: private GameObject rightClickPrompt
+   Field: private CanvasGroup unlockPanel
+   Field: private TextMeshProUGUI unlockRequirementsText
+   Field: private float panelFadeDuration
+   Field: private float statUpdateDuration
+   Field: private Vector3 hoverPanelOffset
+   Field: private Vector3 detailsPanelOffset
+   Field: private CharacterSelectionManager characterSelectionManager
+   Field: private ProfileManager profileManager
+   Field: private string currentCharacterId
+   Field: private Dictionary<string, TextMeshProUGUI> statTextCache
+   Field: private Dictionary<string, CharacterProgressionData> progressionCache
+   Constructor: public CharacterUIManager()
+   Method: protected override void OnManagerAwake()
+   Method: public void UpdatePanelPositions(Transform characterPosition)
+   Method: private void InitializeManagers()
+   Method: private bool ValidateManagerReferences()
+   Method: private void ValidateReferences()
+   Method: private void InitializeCache()
+   Method: public void Initialize(CharacterData[] characters)
+   Method: public void ShowCharacterPreview(CharacterData character)
+   Method: public void ShowDetails(string characterId)
+   Method: public void UpdateCharacterProgress(string characterId, CharacterProgressionData progression)
+   Method: private void UpdateCharacterStats(CharacterData baseData, CharacterProgressionData progression)
+   Method: private void CreateStatRow(string statName, float baseValue, CharacterProgressionData progression)
+   Method: private void ShowUnlockRequirements(CharacterData character)
+   Method: private CharacterProgressionData GetCharacterProgression(string characterId)
+   Method: private void SetPanelState(CanvasGroup panel, bool visible)
+   Method: public void Cleanup()
+   Method: private void ClearUI()
+   Method: private void HideAllPanels()
+   Method: private void ClearStatsContainer()
+   Method: protected override void OnManagerDestroyed()
+Namespace: CyberPickle.Characters.Data
+ Class: CharacterData : ScriptableObject
+   Field: public string characterId
+   Field: public string displayName
+   Field: public string description
+   Field: public string lore
+   Field: public GameObject characterPrefab
+   Field: public Sprite characterIcon
+   Field: public Material lockedMaterial
+   Field: public float maxHealth
+   Field: public float healthRegeneration
+   Field: public float defense
+   Field: public float power
+   Field: public float speed
+   Field: public float magneticField
+   Field: public float dexterity
+   Field: public float luck
+   Field: public float areaOfEffect
+   Field: public bool unlockedByDefault
+   Field: public int requiredPlayerLevel
+   Field: public string[] requiredAchievements
+   Field: public string idleAnimationTrigger
+   Field: public string hoverAnimationTrigger
+   Field: public string selectAnimationTrigger
+   Field: public string lockedAnimationTrigger
+   Constructor: public CharacterData()
+   Method: private void OnValidate()
+   Method: private void ValidateStats()
+   Method: public bool ValidateReferences()
 Namespace: CyberPickle.Core
  Class: GameManager : Manager<GameManager>, IInitializable
    Field: private GameConfig gameConfig
@@ -235,6 +400,10 @@ Namespace: CyberPickle.Core.Events
    Field: public static GameEvent OnProfileCardTransitionComplete
    Field: public static GameEvent<bool> OnProfileCardInteractionEnabled
    Field: public static GameEvent OnCameraTransitionComplete
+   Field: public static GameEvent<string> OnCharacterHoverEnter
+   Field: public static GameEvent<string> OnCharacterHoverExit
+   Field: public static GameEvent<string> OnCharacterSelected
+   Field: public static GameEvent<string> OnCharacterDetailsRequested
 Namespace: CyberPickle.Core.GameFlow.States.ProfileCard
  Enum: ProfileCardState
    Value: Hidden = 0
@@ -428,25 +597,65 @@ Namespace: CyberPickle.Core.Services.Authentication.Data
    Method: public void SaveProfiles()
    Method: public static ProfileContainer Load()
    Method: public void ClearAll()
+   Method: public void VerifyIntegrity()
    Property: private static string ProfilesFilePath { get; }
    Property: public IReadOnlyList<ProfileData> Profiles { get; }
    Property: public ProfileData ActiveProfile { get; }
+ Class: CharacterProgressionData
+   Field: private string characterId
+   Field: private int characterLevel
+   Field: private float experience
+   Field: private Dictionary<string, float> stats
+   Field: private List<string> unlockedSkills
+   Field: private string equippedWeaponId
+   Field: private List<string> equippedPowerupIds
+   Constructor: public CharacterProgressionData(string characterId)
+   Method: private void InitializeCollections()
+   Property: public string CharacterId { get; }
+   Property: public int CharacterLevel { get; }
+   Property: public float Experience { get; }
+   Property: public IReadOnlyDictionary<string, float> Stats { get; }
+   Property: public IReadOnlyList<string> UnlockedSkills { get; }
+   Property: public string EquippedWeaponId { get; }
+   Property: public IReadOnlyList<string> EquippedPowerupIds { get; }
+ Class: MiningNodeData
+   Field: private string nodeId
+   Field: private int level
+   Field: private float baseRate
+   Field: private float multiplier
+   Constructor: public MiningNodeData(string nodeId)
+   Property: public string NodeId { get; }
+   Property: public int Level { get; }
+   Property: public float BaseRate { get; }
+   Property: public float Multiplier { get; }
  Class: ProfileData
    Field: private string profileId
    Field: private string playerId
    Field: private string displayName
-   Field: private bool hasSaveData
+   Field: private bool isActive
+   Field: private long createdAtTicks
+   Field: private long lastLoginAtTicks
    Field: private float totalPlayTime
    Field: private int highestScore
    Field: private float furthestDistance
    Field: private int level
-   Field: private bool isActive
-   Field: private long createdAtTicks
-   Field: private long lastLoginAtTicks
+   Field: private bool hasSaveData
+   Field: private float cyberCoins
+   Field: private float neuralCredits
+   Field: private Dictionary<string, CharacterProgressionData> characterProgress
+   Field: private Dictionary<string, MiningNodeData> miningNodes
+   Field: private HashSet<string> unlockedEquipment
+   Field: private HashSet<string> achievements
+   Field: private Dictionary<string, float> globalMultipliers
    Constructor: public ProfileData(string profileId, string playerId, string displayName)
+   Method: public void InitializeCollectionsIfNeeded()
+   Method: private void SetDefaultValues()
    Method: public void UpdateLoginTime()
    Method: public void UpdateDisplayName(string name)
    Method: public void UpdateProgress(float playTime, int score, float distance, int level)
+   Method: public void UpdateCharacterProgress(string characterId, CharacterProgressionData progression)
+   Method: public void UpdateMiningNode(string nodeId, MiningNodeData nodeData)
+   Method: public void UpdateCurrency(float cyberCoins, float neuralCredits)
    Method: public void ClearProgress()
    Method: public void SetActive(bool active)
    Property: public string ProfileId { get; }
@@ -460,6 +669,13 @@ Namespace: CyberPickle.Core.Services.Authentication.Data
    Property: public bool IsActive { get; }
    Property: public DateTime CreatedAt { get; }
    Property: public DateTime LastLoginTime { get; }
+   Property: public float CyberCoins { get; }
+   Property: public float NeuralCredits { get; }
+   Property: public IReadOnlyDictionary<string, CharacterProgressionData> CharacterProgress { get; }
+   Property: public IReadOnlyDictionary<string, MiningNodeData> MiningNodes { get; }
+   Property: public IReadOnlyCollection<string> UnlockedEquipment { get; }
+   Property: public IReadOnlyCollection<string> Achievements { get; }
+   Property: public IReadOnlyDictionary<string, float> GlobalMultipliers { get; }
 Namespace: CyberPickle.Core.Services.Authentication.Flow
  Class: AuthenticationFlowManager : Manager<AuthenticationFlowManager>, IInitializable
    Field: private IAuthenticationState currentState
