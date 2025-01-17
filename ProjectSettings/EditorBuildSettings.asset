@@ -11,7 +11,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_CyberPickle/Scenes/MainMenu/MainMenu.unity
     guid: 6501ce1547bb7ca4d8b6bd69fe1a6358
-  - enabled: 1
+  - enabled: 0
     path: Assets/_CyberPickle/Scenes/CharacterSelect/CharacterSelect.unity
     guid: 0dde37c6c72d0c34b90f11a3c4b679b9
   - enabled: 1

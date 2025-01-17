@@ -62,5 +62,34 @@ namespace CyberPickle.Core.Events
         public static readonly GameEvent OnProfileCardTransitionComplete = new GameEvent();
         public static readonly GameEvent<bool> OnProfileCardInteractionEnabled = new GameEvent<bool>();
 
+        //Camera Events
+        public static readonly GameEvent OnCameraTransitionComplete = new GameEvent();
+
+        // Character Selection Events
+        public static readonly GameEvent<string> OnCharacterHoverEnter = new GameEvent<string>();
+        public static readonly GameEvent<string> OnCharacterHoverExit = new GameEvent<string>();
+        public static readonly GameEvent<string> OnCharacterSelected = new GameEvent<string>();
+        public static readonly GameEvent<string> OnCharacterDetailsRequested = new GameEvent<string>();
+
+        /// <summary>
+        /// Event raised when the mouse pointer enters a character in the selection screen
+        /// </summary>
+        /// <param name="characterId">ID of the character being hovered</param>
+
+        /// <summary>
+        /// Event raised when the mouse pointer exits a character in the selection screen
+        /// </summary>
+        /// <param name="characterId">ID of the character no longer being hovered</param>
+
+        /// <summary>
+        /// Event raised when a character is selected via left-click
+        /// </summary>
+        /// <param name="characterId">ID of the selected character</param>
+
+        /// <summary>
+        /// Event raised when character details are requested via right-click
+        /// </summary>
+        /// <param name="characterId">ID of the character whose details are requested</param>
+
     }
 }
