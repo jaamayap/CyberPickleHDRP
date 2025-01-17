@@ -14,8 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterId: cyberpickle
   displayName: CyberPickle
-  description: "Description\t"
-  lore: Lore
+  description: ' Description CYBERPICLE'
+  lore: A cybernetic pickle with a knack for chaos. Once a humble garnish in a dystopian
+    diner, Pik now leads the charge against the Megabyte Syndicate, equipped with
+    a plasma blaster and an unshakable sense of irony.
   characterPrefab: {fileID: 2158358189046981709, guid: ef96737170b0b3847adcf2f4891f8db0,
     type: 3}
   characterIcon: {fileID: 0}

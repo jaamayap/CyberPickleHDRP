@@ -36,6 +36,9 @@ namespace CyberPickle.Characters
         [SerializeField] private CanvasGroup unlockPanel;
         [SerializeField] private TextMeshProUGUI unlockRequirementsText;
 
+        [Header("Confirmation Panel")]
+        [SerializeField] private CanvasGroup confirmationPanel;
+
         [Header("Animation Settings")]
         [SerializeField] private float panelFadeDuration = 0.3f;
         [SerializeField] private float statUpdateDuration = 0.5f;
@@ -71,10 +74,16 @@ namespace CyberPickle.Characters
                 hoverPanel.transform.position = characterPosition.position + hoverPanelOffset;
             }
 
-            // Position details panel to the side
+            // Position details panel on top of the character
             if (detailsPanel != null)
             {
                 detailsPanel.transform.position = characterPosition.position + detailsPanelOffset;
+            }
+
+            // Position unlock panel above the character (aligned with hover panel)
+            if (unlockPanel != null)
+            {
+                unlockPanel.transform.position = characterPosition.position + hoverPanelOffset;
             }
         }
         private void InitializeManagers()
@@ -129,22 +138,25 @@ namespace CyberPickle.Characters
             currentCharacterId = character.characterId;
             bool isUnlocked = characterSelectionManager.IsCharacterUnlocked(character.characterId);
 
-            // Update hover panel
+            // Always reset panels before updating
+            HideAllPanels();
+
+            // Update hover panel content
             if (hoverCharacterNameText != null)
             {
                 hoverCharacterNameText.text = character.displayName;
             }
 
-            // Show appropriate prompts
+            // Hide click prompts for locked characters
             if (leftClickPrompt != null) leftClickPrompt.SetActive(isUnlocked);
             if (rightClickPrompt != null) rightClickPrompt.SetActive(isUnlocked);
 
-            // Show appropriate panels
-            SetPanelState(hoverPanel, true);
-            SetPanelState(detailsPanel, false);
-            SetPanelState(unlockPanel, !isUnlocked);
-
-            if (!isUnlocked)
+            // Show the appropriate panel based on unlock state
+            if (isUnlocked)
+            {
+                SetPanelState(hoverPanel, true);
+            }
+            else
             {
                 ShowUnlockRequirements(character);
             }
@@ -185,6 +197,13 @@ namespace CyberPickle.Characters
             SetPanelState(hoverPanel, false);
             SetPanelState(detailsPanel, true);
             SetPanelState(unlockPanel, false);
+        }
+
+        public void ShowConfirmationPanel(bool show)
+        {
+            if (confirmationPanel == null) return;
+
+            SetPanelState(confirmationPanel, show);
         }
 
         public void UpdateCharacterProgress(string characterId, CharacterProgressionData progression)
@@ -243,7 +262,7 @@ namespace CyberPickle.Characters
             }
         }
 
-        private void ShowUnlockRequirements(CharacterData character)
+        public void ShowUnlockRequirements(CharacterData character)
         {
             if (unlockRequirementsText == null) return;
 
@@ -263,8 +282,18 @@ namespace CyberPickle.Characters
             }
 
             unlockRequirementsText.text = requirements;
+            SetPanelState(unlockPanel, true);
         }
 
+        public void HideUnlockPanel()
+        {
+            if (unlockPanel != null)
+            {
+                SetPanelState(unlockPanel, false); // Use the existing method to hide the panel
+            }
+
+            Debug.Log("[CharacterUIManager] Unlock panel hidden");
+        }
         private CharacterProgressionData GetCharacterProgression(string characterId)
         {
             if (string.IsNullOrEmpty(characterId) || profileManager == null) return null;
@@ -298,7 +327,7 @@ namespace CyberPickle.Characters
             currentCharacterId = null;
         }
 
-        private void HideAllPanels()
+        public void HideAllPanels()
         {
             SetPanelState(hoverPanel, false);
             SetPanelState(detailsPanel, false);

@@ -468,10 +468,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 58827306e9481774880090fb7b0e9ffe,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: 718766039283166236}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 58827306e9481774880090fb7b0e9ffe,
-        type: 3}
-      insertIndex: -1
       addedObject: {fileID: -1835118089187490380}
   m_SourcePrefab: {fileID: 100100000, guid: 58827306e9481774880090fb7b0e9ffe, type: 3}
 --- !u!1 &8769185263671085875 stripped
@@ -501,23 +497,6 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!111 &718766039283166236
-Animation:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8769185263671085875}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Animation: {fileID: -1364474898790094943, guid: 3cf28c64f59029c4bb1119e46578da79,
-    type: 3}
-  m_Animations:
-  - {fileID: -1364474898790094943, guid: 3cf28c64f59029c4bb1119e46578da79, type: 3}
-  m_WrapMode: 0
-  m_PlayAutomatically: 1
-  m_AnimatePhysics: 1
-  m_CullingType: 0
 --- !u!65 &-1835118089187490380
 BoxCollider:
   m_ObjectHideFlags: 0

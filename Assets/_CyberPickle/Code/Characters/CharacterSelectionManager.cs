@@ -29,6 +29,7 @@ using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Characters.Data;
 using CyberPickle.Core.Input;
 using CyberPickle.Core;
+using DG.Tweening;
 
 namespace CyberPickle.Characters
 {
@@ -444,11 +445,8 @@ namespace CyberPickle.Characters
 
         private async Task SpawnCharacter(CharacterData characterData, Transform position)
         {
-            if (characterData == null || position == null) return;
-
             try
             {
-                // Use DisplayManager to handle the actual spawning
                 GameObject characterInstance = await displayManager.SpawnCharacter(
                     characterData,
                     position.position,
@@ -457,17 +455,42 @@ namespace CyberPickle.Characters
 
                 if (characterInstance != null)
                 {
-                    // Selection Manager handles game logic and state
-                    var pointerHandler = characterInstance.AddComponent<CharacterPointerHandler>();
+                    // Add debug logging to verify setup
+                    Debug.Log($"[CharacterSelectionManager] Setting up character {characterData.characterId}");
+
+                    // Check if pointer handler exists and is properly initialized
+                    var pointerHandler = characterInstance.GetComponent<CharacterPointerHandler>();
+                    if (pointerHandler == null)
+                    {
+                        pointerHandler = characterInstance.AddComponent<CharacterPointerHandler>();
+                        Debug.Log($"[CharacterSelectionManager] Added CharacterPointerHandler to {characterData.characterId}");
+                    }
                     pointerHandler.Initialize(characterData.characterId);
 
+                    // Verify layer setup
                     characterInstance.layer = LayerMask.NameToLayer("Character");
+                    Debug.Log($"[CharacterSelectionManager] Set layer for {characterData.characterId} to Character");
 
-                    // Store references and state
+                    // Store references
                     spawnedCharacters[characterData.characterId] = characterInstance;
+
+                    // Determine character state
                     bool isUnlocked = IsCharacterUnlocked(characterData.characterId);
                     characterStates[characterData.characterId] = isUnlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
-                    pointerHandler.SetInteractable(isUnlocked);
+
+                    // Update interactability
+                    if (isUnlocked)
+                    {
+                        pointerHandler.SetInteractable(true);
+                    }
+                    else
+                    {
+                        // Allow hover but disable click for locked characters
+                        pointerHandler.SetInteractable(false, allowHover: true);
+                        Debug.Log($"[CharacterSelectionManager] Character {characterData.characterId} is locked but hoverable");
+                    }
+
+                    Debug.Log($"[CharacterSelectionManager] Character setup complete - ID: {characterData.characterId}, Unlocked: {isUnlocked}");
                 }
             }
             catch (Exception e)
@@ -475,6 +498,7 @@ namespace CyberPickle.Characters
                 Debug.LogError($"[CharacterSelectionManager] Failed to spawn character {characterData.characterId}: {e.Message}");
             }
         }
+
 
         /// <summary>
         /// Handles mouse hover enter events for characters
@@ -484,16 +508,33 @@ namespace CyberPickle.Characters
         {
             if (isTransitioning) return;
 
-            // Find the index of the hovered character
+            // Find the hovered character and its position
             for (int i = 0; i < availableCharacters.Length; i++)
             {
                 if (availableCharacters[i].characterId == characterId)
                 {
-                    // Only update if it's a different character
                     if (currentSpotlightIndex != i)
                     {
                         RotateSpotlightToIndex(i);
                     }
+
+                    var characterTransform = characterPositions[i];
+
+                    // Check if the character is locked or unlocked
+                    if (IsCharacterUnlocked(characterId))
+                    {
+                        // Update panel positions and show hover panel for unlocked character
+                        uiManager.UpdatePanelPositions(characterTransform);
+                        uiManager.ShowCharacterPreview(availableCharacters[i]);
+                    }
+                    else
+                    {
+                        // Hide the hover panel and only show the unlock requirements panel
+                        uiManager.HideAllPanels();
+                        uiManager.UpdatePanelPositions(characterTransform);
+                        uiManager.ShowUnlockRequirements(availableCharacters[i]);
+                    }
+
                     break;
                 }
             }
@@ -505,8 +546,10 @@ namespace CyberPickle.Characters
         /// <param name="characterId">ID of the character no longer being hovered</param>
         private void HandleCharacterHoverExit(string characterId)
         {
-            // Optional: Add hover exit behavior if needed
-            // For example, you might want to reset some visual effects
+            if (!IsCharacterUnlocked(characterId))
+            {
+                uiManager.HideUnlockPanel();
+            }
         }
 
         /// <summary>
@@ -547,12 +590,17 @@ namespace CyberPickle.Characters
             isTransitioning = true;
             currentSpotlightIndex = index;
 
-            float targetRotation = (index - 1) * 50f; // Center character at 0 degrees
+            float targetRotation = (index - 1) * 50f; // Adjust spotlight rotation based on character index
             UpdateCharacterStates(index);
-            await displayManager.RotateSpotlight(spotLight, targetRotation, spotlightRotationDuration);
 
+            // Move spotlight to the target character
+            await displayManager.RotateSpotlight(spotLight, targetRotation, spotlightRotationDuration);
             isTransitioning = false;
+
+            Debug.Log($"[CharacterSelectionManager] Spotlight moved to character index: {index}");
         }
+
+
 
         private void UpdateCharacterStates(int focusedIndex)
         {
@@ -596,6 +644,30 @@ namespace CyberPickle.Characters
             characterStates[characterId] = newState;
             displayManager.UpdateCharacterState(spawnedCharacters[characterId], newState);
         }
+
+        public async Task FocusCameraOnCharacter(Transform characterTransform)
+        {
+            if (characterTransform == null) return;
+
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                Debug.LogError("[CharacterSelectionManager] Main camera not found!");
+                return;
+            }
+
+            // Target position and rotation for the camera
+            Vector3 targetPosition = characterTransform.position + new Vector3(0, 2, -3); // Adjust for desired camera offset
+            Vector3 targetRotation = characterTransform.position - mainCamera.transform.position;
+
+            // Smoothly move and rotate the camera
+            await mainCamera.transform.DOMove(targetPosition, 1f).AsyncWaitForCompletion();
+            await mainCamera.transform.DOLookAt(characterTransform.position, 0.5f).AsyncWaitForCompletion();
+
+            // Show confirmation panel
+            uiManager.ShowConfirmationPanel(true);
+        }
+
 
         private void CleanupCharacterSelection()
         {

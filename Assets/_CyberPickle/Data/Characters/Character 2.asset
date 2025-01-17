@@ -15,7 +15,8 @@ MonoBehaviour:
   characterId: character2
   displayName: Character2
   description: Description C2
-  lore: Lore C2
+  lore: "An electric rogue with a past buried in encrypted archives. Volt\u2019s
+    neural core holds the secrets to the Syndicate\u2019s downfall."
   characterPrefab: {fileID: 8769185263671085875, guid: 926c772623c792d4a9ae1ea499bce48e,
     type: 3}
   characterIcon: {fileID: 0}
@@ -29,7 +30,7 @@ MonoBehaviour:
   dexterity: 10
   luck: 1
   areaOfEffect: 1
-  unlockedByDefault: 0
+  unlockedByDefault: 1
   requiredPlayerLevel: 0
   requiredAchievements: []
   idleAnimationTrigger: Idle

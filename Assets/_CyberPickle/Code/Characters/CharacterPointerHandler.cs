@@ -11,6 +11,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using CyberPickle.Core.Events;
 using CyberPickle.Characters.Data;
+using UnityEngine.UI;
 
 namespace CyberPickle.Characters
 {
@@ -34,23 +35,44 @@ namespace CyberPickle.Characters
         /// </summary>
         private void Awake()
         {
-            // Setup collider for mouse interaction
+            // Add debug logging
+            Debug.Log($"[CharacterPointerHandler] Initializing for GameObject: {gameObject.name}");
+
             pointerCollider = GetComponent<BoxCollider>();
             if (pointerCollider == null)
             {
                 pointerCollider = gameObject.AddComponent<BoxCollider>();
+                // Make sure collider size is appropriate
+                pointerCollider.size = new Vector3(2f, 4f, 2f);
+                pointerCollider.center = new Vector3(0f, 2f, 0f);
+                pointerCollider.isTrigger = true;
                 Debug.Log($"[CharacterPointerHandler] Added BoxCollider to {gameObject.name}");
             }
+        }
 
-            // Configure collider for pointer events
-            pointerCollider.isTrigger = true;
+       
+        private void Update()
+        {
+            // Debug ray from mouse position
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
 
-            // Set default collider size and position
-            // These values can be adjusted based on character model scale
-            pointerCollider.size = new Vector3(2f, 4f, 2f);
-            pointerCollider.center = new Vector3(0f, 2f, 0f);
-
-            Debug.Log($"[CharacterPointerHandler] Initialized on {gameObject.name}");
+            if (Physics.Raycast(ray, out hit))
+            {
+                Debug.DrawRay(ray.origin, ray.direction * hit.distance, Color.yellow);
+                
+            }
+        }
+        private void OnDrawGizmos()
+        {
+            if (pointerCollider != null)
+            {
+                // Draw collider bounds
+                Gizmos.color = Color.yellow;
+                Matrix4x4 rotationMatrix = Matrix4x4.TRS(transform.position, transform.rotation, transform.lossyScale);
+                Gizmos.matrix = rotationMatrix;
+                Gizmos.DrawWireCube(pointerCollider.center, pointerCollider.size);
+            }
         }
 
         /// <summary>
@@ -67,10 +89,14 @@ namespace CyberPickle.Characters
         /// Enables or disables pointer interactions with the character
         /// </summary>
         /// <param name="interactable">Whether the character should respond to pointer events</param>
-        public void SetInteractable(bool interactable)
+        public void SetInteractable(bool interactable, bool allowHover = true)
         {
             isInteractable = interactable;
-            Debug.Log($"[CharacterPointerHandler] Interactable set to {interactable} for character: {characterId}");
+
+            // Allow hover even if interaction is disabled
+            pointerCollider.isTrigger = !interactable || allowHover;
+
+            Debug.Log($"[CharacterPointerHandler] Interactable set to {interactable}, AllowHover: {allowHover}");
         }
 
         /// <summary>
@@ -79,10 +105,21 @@ namespace CyberPickle.Characters
         /// <param name="eventData">Data associated with the pointer event</param>
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (!isInteractable) return;
+            Debug.Log($"[CharacterPointerHandler] POINTER ENTER - Position: {eventData.position}");
+            Debug.Log($"Cursor Entering {name} GameObject");
 
-            Debug.Log($"[CharacterPointerHandler] Pointer entered character: {characterId}");
+            // Always invoke hover events, even for locked characters
             GameEvents.OnCharacterHoverEnter?.Invoke(characterId);
+
+            // Add additional debug to verify behavior
+            if (isInteractable)
+            {
+                Debug.Log($"[CharacterPointerHandler] Hovering over unlocked character: {characterId}");
+            }
+            else
+            {
+                Debug.Log($"[CharacterPointerHandler] Hovering over locked character: {characterId}");
+            }
         }
 
         /// <summary>
@@ -91,9 +128,8 @@ namespace CyberPickle.Characters
         /// <param name="eventData">Data associated with the pointer event</param>
         public void OnPointerExit(PointerEventData eventData)
         {
+            Debug.Log($"[CharacterPointerHandler] POINTER EXIT - Position: {eventData.position}");
             if (!isInteractable) return;
-
-            Debug.Log($"[CharacterPointerHandler] Pointer exited character: {characterId}");
             GameEvents.OnCharacterHoverExit?.Invoke(characterId);
         }
 
@@ -105,17 +141,19 @@ namespace CyberPickle.Characters
         /// <param name="eventData">Data associated with the pointer event</param>
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (!isInteractable) return;
+            Debug.Log($"[CharacterPointerHandler] POINTER CLICK - Position: {eventData.position}, Button: {eventData.button}");
+            if (!isInteractable)
+            {
+                Debug.Log($"[CharacterPointerHandler] Click blocked for locked character: {characterId}");
+                return; // Block click interaction
+            }
 
             switch (eventData.button)
             {
                 case PointerEventData.InputButton.Left:
-                    Debug.Log($"[CharacterPointerHandler] Left click on character: {characterId}");
                     GameEvents.OnCharacterSelected?.Invoke(characterId);
                     break;
-
                 case PointerEventData.InputButton.Right:
-                    Debug.Log($"[CharacterPointerHandler] Right click on character: {characterId}");
                     GameEvents.OnCharacterDetailsRequested?.Invoke(characterId);
                     break;
             }

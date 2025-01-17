@@ -38,7 +38,7 @@ namespace CyberPickle.Characters
         [SerializeField] private Material lockedMaterial;
 
         [Header("Spotlight Settings")]
-        [SerializeField] private float spotlightIntensity = 2f;
+        [SerializeField] private float spotlightIntensity = 5000f;
         [SerializeField] private float spotlightRange = 10f;
         [SerializeField] private float spotlightAngle = 30f;
 

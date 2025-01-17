@@ -15,23 +15,26 @@ MonoBehaviour:
   characterId: character3
   displayName: Character3
   description: Description C3
-  lore: Lore C3
+  lore: "A quantum assassin who dances on the razor\u2019s edge of time itself. Her
+    precision strikes and time-warping abilities make him a force to be reckoned
+    with"
   characterPrefab: {fileID: 4989332315425718118, guid: c312ab2184076f947aa1c124d09e4beb,
     type: 3}
   characterIcon: {fileID: 0}
   lockedMaterial: {fileID: 2100000, guid: f20a26ba19d0246df85d39dee74d02c1, type: 2}
-  maxHealth: 300
+  maxHealth: 100
   healthRegeneration: 1
   defense: 10
-  power: 10
+  power: 300
   speed: 5
   magneticField: 1
   dexterity: 10
   luck: 1
   areaOfEffect: 1
   unlockedByDefault: 0
-  requiredPlayerLevel: 0
-  requiredAchievements: []
+  requiredPlayerLevel: 5
+  requiredAchievements:
+  - 12345
   idleAnimationTrigger: Idle
   hoverAnimationTrigger: Dance
   selectAnimationTrigger: Selected
