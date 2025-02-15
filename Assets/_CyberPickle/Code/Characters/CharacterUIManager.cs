@@ -13,6 +13,7 @@ using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Characters.Data;
 using DG.Tweening;
 using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Core.Events;
 
 namespace CyberPickle.Characters
 {
@@ -36,8 +37,10 @@ namespace CyberPickle.Characters
         [SerializeField] private CanvasGroup unlockPanel;
         [SerializeField] private TextMeshProUGUI unlockRequirementsText;
 
-        [Header("Confirmation Panel")]
-        [SerializeField] private CanvasGroup confirmationPanel;
+        [Header("Confirm Selection Panel")]
+        [SerializeField] private CanvasGroup confirmationPanelPrefab; // Prefab reference
+        private CanvasGroup confirmationPanel; // Runtime reference to instantiated panel
+
 
         [Header("Animation Settings")]
         [SerializeField] private float panelFadeDuration = 0.3f;
@@ -45,7 +48,9 @@ namespace CyberPickle.Characters
 
         [Header("Positioning")]
         [SerializeField] private Vector3 hoverPanelOffset = new Vector3(0, 2, 0);
-        [SerializeField] private Vector3 detailsPanelOffset = new Vector3(2, 1, 0);
+        [SerializeField] private Vector3 detailsPanelOffsetGeneral = new Vector3(2, 1, 0); // Offset in general view
+        [SerializeField] private Vector3 detailsPanelOffsetFocused = new Vector3(-1, 0, 0); // Offset in focused view
+        [SerializeField] private Vector3 confirmationPanelOffset = new Vector3(0, 2, 0);
 
         // Dependencies
         private CharacterSelectionManager characterSelectionManager;
@@ -74,16 +79,31 @@ namespace CyberPickle.Characters
                 hoverPanel.transform.position = characterPosition.position + hoverPanelOffset;
             }
 
-            // Position details panel on top of the character
+            // Position details panel based on camera focus
             if (detailsPanel != null)
             {
-                detailsPanel.transform.position = characterPosition.position + detailsPanelOffset;
+                if (characterSelectionManager.IsCharacterSelected(currentCharacterId)) // Focused view
+                {
+                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetFocused;
+                    detailsPanel.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f); // Scale in focused view
+                }
+                else // General view
+                {
+                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetGeneral;
+                    detailsPanel.transform.localScale = Vector3.one; // No scaling in general view
+                }
             }
 
             // Position unlock panel above the character (aligned with hover panel)
             if (unlockPanel != null)
             {
                 unlockPanel.transform.position = characterPosition.position + hoverPanelOffset;
+            }
+
+            // Position confirmation panel above the character
+            if (confirmationPanel != null)
+            {
+                confirmationPanel.transform.position = characterPosition.position + confirmationPanelOffset;
             }
         }
         private void InitializeManagers()
@@ -197,13 +217,97 @@ namespace CyberPickle.Characters
             SetPanelState(hoverPanel, false);
             SetPanelState(detailsPanel, true);
             SetPanelState(unlockPanel, false);
+
+            // Get the character's position
+            var characterPosition = characterSelectionManager.GetCharacterGameObject(characterId)?.transform;
+
+            // Position the details panel correctly based on camera view
+            if (characterSelectionManager.IsCharacterSelected(currentCharacterId))
+            {
+                // Focused view (details panel to the left, scaled down)
+                if (characterPosition != null)
+                {
+                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetFocused; // Use detailsPanelOffsetFocused
+                    detailsPanel.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+                }
+            }
+            else
+            {
+                // General view (details panel at default position, no scaling)
+                if (characterPosition != null)
+                {
+                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetGeneral; // Use detailsPanelOffsetGeneral
+                    detailsPanel.transform.localScale = Vector3.one;
+                }
+            }
         }
 
         public void ShowConfirmationPanel(bool show)
         {
-            if (confirmationPanel == null) return;
+            Debug.Log($"[CharacterUIManager] ShowConfirmationPanel called with show={show}");
 
-            SetPanelState(confirmationPanel, show);
+            if (!show)
+            {
+                if (confirmationPanel != null)
+                {
+                    // Clean up existing listeners before destroying
+                    var buttons = confirmationPanel.GetComponentsInChildren<Button>();
+                    foreach (var button in buttons)
+                    {
+                        button.onClick.RemoveAllListeners();
+                    }
+                    Destroy(confirmationPanel.gameObject);
+                    confirmationPanel = null;
+                }
+                return;
+            }
+
+            if (confirmationPanel == null)
+            {
+                if (confirmationPanelPrefab == null)
+                {
+                    Debug.LogError("[CharacterUIManager] Confirmation panel prefab is missing!");
+                    return;
+                }
+
+                var instance = Instantiate(confirmationPanelPrefab, hoverPanel.transform.parent);
+                confirmationPanel = instance.GetComponent<CanvasGroup>();
+
+                if (confirmationPanel != null)
+                {
+                    var characterPosition = characterSelectionManager.GetCharacterGameObject(currentCharacterId)?.transform;
+                    if (characterPosition != null)
+                    {
+                        confirmationPanel.transform.position = characterPosition.position + confirmationPanelOffset;
+                    }
+                }
+
+                var buttons = instance.GetComponentsInChildren<Button>();
+                foreach (var button in buttons)
+                {
+                    button.onClick.RemoveAllListeners(); // Clear any existing listeners
+                    if (button.gameObject.name.Contains("Confirm"))
+                    {
+                        button.onClick.AddListener(() => {
+                            Debug.Log("[CharacterUIManager] Confirm button clicked");
+                            GameEvents.OnCharacterConfirmed?.Invoke();
+                        });
+                    }
+                    else if (button.gameObject.name.Contains("Cancel"))
+                    {
+                        button.onClick.AddListener(() => {
+                            Debug.Log("[CharacterUIManager] Cancel button clicked");
+                            GameEvents.OnCharacterSelectionCancelled?.Invoke();
+                        });
+                    }
+                }
+            }
+
+            if (confirmationPanel != null)
+            {
+                confirmationPanel.gameObject.SetActive(true);
+                SetPanelState(confirmationPanel, true);
+            }
         }
 
         public void UpdateCharacterProgress(string characterId, CharacterProgressionData progression)
@@ -317,6 +421,16 @@ namespace CyberPickle.Characters
         public void Cleanup()
         {
             ClearUI();
+            if (confirmationPanel != null)
+            {
+                var buttons = confirmationPanel.GetComponentsInChildren<Button>();
+                foreach (var button in buttons)
+                {
+                    button.onClick.RemoveAllListeners();
+                }
+                Destroy(confirmationPanel.gameObject);
+                confirmationPanel = null;
+            }
             progressionCache.Clear();
         }
 

@@ -9,7 +9,7 @@
 	</RootPaths>
 	<DialogueEvents/>
 	<SoundBanks>
-		<SoundBank Id="1355168291" Type="User" Language="SFX" Hash="{B6CBD692-12EC-CDBA-0932-48F63C40C91F}">
+		<SoundBank Id="1355168291" Type="User" Language="SFX" Hash="{0BE972B1-9C73-D304-9015-D6831A05B697}">
 			<ShortName>Init</ShortName>
 			<Path>Init.bnk</Path>
 			<Plugins>
@@ -22,23 +22,23 @@
 				<Bus Id="3803692087" Name="Master Audio Bus"/>
 			</Busses>
 		</SoundBank>
-		<SoundBank Id="2082426231" Type="User" Language="SFX" Hash="{9311413E-772E-74EE-D92C-28DD89BFE0F0}">
+		<SoundBank Id="2082426231" Type="User" Language="SFX" Hash="{4E88B83E-99D9-A14B-B48F-3ABE57AAD2C2}">
 			<ShortName>SoundTrack</ShortName>
 			<Path>SoundTrack.bnk</Path>
 			<Media>
-				<File Id="594448904" Language="SFX" Streaming="false" Location="Memory">
-					<ShortName>Song1_placeholder.wav</ShortName>
-					<CachePath>SFX/Song1_placeholder_818F3B66.wem</CachePath>
+				<File Id="1008750959" Language="SFX" Streaming="false" Location="Memory">
+					<ShortName>Neon Dreams (Remastered)_01.wav</ShortName>
+					<CachePath>SFX/Neon Dreams (Remastered)_01_818F3B66.wem</CachePath>
 				</File>
 			</Media>
 			<Events>
-				<Event Id="1927207284" Name="Play_Song1_placeholder" DurationType="OneShot" DurationMin="89.04" DurationMax="89.04">
+				<Event Id="1927207284" Name="Play_Song1_placeholder" DurationType="OneShot" DurationMin="88.83998" DurationMax="88.83998">
 					<MediaRefs>
-						<MediaRef Id="594448904"/>
+						<MediaRef Id="1008750959"/>
 					</MediaRefs>
 				</Event>
 			</Events>
 		</SoundBank>
 	</SoundBanks>
-	<FileHash>{6AC378D7-C96C-10AA-5DA7-565CFB0F2A80}</FileHash>
+	<FileHash>{3A5722AA-63D3-1F80-602A-43B5932399E7}</FileHash>
 </SoundBanksInfo>

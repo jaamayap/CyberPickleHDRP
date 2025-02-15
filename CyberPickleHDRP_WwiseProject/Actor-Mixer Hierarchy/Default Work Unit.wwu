@@ -13,16 +13,16 @@
 						</Reference>
 					</ReferenceList>
 					<ChildrenList>
-						<AudioFileSource Name="Song1_placeholder" ID="{4BEEBE5B-59E7-4EBE-8CB2-876BE1DA1214}">
+						<AudioFileSource Name="Song1_placeholder" ID="{27A62CCF-F92D-47B7-BC7B-3F568A64E03E}">
 							<Language>SFX</Language>
-							<AudioFile>Song1_placeholder.wav</AudioFile>
+							<AudioFile>Neon Dreams (Remastered)_01.wav</AudioFile>
 							<MediaIDList>
-								<MediaID ID="594448904"/>
+								<MediaID ID="1008750959"/>
 							</MediaIDList>
 						</AudioFileSource>
 					</ChildrenList>
 					<ActiveSourceList>
-						<ActiveSource Name="Song1_placeholder" ID="{4BEEBE5B-59E7-4EBE-8CB2-876BE1DA1214}" Platform="Linked"/>
+						<ActiveSource Name="Song1_placeholder" ID="{27A62CCF-F92D-47B7-BC7B-3F568A64E03E}" Platform="Linked"/>
 					</ActiveSourceList>
 				</Sound>
 			</ChildrenList>

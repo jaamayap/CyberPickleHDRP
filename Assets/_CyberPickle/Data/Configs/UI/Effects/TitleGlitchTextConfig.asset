@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   glitchInterval: 2
   glitchIntensity: 0
-  glitchIntensityMax: 0.14
+  glitchIntensityMax: 0.896
   glitchIntensityMin: 0.06
   glitchAmplitude: 0.1
   glitchSpeed: 5.4

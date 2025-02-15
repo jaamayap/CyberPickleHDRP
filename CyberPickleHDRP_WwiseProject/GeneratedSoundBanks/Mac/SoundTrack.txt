@@ -1,0 +1,6 @@
+Event	ID	Name			Wwise Object Path	Notes
+	1927207284	Play_Song1_placeholder			\Default Work Unit\Play_Song1_placeholder	
+
+In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
+	1008750959	Song1_placeholder	C:\Users\jaama\OneDrive\Documents\1. Game\CyberPickleHDRP\CyberPickleHDRP_WwiseProject\.cache\Mac\SFX\Neon Dreams (Remastered)_01_818F3B66.wem		\Actor-Mixer Hierarchy\Default Work Unit\Song1_placeholder		17057372
+

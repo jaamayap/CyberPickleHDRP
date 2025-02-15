@@ -4,6 +4,9 @@ using CyberPickle.Core.Management;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
 using UnityEngine.Rendering;
+using DG.Tweening;
+using System;
+using System.Threading.Tasks;
 
 namespace CyberPickle.Core.Camera
 {
@@ -31,6 +34,10 @@ namespace CyberPickle.Core.Camera
         [Header("Animation Settings")]
         [SerializeField] private bool enableMenuIdleAnimation = false; // Set to false by default
         [SerializeField] private bool enableCharacterSelectIdleAnimation = true;
+
+        [Header("Camera Settings")]
+        [SerializeField] private float defaultFieldOfView = 60f;
+        public Transform CharacterSelectCameraPosition => characterSelectCameraPosition;
 
         private Coroutine currentTransition;
         private Coroutine idleAnimationCoroutine;
@@ -244,6 +251,131 @@ namespace CyberPickle.Core.Camera
 
             if (characterSelectVolume != null)
                 characterSelectVolume.weight = blend;
+        }
+
+        public async Task FocusCameraOnCharacter(
+     Transform characterTransform,
+     float cameraHeightOffset,
+     float focusDistance,
+     float transitionDuration,
+     float targetFOV,
+     float lookOffset 
+ )
+        {
+            if (characterTransform == null) return;
+
+            StopIdleAnimation();
+
+            // Position the camera behind & above the character
+            Vector3 targetPosition = new Vector3(
+                characterTransform.position.x,
+                characterTransform.position.y + cameraHeightOffset,
+                characterTransform.position.z + focusDistance
+            );
+
+            // Shift the look-at point higher than the character's pivot
+            Vector3 lookAtPoint = characterTransform.position + Vector3.up * lookOffset;
+
+            // Now calculate rotation toward that higher lookAtPoint
+            Vector3 directionToCharacter = lookAtPoint - targetPosition;
+            Quaternion targetRotation = Quaternion.LookRotation(directionToCharacter);
+
+            // Move, rotate & set FOV
+            await TransitionToPosition(
+                targetPosition,
+                targetRotation,
+                transitionDuration,
+                targetFOV
+            );
+        }
+
+        public async Task TransitionToPosition(Vector3 targetPosition, Quaternion targetRotation, float duration, float targetFOV)
+        {
+            if (mainCamera == null)
+            {
+                Debug.LogError("[CameraManager] Main camera is null!");
+                return;
+            }
+
+            Debug.Log($"[CameraManager] Starting camera transition to position: {targetPosition}");
+
+            try
+            {
+                // Store original values for potential reset
+                Vector3 originalPosition = mainCamera.transform.position;
+                Quaternion originalRotation = mainCamera.transform.rotation;
+                float originalFOV = mainCamera.fieldOfView;
+
+                // Create a sequence for synchronized animations
+                Sequence cameraSequence = DOTween.Sequence();
+
+                // Add position transition
+                cameraSequence.Join(mainCamera.transform.DOMove(targetPosition, duration)
+                    .SetEase(transitionCurve));
+
+                // Add rotation transition
+                cameraSequence.Join(mainCamera.transform.DORotateQuaternion(targetRotation, duration)
+                    .SetEase(transitionCurve));
+
+                // Add FOV transition
+                cameraSequence.Join(DOTween.To(() => mainCamera.fieldOfView,
+                    x => mainCamera.fieldOfView = x,
+                    targetFOV,
+                    duration)
+                    .SetEase(transitionCurve));
+
+                // Wait for sequence completion
+                await cameraSequence.AsyncWaitForCompletion();
+
+                Debug.Log("[CameraManager] Camera transition completed successfully");
+                GameEvents.OnCameraTransitionComplete.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[CameraManager] Error during camera transition: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task ResetToDefaultPosition(float duration)
+        {
+            if (mainCamera == null || menuCameraPosition == null)
+            {
+                Debug.LogError("[CameraManager] Required references are null!");
+                return;
+            }
+
+            Debug.Log("[CameraManager] Resetting camera to default position");
+
+            try
+            {
+                // Get default values from menu camera position
+                Vector3 defaultPosition = menuCameraPosition.position;
+                Quaternion defaultRotation = menuCameraPosition.rotation;
+                float defaultFOV = mainCamera.fieldOfView; // You might want to store this as a serialized field
+
+                // Create transition sequence
+                Sequence resetSequence = DOTween.Sequence();
+
+                // Add position reset
+                resetSequence.Join(mainCamera.transform.DOMove(defaultPosition, duration)
+                    .SetEase(transitionCurve));
+
+                // Add rotation reset
+                resetSequence.Join(mainCamera.transform.DORotateQuaternion(defaultRotation, duration)
+                    .SetEase(transitionCurve));
+
+                // Wait for sequence completion
+                await resetSequence.AsyncWaitForCompletion();
+
+                Debug.Log("[CameraManager] Camera reset completed successfully");
+                GameEvents.OnCameraTransitionComplete.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[CameraManager] Error during camera reset: {ex.Message}");
+                throw;
+            }
         }
     }
 }

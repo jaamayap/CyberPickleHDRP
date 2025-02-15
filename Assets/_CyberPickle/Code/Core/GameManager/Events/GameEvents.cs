@@ -70,6 +70,9 @@ namespace CyberPickle.Core.Events
         public static readonly GameEvent<string> OnCharacterHoverExit = new GameEvent<string>();
         public static readonly GameEvent<string> OnCharacterSelected = new GameEvent<string>();
         public static readonly GameEvent<string> OnCharacterDetailsRequested = new GameEvent<string>();
+        public static readonly GameEvent<string> OnCharacterConfirmationRequested = new GameEvent<string>();
+        public static readonly GameEvent OnCharacterConfirmed = new GameEvent();
+        public static readonly GameEvent OnCharacterSelectionCancelled = new GameEvent();
 
         /// <summary>
         /// Event raised when the mouse pointer enters a character in the selection screen

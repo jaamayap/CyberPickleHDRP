@@ -30,6 +30,7 @@ using CyberPickle.Characters.Data;
 using CyberPickle.Core.Input;
 using CyberPickle.Core;
 using DG.Tweening;
+using System.Collections;
 
 namespace CyberPickle.Characters
 {
@@ -58,6 +59,8 @@ namespace CyberPickle.Characters
     /// </summary>
     public class CharacterSelectionManager : Manager<CharacterSelectionManager>
     {
+        private bool cameraFocused = false;
+
         #region Serialized Fields
 
         [Header("Scene References")]
@@ -72,6 +75,17 @@ namespace CyberPickle.Characters
         [SerializeField] private CharacterDisplayManager displayManager;
         [SerializeField] private CharacterUIManager uiManager;
 
+        [Header("Camera Focus Settings")]
+        [SerializeField] private Vector3 cameraFocusOffset = new Vector3(0, 2, -3);
+        [SerializeField] private float cameraFocusFieldOfView = 40f;
+        [SerializeField] private float focusTransitionDuration = 1f;
+        [SerializeField] private float focusHeightOffset = 0f;
+        [SerializeField] private float focusDistance = -5f;
+        [SerializeField] private Vector3 focusRotationAngles = new Vector3(10f, 0f, 0f);
+        [SerializeField] private float lookOffset = 2f;
+
+        [SerializeField] private float spotlightRotationSpeed = 3f;    // Adjust how quickly the spotlight aims
+        [SerializeField] private float spotlightVerticalOffset = 1.5f; // How high above the feet to aim
         #endregion
 
         #region Private Fields
@@ -89,6 +103,8 @@ namespace CyberPickle.Characters
         private string currentlyHoveredCharacterId;
         private bool isTransitioning;
         private int currentSpotlightIndex;
+        private Vector3 characterSelectionCameraPosition;
+        [SerializeField] private float defaultFieldOfView = 60f;  // Or whatever default FOV you want
 
         #endregion
 
@@ -326,6 +342,7 @@ namespace CyberPickle.Characters
             GameEvents.OnCharacterHoverExit.AddListener(HandleCharacterHoverExit);
             GameEvents.OnCharacterSelected.AddListener(HandleCharacterSelected);
             GameEvents.OnCharacterDetailsRequested.AddListener(HandleCharacterDetails);
+            GameEvents.OnCharacterSelectionCancelled.AddListener(HandleSelectionCancelled);
 
             Debug.Log("[CharacterSelectionManager] Subscribed to all events");
         }
@@ -345,9 +362,11 @@ namespace CyberPickle.Characters
             GameEvents.OnCharacterHoverExit.RemoveListener(HandleCharacterHoverExit);
             GameEvents.OnCharacterSelected.RemoveListener(HandleCharacterSelected);
             GameEvents.OnCharacterDetailsRequested.RemoveListener(HandleCharacterDetails);
+            GameEvents.OnCharacterSelectionCancelled.RemoveListener(HandleSelectionCancelled);
 
             Debug.Log("[CharacterSelectionManager] Unsubscribed from all events");
         }
+
 
         private void HandleGameStateChanged(GameState newState)
         {
@@ -355,6 +374,7 @@ namespace CyberPickle.Characters
             {
                 case GameState.CharacterSelect:
                     InitializeCharacterSelection();
+                    characterSelectionCameraPosition = Camera.main.transform.position;
                     break;
                 case GameState.MainMenu:
                 case GameState.LevelSelect:
@@ -506,7 +526,7 @@ namespace CyberPickle.Characters
         /// <param name="characterId">ID of the character being hovered</param>
         private void HandleCharacterHoverEnter(string characterId)
         {
-            if (isTransitioning) return;
+            if (isTransitioning || cameraFocused) return;  // Ignore hover when focused
 
             // Find the hovered character and its position
             for (int i = 0; i < availableCharacters.Length; i++)
@@ -558,10 +578,159 @@ namespace CyberPickle.Characters
         /// <param name="characterId">ID of the selected character</param>
         private async void HandleCharacterSelected(string characterId)
         {
-            if (isTransitioning) return;
-            await SelectCharacter(characterId);
+            if (isTransitioning || string.IsNullOrEmpty(characterId)) return;
+
+            Debug.Log($"[CharacterSelectionManager] Character selected: {characterId}");
+
+            try
+            {
+                isTransitioning = true;
+                currentlySelectedCharacterId = characterId;
+
+                if (!spawnedCharacters.TryGetValue(characterId, out GameObject selectedCharacter))
+                {
+                    Debug.LogError($"[CharacterSelectionManager] Selected character {characterId} not found");
+                    return;
+                }
+
+                // Set selected state and disable other interactions
+                SetCharacterState(characterId, CharacterDisplayState.Selected);
+                SetCharactersInteractable(false, allowCancel: true);
+
+                // Focus camera on the character
+                await cameraManager.FocusCameraOnCharacter(
+                     selectedCharacter.transform,
+                     focusHeightOffset,
+                     focusDistance,
+                     focusTransitionDuration,
+                     cameraFocusFieldOfView,
+                     lookOffset
+                );
+
+                // Now mark that the camera is focused so hover events are ignored
+                cameraFocused = true;
+
+                isTransitioning = false;
+
+                uiManager.ShowDetails(characterId);
+                uiManager.ShowConfirmationPanel(true);
+
+                GameEvents.OnCharacterConfirmed.AddListener(HandleCharacterConfirmed);
+                GameEvents.OnCharacterSelectionCancelled.AddListener(HandleSelectionCancelled);
+
+                Debug.Log($"[CharacterSelectionManager] Character selection UI shown for: {characterId}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[CharacterSelectionManager] Error during character selection: {ex.Message}\n{ex.StackTrace}");
+                ResetSelectionState();
+            }
         }
 
+
+        private async Task ResetToCharacterSelectionView()
+        {
+            if (cameraManager == null) return;
+
+            await cameraManager.TransitionToPosition(
+                 cameraManager.CharacterSelectCameraPosition.position,
+                 cameraManager.CharacterSelectCameraPosition.rotation,
+                 focusTransitionDuration,
+                 defaultFieldOfView
+            );
+        }
+
+
+        private async void HandleCharacterConfirmed()
+        {
+            try
+            {
+                CleanupSelectionListeners();
+                await SelectCharacter(currentlySelectedCharacterId);
+                ResetSelectionState();
+                GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[CharacterSelectionManager] Error during character confirmation: {ex.Message}");
+                ResetSelectionState();
+            }
+        }
+
+
+        private async void HandleSelectionCancelled()
+        {
+            if (isTransitioning) return;
+            isTransitioning = true;
+
+            try
+            {
+                uiManager.ShowConfirmationPanel(false);
+                uiManager.HideAllPanels();
+
+                // Reset to the character selection view (second position)
+                await ResetToCharacterSelectionView();
+
+                // Reset character states
+                foreach (var characterId in spawnedCharacters.Keys)
+                {
+                    SetCharacterState(characterId,
+                        IsCharacterUnlocked(characterId) ? CharacterDisplayState.Idle : CharacterDisplayState.Locked);
+                }
+
+                SetCharactersInteractable(true);
+                ResetSelectionState();
+
+                // Clear the focused flag so hover behavior resumes
+                cameraFocused = false;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[CharacterSelectionManager] Error during cancel: {ex.Message}");
+            }
+            finally
+            {
+                isTransitioning = false;
+            }
+        }
+
+
+
+        private void SetCharactersInteractable(bool interactable, bool allowCancel = false)
+        {
+            foreach (var character in spawnedCharacters.Values)
+            {
+                var pointerHandler = character.GetComponent<CharacterPointerHandler>();
+                if (pointerHandler != null)
+                {
+                    // For selected character, only allow cancel interaction
+                    if (character.name.Contains(currentlySelectedCharacterId))
+                    {
+                        pointerHandler.SetInteractable(allowCancel, allowHover: false);
+                    }
+                    else
+                    {
+                        pointerHandler.SetInteractable(interactable, allowHover: interactable);
+                    }
+                }
+            }
+        }
+
+        private void CleanupSelectionListeners()
+        {
+            GameEvents.OnCharacterConfirmed.RemoveListener(HandleCharacterConfirmed);
+            GameEvents.OnCharacterSelectionCancelled.RemoveListener(HandleSelectionCancelled);
+        }
+
+        private void ResetSelectionState()
+        {
+            isTransitioning = false;
+            SetCharactersInteractable(true);
+            CleanupSelectionListeners();
+            uiManager.HideAllPanels();
+        }
+
+       
         /// <summary>
         /// Handles requests to view character details
         /// </summary>
@@ -583,21 +752,99 @@ namespace CyberPickle.Characters
             }
         }
 
-        private async void RotateSpotlightToIndex(int index)
+        private Coroutine spotlightFollowCoroutine;
+
+        private void RotateSpotlightToIndex(int index)
         {
+            // Basic checks
             if (index < 0 || index >= characterPositions.Length || isTransitioning) return;
 
+            // Mark we’re transitioning only while we pick new index
             isTransitioning = true;
             currentSpotlightIndex = index;
 
-            float targetRotation = (index - 1) * 50f; // Adjust spotlight rotation based on character index
+            // Update the character states or UI
             UpdateCharacterStates(index);
 
-            // Move spotlight to the target character
-            await displayManager.RotateSpotlight(spotLight, targetRotation, spotlightRotationDuration);
-            isTransitioning = false;
+            // Get the character data and GameObject
+            CharacterData charData = availableCharacters[index];
+            if (!spawnedCharacters.TryGetValue(charData.characterId, out GameObject characterObj))
+            {
+                Debug.LogError($"[CharacterSelectionManager] Character not found at index {index} ({charData.characterId})");
+                isTransitioning = false;
+                return;
+            }
 
-            Debug.Log($"[CharacterSelectionManager] Spotlight moved to character index: {index}");
+            // Stop any old tracking so we only have one coroutine running
+            if (spotlightFollowCoroutine != null)
+            {
+                StopCoroutine(spotlightFollowCoroutine);
+            }
+
+            // Start a new coroutine that smoothly follows the character
+            spotlightFollowCoroutine = StartCoroutine(SmoothlyTrackCharacter(characterObj.transform));
+            isTransitioning = false;
+        }
+
+        /// <summary>
+        /// Continuously rotates the spotlight to face the given transform,
+        /// using a smooth Slerp so it doesn't snap suddenly.
+        /// </summary>
+        private IEnumerator SmoothlyTrackCharacter(Transform targetCharacterRoot)
+        {
+            // Early exit if we don't have a target
+            if (!targetCharacterRoot)
+            {
+                Debug.LogError("[CharacterSelectionManager] SmoothlyTrackCharacter called with null target.");
+                yield break;
+            }
+
+            // Find the Hips bone (the Transform we want to track)
+            Transform hipsBone = FindHipsBone(targetCharacterRoot);
+
+            // If Hips bone is not found, log an error and exit the coroutine
+            if (!hipsBone)
+            {
+                Debug.LogError($"[CharacterSelectionManager] Hips bone not found on {targetCharacterRoot.name} or its children.");
+                yield break;
+            }
+
+            // Track the Hips bone's position
+            while (true)
+            {
+                // Calculate look-at point (with vertical offset)
+                Vector3 lookAtPoint = hipsBone.position + Vector3.up * spotlightVerticalOffset;
+
+                // Calculate the desired rotation for the spotlight
+                Quaternion targetRotation = Quaternion.LookRotation(lookAtPoint - spotLight.transform.position);
+
+                // Smoothly rotate the spotlight towards the target
+                spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * spotlightRotationSpeed);
+
+                yield return null; // Wait for the next frame
+            }
+        }
+
+        // Helper function to find the Hips bone
+        private Transform FindHipsBone(Transform characterRoot)
+        {
+            // Check if the current transform is the Hips bone
+            if (characterRoot.name.EndsWith(":Hips"))
+            {
+                return characterRoot;
+            }
+
+            // Recursively search in children
+            foreach (Transform child in characterRoot)
+            {
+                Transform hips = FindHipsBone(child);
+                if (hips != null)
+                {
+                    return hips;
+                }
+            }
+
+            return null; // Hips bone not found
         }
 
 
@@ -645,30 +892,36 @@ namespace CyberPickle.Characters
             displayManager.UpdateCharacterState(spawnedCharacters[characterId], newState);
         }
 
-        public async Task FocusCameraOnCharacter(Transform characterTransform)
-        {
-            if (characterTransform == null) return;
+        
 
-            Camera mainCamera = Camera.main;
-            if (mainCamera == null)
+        private async Task ResetCameraPosition()
+        {
+            if (cameraManager == null)
             {
-                Debug.LogError("[CharacterSelectionManager] Main camera not found!");
+                Debug.LogError("[CharacterSelectionManager] CameraManager is null");
                 return;
             }
 
-            // Target position and rotation for the camera
-            Vector3 targetPosition = characterTransform.position + new Vector3(0, 2, -3); // Adjust for desired camera offset
-            Vector3 targetRotation = characterTransform.position - mainCamera.transform.position;
-
-            // Smoothly move and rotate the camera
-            await mainCamera.transform.DOMove(targetPosition, 1f).AsyncWaitForCompletion();
-            await mainCamera.transform.DOLookAt(characterTransform.position, 0.5f).AsyncWaitForCompletion();
-
-            // Show confirmation panel
-            uiManager.ShowConfirmationPanel(true);
+            await cameraManager.ResetToDefaultPosition(focusTransitionDuration);
         }
 
+        public bool IsCharacterSelected(string characterId)
+        {
+            return !string.IsNullOrEmpty(currentlySelectedCharacterId);
+        }
 
+        public GameObject GetCharacterGameObject(string characterId)
+        {
+            if (spawnedCharacters.TryGetValue(characterId, out GameObject character))
+            {
+                return character;
+            }
+            else
+            {
+                Debug.LogError($"[CharacterSelectionManager] Character with ID '{characterId}' not found in spawnedCharacters.");
+                return null;
+            }
+        }
         private void CleanupCharacterSelection()
         {
             foreach (var character in spawnedCharacters.Values)
