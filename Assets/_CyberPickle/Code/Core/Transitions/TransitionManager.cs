@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.VFX;
 using System.Collections;
 using CyberPickle.Core.Management;
 using CyberPickle.Core.Events;

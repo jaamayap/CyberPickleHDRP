@@ -1,4 +1,4 @@
-// File: Assets/_CyberPickle/Code/Characters/CharacterSelectionManager.cs
+﻿// File: Assets/_CyberPickle/Code/Characters/CharacterSelectionManager.cs
 //
 // Purpose: Manages the character selection screen functionality in Cyber Pickle.
 // This manager coordinates character display, UI interactions, profile data handling,
@@ -49,8 +49,7 @@ namespace CyberPickle.Characters
         Hover,
         /// <summary>Character has been selected</summary>
         Selected,
-        /// <summary>Character is being previewed</summary>
-        Previewing
+
     }
 
     /// <summary>
@@ -83,7 +82,7 @@ namespace CyberPickle.Characters
         [SerializeField] private float focusDistance = -5f;
         [SerializeField] private Vector3 focusRotationAngles = new Vector3(10f, 0f, 0f);
         [SerializeField] private float lookOffset = 2f;
-
+        [SerializeField] private float panelTransitionDuration = 0.8f;
         [SerializeField] private float spotlightRotationSpeed = 3f;    // Adjust how quickly the spotlight aims
         [SerializeField] private float spotlightVerticalOffset = 1.5f; // How high above the feet to aim
         #endregion
@@ -104,6 +103,15 @@ namespace CyberPickle.Characters
         private bool isTransitioning;
         private int currentSpotlightIndex;
         private Vector3 characterSelectionCameraPosition;
+
+        // Stores whether each character was interactable before selection
+        private Dictionary<string, bool> oldInteractableStates = new Dictionary<string, bool>();
+
+
+        // Stores Hover/Selected/Locked 
+        private Dictionary<string, CharacterDisplayState> oldDisplayStates = new Dictionary<string, CharacterDisplayState>();
+
+
         [SerializeField] private float defaultFieldOfView = 60f;  // Or whatever default FOV you want
 
         #endregion
@@ -307,7 +315,7 @@ namespace CyberPickle.Characters
 
         #region Private Methods
 
-       
+
 
         private void ValidateReferences()
         {
@@ -526,9 +534,8 @@ namespace CyberPickle.Characters
         /// <param name="characterId">ID of the character being hovered</param>
         private void HandleCharacterHoverEnter(string characterId)
         {
-            if (isTransitioning || cameraFocused) return;  // Ignore hover when focused
+            if (isTransitioning || cameraFocused) return;
 
-            // Find the hovered character and its position
             for (int i = 0; i < availableCharacters.Length; i++)
             {
                 if (availableCharacters[i].characterId == characterId)
@@ -540,21 +547,22 @@ namespace CyberPickle.Characters
 
                     var characterTransform = characterPositions[i];
 
-                    // Check if the character is locked or unlocked
-                    if (IsCharacterUnlocked(characterId))
+                    bool isUnlocked = IsCharacterUnlocked(characterId);
+                    // Set hover state - for locked characters this means "Locked" state
+                    SetCharacterState(characterId, CharacterDisplayState.Hover);
+
+                    // Update UI based on lock state
+                    if (isUnlocked)
                     {
-                        // Update panel positions and show hover panel for unlocked character
                         uiManager.UpdatePanelPositions(characterTransform);
                         uiManager.ShowCharacterPreview(availableCharacters[i]);
                     }
                     else
                     {
-                        // Hide the hover panel and only show the unlock requirements panel
                         uiManager.HideAllPanels();
                         uiManager.UpdatePanelPositions(characterTransform);
                         uiManager.ShowUnlockRequirements(availableCharacters[i]);
                     }
-
                     break;
                 }
             }
@@ -566,7 +574,12 @@ namespace CyberPickle.Characters
         /// <param name="characterId">ID of the character no longer being hovered</param>
         private void HandleCharacterHoverExit(string characterId)
         {
-            if (!IsCharacterUnlocked(characterId))
+            bool isUnlocked = IsCharacterUnlocked(characterId);
+
+            // Set the state back - for locked characters this means Idle
+            SetCharacterState(characterId, isUnlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Idle);
+
+            if (!isUnlocked)
             {
                 uiManager.HideUnlockPanel();
             }
@@ -578,54 +591,95 @@ namespace CyberPickle.Characters
         /// <param name="characterId">ID of the selected character</param>
         private async void HandleCharacterSelected(string characterId)
         {
+            // Guard checks
             if (isTransitioning || string.IsNullOrEmpty(characterId)) return;
+            isTransitioning = true;
+            currentlySelectedCharacterId = characterId;
 
-            Debug.Log($"[CharacterSelectionManager] Character selected: {characterId}");
+            if (!spawnedCharacters.TryGetValue(characterId, out GameObject selectedCharacter))
+            {
+                Debug.LogError($"[CharacterSelectionManager] Selected character {characterId} not found");
+                isTransitioning = false;
+                return;
+            }
 
             try
             {
-                isTransitioning = true;
-                currentlySelectedCharacterId = characterId;
-
-                if (!spawnedCharacters.TryGetValue(characterId, out GameObject selectedCharacter))
+                //  Store current states before we override them
+                oldInteractableStates.Clear();
+                oldDisplayStates.Clear();
+                foreach (var kvp in spawnedCharacters)
                 {
-                    Debug.LogError($"[CharacterSelectionManager] Selected character {characterId} not found");
-                    return;
+                    string id = kvp.Key;
+                    GameObject obj = kvp.Value;
+
+                    // Capture 'interactable' from CharacterPointerHandler
+                    var pointerHandler = obj.GetComponent<CharacterPointerHandler>();
+                    if (pointerHandler != null)
+                    {
+                        oldInteractableStates[id] = pointerHandler.IsInteractable;
+                    }
+
+                    // Capture display state from characterStates dictionary
+                    if (characterStates.TryGetValue(id, out var currentState))
+                    {
+                        oldDisplayStates[id] = currentState;
+                    }
                 }
 
-                // Set selected state and disable other interactions
-                SetCharacterState(characterId, CharacterDisplayState.Selected);
+                //  Disable interactions for everyone so the user can’t hover/click others
+                //    but allow a 'Cancel' if you want. For example:
                 SetCharactersInteractable(false, allowCancel: true);
 
-                // Focus camera on the character
+                //  Change this selected one to "Selected" state
+                SetCharacterState(characterId, CharacterDisplayState.Selected);
+
+                // Determine if this is a direct left-click or after preview
+                bool isPreview = currentlyHoveredCharacterId == characterId && currentlyHoveredCharacterId != currentlySelectedCharacterId;
+
+                // Animate panel and focus camera
+                if (isPreview)
+                {
+                    // Slide panel from above head to left while camera focuses
+                    await uiManager.AnimatePanelToFocusedPosition(
+                        selectedCharacter.transform,
+                        panelTransitionDuration
+                    );
+                }
+                else
+                {
+                    // Direct left-click: position panel instantly on the left
+                    uiManager.ShowDetails(characterId); // This will position it on the left instantly
+                }
+
+                //  Focus camera on the selected character
                 await cameraManager.FocusCameraOnCharacter(
-                     selectedCharacter.transform,
-                     focusHeightOffset,
-                     focusDistance,
-                     focusTransitionDuration,
-                     cameraFocusFieldOfView,
-                     lookOffset
+                    selectedCharacter.transform,
+                    focusHeightOffset,
+                    focusDistance,
+                    focusTransitionDuration,
+                    cameraFocusFieldOfView,
+                    lookOffset
                 );
 
-                // Now mark that the camera is focused so hover events are ignored
                 cameraFocused = true;
-
                 isTransitioning = false;
 
+                // Show details & confirmation UI
                 uiManager.ShowDetails(characterId);
                 uiManager.ShowConfirmationPanel(true);
 
+                // Add listeners for confirm/cancel
                 GameEvents.OnCharacterConfirmed.AddListener(HandleCharacterConfirmed);
                 GameEvents.OnCharacterSelectionCancelled.AddListener(HandleSelectionCancelled);
-
-                Debug.Log($"[CharacterSelectionManager] Character selection UI shown for: {characterId}");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[CharacterSelectionManager] Error during character selection: {ex.Message}\n{ex.StackTrace}");
-                ResetSelectionState();
+                Debug.LogError($"[CharacterSelectionManager] Error in HandleCharacterSelected: {ex.Message}");
+                isTransitioning = false;
             }
         }
+
 
 
         private async Task ResetToCharacterSelectionView()
@@ -665,34 +719,57 @@ namespace CyberPickle.Characters
 
             try
             {
+                // Hide UI
                 uiManager.ShowConfirmationPanel(false);
                 uiManager.HideAllPanels();
 
-                // Reset to the character selection view (second position)
+                // Animate panel exit while camera resets
+                await uiManager.AnimatePanelExit(panelTransitionDuration);
+
+                // Return to the wide camera view
                 await ResetToCharacterSelectionView();
 
-                // Reset character states
-                foreach (var characterId in spawnedCharacters.Keys)
+                // 1) Restore each character's old display + interactable states
+                foreach (var kvp in spawnedCharacters)
                 {
-                    SetCharacterState(characterId,
-                        IsCharacterUnlocked(characterId) ? CharacterDisplayState.Idle : CharacterDisplayState.Locked);
+                    string id = kvp.Key;
+                    GameObject obj = kvp.Value;
+
+                    // Display State
+                    if (oldDisplayStates.TryGetValue(id, out CharacterDisplayState oldState))
+                    {
+                        SetCharacterState(id, oldState);
+                    }
+
+                    // Interactable
+                    var pointerHandler = obj.GetComponent<CharacterPointerHandler>();
+                    if (pointerHandler != null && oldInteractableStates.TryGetValue(id, out bool oldInteractable))
+                    {
+                        pointerHandler.SetInteractable(oldInteractable);
+                    }
                 }
 
-                SetCharactersInteractable(true);
-                ResetSelectionState();
+                // 2) Clear our dictionaries so they don't accumulate old data
+                oldDisplayStates.Clear();
+                oldInteractableStates.Clear();
+                currentlySelectedCharacterId = null; // Clear selected character
+                currentlyHoveredCharacterId = null; // Clear preview state
 
-                // Clear the focused flag so hover behavior resumes
+                // 3) Reset internal selection state
+                ResetSelectionState();
                 cameraFocused = false;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[CharacterSelectionManager] Error during cancel: {ex.Message}");
+                Debug.LogError($"[CharacterSelectionManager] Error during HandleSelectionCancelled: {ex.Message}");
             }
             finally
             {
                 isTransitioning = false;
             }
         }
+
+
 
 
 
@@ -725,12 +802,11 @@ namespace CyberPickle.Characters
         private void ResetSelectionState()
         {
             isTransitioning = false;
-            SetCharactersInteractable(true);
             CleanupSelectionListeners();
             uiManager.HideAllPanels();
         }
 
-       
+
         /// <summary>
         /// Handles requests to view character details
         /// </summary>
@@ -738,8 +814,11 @@ namespace CyberPickle.Characters
         private void HandleCharacterDetails(string characterId)
         {
             if (isTransitioning || !IsCharacterUnlocked(characterId)) return;
+            currentlyHoveredCharacterId = characterId;
             uiManager.ShowDetails(characterId);
         }
+
+
         private void LoadCharacterProgressionData(ProfileData profile)
         {
             if (profile == null) return;
@@ -759,7 +838,7 @@ namespace CyberPickle.Characters
             // Basic checks
             if (index < 0 || index >= characterPositions.Length || isTransitioning) return;
 
-            // Mark we�re transitioning only while we pick new index
+            // Mark we’re transitioning only while we pick new index
             isTransitioning = true;
             currentSpotlightIndex = index;
 
@@ -865,7 +944,13 @@ namespace CyberPickle.Characters
                 if (i == focusedIndex)
                 {
                     SetCharacterState(characterId, CharacterDisplayState.Hover);
-                    currentlyHoveredCharacterId = characterId;
+                }
+                // If this is the character that was right‑clicked for details,
+                // keep it on Hover instead of forcing Idle.
+                else if (characterId == currentlyHoveredCharacterId)
+                {
+                    // Do nothing, or explicitly set Hover again
+                    SetCharacterState(characterId, CharacterDisplayState.Hover);
                 }
                 else
                 {
@@ -892,7 +977,7 @@ namespace CyberPickle.Characters
             displayManager.UpdateCharacterState(spawnedCharacters[characterId], newState);
         }
 
-        
+
 
         private async Task ResetCameraPosition()
         {

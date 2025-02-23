@@ -10,8 +10,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using CyberPickle.Core.Events;
-using CyberPickle.Characters.Data;
-using UnityEngine.UI;
+
 
 namespace CyberPickle.Characters
 {
@@ -98,7 +97,7 @@ namespace CyberPickle.Characters
 
             Debug.Log($"[CharacterPointerHandler] Interactable set to {interactable}, AllowHover: {allowHover}");
         }
-
+        public bool IsInteractable => isInteractable;
         /// <summary>
         /// Handles pointer enter events, triggering character hover state
         /// </summary>

@@ -14,6 +14,7 @@ using CyberPickle.Characters.Data;
 using DG.Tweening;
 using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.Events;
+using System.Threading.Tasks;
 
 namespace CyberPickle.Characters
 {
@@ -45,6 +46,7 @@ namespace CyberPickle.Characters
         [Header("Animation Settings")]
         [SerializeField] private float panelFadeDuration = 0.3f;
         [SerializeField] private float statUpdateDuration = 0.5f;
+        [SerializeField] private float panelTransitionDuration = 0.8f;
 
         [Header("Positioning")]
         [SerializeField] private Vector3 hoverPanelOffset = new Vector3(0, 2, 0);
@@ -73,34 +75,35 @@ namespace CyberPickle.Characters
         {
             if (characterPosition == null) return;
 
-            // Position hover panel above character
+            // Animate panel position if transitioning from preview to selected
+            if (detailsPanel != null && characterSelectionManager.IsCharacterSelected(currentCharacterId))
+            {
+                Vector3 targetPosition = characterPosition.position + detailsPanelOffsetFocused;
+                detailsPanel.transform.DOLocalMove(targetPosition, panelTransitionDuration)
+                    .SetEase(Ease.InOutQuad) // Ease-in-out for smooth sliding
+                    .SetUpdate(true); // Ensure update in late update for smooth movement
+                detailsPanel.transform.DOScale(new Vector3(0.5f, 0.5f, 0.5f), panelTransitionDuration)
+                    .SetEase(Ease.InOutQuad);
+            }
+            else if (detailsPanel != null)
+            {
+                // Preview state: position above the head (no animation needed here, handled by ShowDetails)
+                Vector3 targetPosition = characterPosition.position + detailsPanelOffsetGeneral;
+                detailsPanel.transform.position = targetPosition;
+                detailsPanel.transform.localScale = Vector3.one;
+            }
+
+            // Position other panels as before (hover, unlock, confirmation)
             if (hoverPanel != null)
             {
                 hoverPanel.transform.position = characterPosition.position + hoverPanelOffset;
             }
 
-            // Position details panel based on camera focus
-            if (detailsPanel != null)
-            {
-                if (characterSelectionManager.IsCharacterSelected(currentCharacterId)) // Focused view
-                {
-                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetFocused;
-                    detailsPanel.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f); // Scale in focused view
-                }
-                else // General view
-                {
-                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetGeneral;
-                    detailsPanel.transform.localScale = Vector3.one; // No scaling in general view
-                }
-            }
-
-            // Position unlock panel above the character (aligned with hover panel)
             if (unlockPanel != null)
             {
                 unlockPanel.transform.position = characterPosition.position + hoverPanelOffset;
             }
 
-            // Position confirmation panel above the character
             if (confirmationPanel != null)
             {
                 confirmationPanel.transform.position = characterPosition.position + confirmationPanelOffset;
@@ -213,33 +216,33 @@ namespace CyberPickle.Characters
             // Update and show stats
             UpdateCharacterStats(character, progression);
 
-            // Show details panel
-            SetPanelState(hoverPanel, false);
-            SetPanelState(detailsPanel, true);
-            SetPanelState(unlockPanel, false);
-
-            // Get the character's position
+            // Position the panel based on selection state
             var characterPosition = characterSelectionManager.GetCharacterGameObject(characterId)?.transform;
-
-            // Position the details panel correctly based on camera view
-            if (characterSelectionManager.IsCharacterSelected(currentCharacterId))
+            if (characterPosition != null && detailsPanel != null)
             {
-                // Focused view (details panel to the left, scaled down)
-                if (characterPosition != null)
+                // Ensure the panel is active and visible
+                detailsPanel.gameObject.SetActive(true); // Reactivate if inactive
+                SetPanelState(detailsPanel, true); // Set alpha to 1, enable interaction/raycasts
+
+                if (characterSelectionManager.IsCharacterSelected(characterId))
                 {
-                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetFocused; // Use detailsPanelOffsetFocused
+                    // Selected state: position instantly on the left
+                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetFocused;
                     detailsPanel.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
                 }
-            }
-            else
-            {
-                // General view (details panel at default position, no scaling)
-                if (characterPosition != null)
+                else
                 {
-                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetGeneral; // Use detailsPanelOffsetGeneral
+                    // Preview state: position above the head
+                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetGeneral;
                     detailsPanel.transform.localScale = Vector3.one;
                 }
             }
+
+            // Ensure panel is visible
+
+            SetPanelState(hoverPanel, false);
+            SetPanelState(unlockPanel, false);
+
         }
 
         public void ShowConfirmationPanel(bool show)
@@ -441,12 +444,52 @@ namespace CyberPickle.Characters
             currentCharacterId = null;
         }
 
-        public void HideAllPanels()
+        public async void HideAllPanels()
         {
             SetPanelState(hoverPanel, false);
-            SetPanelState(detailsPanel, false);
             SetPanelState(unlockPanel, false);
+            await AnimatePanelExit(panelTransitionDuration); // Await the details panel exit animation
         }
+
+        public async Task AnimatePanelToFocusedPosition(Transform characterTransform, float duration)
+        {
+            if (detailsPanel == null || characterTransform == null) return;
+
+            // Ensure the panel is active and visible before animating
+            detailsPanel.gameObject.SetActive(true); // Reactivate if inactive
+            SetPanelState(detailsPanel, true); // Set alpha to 1, enable interaction/raycasts
+
+            Vector3 startPosition = detailsPanel.transform.position;
+            Vector3 targetPosition = characterTransform.position + detailsPanelOffsetFocused;
+
+            // Animate position and scale
+            detailsPanel.transform.DOLocalMove(targetPosition, duration)
+                .SetEase(Ease.InOutQuad)
+                .SetUpdate(true);
+            detailsPanel.transform.DOScale(new Vector3(0.5f, 0.5f, 0.5f), duration)
+                .SetEase(Ease.InOutQuad);
+
+            // Wait for the animation to complete
+            await detailsPanel.transform.DOLocalMove(targetPosition, duration).AsyncWaitForCompletion();
+        }
+
+        public async Task AnimatePanelExit(float duration)
+        {
+            if (detailsPanel == null) return;
+
+            // Fade out and slide off (or just fade out for simplicity)
+            Sequence sequence = DOTween.Sequence();
+            sequence.Append(detailsPanel.DOFade(0f, duration).SetEase(Ease.InOutQuad)); // Fade out
+            sequence.Join(detailsPanel.transform.DOLocalMoveY(detailsPanel.transform.position.y - 200f, duration)
+                .SetEase(Ease.InOutQuad)); // Slide upward or off-screen
+
+            // Wait for the animation to complete
+            await sequence.AsyncWaitForCompletion();
+
+            // Ensure panel is hidden after animation
+            detailsPanel.gameObject.SetActive(false);
+        }
+
 
         private void ClearStatsContainer()
         {

@@ -193,30 +193,59 @@ namespace CyberPickle.Characters
 
         private void UpdateAnimation(GameObject character, CharacterDisplayState state)
         {
+            Debug.Log($"UpdateAnimation called for {character.name} with state: {state}");
             if (!characterAnimators.TryGetValue(character, out var animator))
                 return;
 
-            switch (state)
+            // Reset all triggers first to prevent animation conflicts
+            animator.ResetTrigger("Idle");
+            animator.ResetTrigger("Dance");
+            animator.ResetTrigger("Selected");
+            animator.ResetTrigger("Locked");
+
+            string characterId = character.name.Replace("Character_", "");
+            bool isLocked = !CharacterSelectionManager.Instance.IsCharacterUnlocked(characterId);
+
+            if (isLocked)
             {
-                case CharacterDisplayState.Idle:
+                // For locked characters:
+                // - On hover -> Locked animation
+                // - Otherwise -> Idle animation
+                if (state == CharacterDisplayState.Hover)
+                {
+                    animator.SetTrigger("Locked");
+                    Debug.Log($"SetTrigger called for {character.name} with state: {state}");
+                    animator.speed = 0.5f;
+                }
+                else
+                {
                     animator.SetTrigger("Idle");
                     animator.speed = idleAnimationSpeed;
-                    break;
-
-                case CharacterDisplayState.Hover:
-                    animator.SetTrigger("Dance");
-                    animator.speed = hoverAnimationSpeed;
-                    break;
-
-                case CharacterDisplayState.Selected:
-                    animator.SetTrigger("Selected");
-                    animator.speed = 1f;
-                    break;
-
-                case CharacterDisplayState.Locked:
-                    animator.SetTrigger("Locked");
-                    animator.speed = 0.5f;
-                    break;
+                }
+            }
+            else
+            {
+                // Unlocked characters use all states normally
+                switch (state)
+                {
+                    case CharacterDisplayState.Idle:
+                        animator.SetTrigger("Idle");
+                        animator.speed = idleAnimationSpeed;
+                        break;
+                    case CharacterDisplayState.Hover:
+                        animator.SetTrigger("Dance");
+                        Debug.Log($"SetTrigger called for {character.name} with state: {state}");
+                        animator.speed = hoverAnimationSpeed;
+                        break;
+                    case CharacterDisplayState.Selected:
+                        animator.SetTrigger("Selected");
+                        animator.speed = 1f;
+                        break;
+                    case CharacterDisplayState.Locked:
+                        animator.SetTrigger("Locked");
+                        animator.speed = 0.5f;
+                        break;
+                }
             }
         }
 
@@ -226,43 +255,37 @@ namespace CyberPickle.Characters
                 !originalMaterials.ContainsKey(character))
                 return;
 
-            Material[] currentMaterials;
+            string characterId = character.name.Replace("Character_", "");
+            bool isLocked = !CharacterSelectionManager.Instance.IsCharacterUnlocked(characterId);
 
-            switch (state)
+            if (isLocked)
             {
-                case CharacterDisplayState.Locked:
-                    currentMaterials = new Material[renderer.materials.Length];
-                    for (int i = 0; i < currentMaterials.Length; i++)
-                    {
-                        currentMaterials[i] = lockedMaterial;
-                    }
-                    break;
-
-                case CharacterDisplayState.Hover:
-                case CharacterDisplayState.Selected:
-                    currentMaterials = originalMaterials[character];
-                    foreach (var material in currentMaterials)
-                    {
-                        if (material.HasProperty("_EmissionIntensity"))
-                        {
-                            material.SetFloat("_EmissionIntensity", highlightIntensity);
-                        }
-                    }
-                    break;
-
-                default:
-                    currentMaterials = originalMaterials[character];
-                    foreach (var material in currentMaterials)
-                    {
-                        if (material.HasProperty("_EmissionIntensity"))
-                        {
-                            material.SetFloat("_EmissionIntensity", 1f);
-                        }
-                    }
-                    break;
+                // Always apply locked material for locked characters
+                Material[] lockedMaterials = new Material[renderer.materials.Length];
+                for (int i = 0; i < lockedMaterials.Length; i++)
+                {
+                    lockedMaterials[i] = lockedMaterial;
+                }
+                renderer.materials = lockedMaterials;
             }
-
-            renderer.materials = currentMaterials;
+            else
+            {
+                // For unlocked characters, apply original materials with intensity based on state
+                Material[] currentMaterials = originalMaterials[character];
+                float intensity = 1f;
+                if (state == CharacterDisplayState.Hover || state == CharacterDisplayState.Selected)
+                {
+                    intensity = highlightIntensity;
+                }
+                foreach (var material in currentMaterials)
+                {
+                    if (material.HasProperty("_EmissionIntensity"))
+                    {
+                        material.SetFloat("_EmissionIntensity", intensity);
+                    }
+                }
+                renderer.materials = currentMaterials;
+            }
         }
 
         private void UpdateLighting(GameObject character, CharacterDisplayState state)
