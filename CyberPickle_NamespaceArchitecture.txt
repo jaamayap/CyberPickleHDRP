@@ -3,177 +3,9 @@ Namespace: CyberPickle.Achievements
    Constructor: public AchievementManager()
    Method: public sealed void Initialize()
 Namespace: CyberPickle.Characters
- Class: CharacterDisplayManager : Manager<CharacterDisplayManager>
-   Field: private float transitionDuration
-   Field: private float idleAnimationSpeed
-   Field: private float hoverAnimationSpeed
-   Field: private float highlightIntensity
-   Field: private float dimmedIntensity
-   Field: private Material lockedMaterial
-   Field: private float spotlightIntensity
-   Field: private float spotlightRange
-   Field: private float spotlightAngle
-   Field: private Dictionary<GameObject, Animator> characterAnimators
-   Field: private Dictionary<GameObject, Material[]> originalMaterials
-   Field: private Dictionary<GameObject, SkinnedMeshRenderer> characterRenderers
-   Field: private bool isInitialized
-   Constructor: public CharacterDisplayManager()
-   Method: protected override void OnManagerAwake()
-   Method: public void Initialize()
-   Method: private void ValidateReferences()
-   Method: private void SetupPointerInteraction()
-   Method: public async Task<GameObject> SpawnCharacter(CharacterData characterData, Vector3 position, Quaternion rotation)
-   Method: private void CacheCharacterComponents(GameObject character)
-   Method: private async Task InitializeCharacterVisuals(GameObject character, CharacterData characterData)
-   Method: public void UpdateCharacterState(GameObject character, CharacterDisplayState state)
-   Method: private void UpdateAnimation(GameObject character, CharacterDisplayState state)
-   Method: private void UpdateMaterials(GameObject character, CharacterDisplayState state)
-   Method: private void UpdateLighting(GameObject character, CharacterDisplayState state)
-   Method: public async Task RotateSpotlight(Light spotlight, float targetRotation, float duration)
-   Method: public void Cleanup()
-   Method: protected override void OnManagerDestroyed()
  Class: CharacterManager : Manager<CharacterManager>, IInitializable
    Constructor: public CharacterManager()
    Method: public sealed void Initialize()
- Class: CharacterPointerHandler : MonoBehaviour, IPointerClickHandler, IEventSystemHandler, IPointerEnterHandler, IPointerExitHandler
-   Field: private BoxCollider pointerCollider
-   Field: private string characterId
-   Field: private bool isInteractable
-   Constructor: public CharacterPointerHandler()
-   Method: private void Awake()
-   Method: private void Update()
-   Method: private void OnDrawGizmos()
-   Method: public void Initialize(string characterId)
-   Method: public void SetInteractable(bool interactable, bool allowHover)
-   Method: public sealed void OnPointerEnter(PointerEventData eventData)
-   Method: public sealed void OnPointerExit(PointerEventData eventData)
-   Method: public sealed void OnPointerClick(PointerEventData eventData)
-   Method: public void AdjustColliderSize(Vector3 size, Vector3 center)
- Enum: CharacterDisplayState
-   Value: Hidden = 0
-   Value: Locked = 1
-   Value: Idle = 2
-   Value: Hover = 3
-   Value: Selected = 4
-   Value: Previewing = 5
- Class: CharacterSelectionManager : Manager<CharacterSelectionManager>
-   Field: private bool cameraFocused
-   Field: private Transform[] characterPositions
-   Field: private Light spotLight
-   Field: private float spotlightRotationDuration
-   Field: private CharacterData[] availableCharacters
-   Field: private CharacterDisplayManager displayManager
-   Field: private CharacterUIManager uiManager
-   Field: private Vector3 cameraFocusOffset
-   Field: private float cameraFocusFieldOfView
-   Field: private float focusTransitionDuration
-   Field: private float focusHeightOffset
-   Field: private float focusDistance
-   Field: private Vector3 focusRotationAngles
-   Field: private float lookOffset
-   Field: private float spotlightRotationSpeed
-   Field: private float spotlightVerticalOffset
-   Field: private ProfileManager profileManager
-   Field: private GameManager gameManager
-   Field: private InputManager inputManager
-   Field: private CameraManager cameraManager
-   Field: private Dictionary<string, GameObject> spawnedCharacters
-   Field: private Dictionary<string, CharacterDisplayState> characterStates
-   Field: private string currentlySelectedCharacterId
-   Field: private string currentlyHoveredCharacterId
-   Field: private bool isTransitioning
-   Field: private int currentSpotlightIndex
-   Field: private Vector3 characterSelectionCameraPosition
-   Field: private float defaultFieldOfView
-   Field: private Coroutine spotlightFollowCoroutine
-   Constructor: public CharacterSelectionManager()
-   Method: public CharacterData GetCharacterData(string characterId)
-   Method: public bool IsCharacterUnlocked(string characterId)
-   Method: public async Task<bool> SelectCharacter(string characterId)
-   Method: protected override void OnManagerAwake()
-   Method: protected override void OnManagerEnabled()
-   Method: protected override void OnManagerDisabled()
-   Method: protected override void OnManagerDestroyed()
-   Method: private void InitializeManagerReferences()
-   Method: private bool EnsureManagerReferences()
-   Method: private bool ValidateManagerReferences()
-   Method: private void ValidateReferences()
-   Method: private void SubscribeToEvents()
-   Method: private void UnsubscribeFromEvents()
-   Method: private void HandleGameStateChanged(GameState newState)
-   Method: private void HandleProfileSelected(string profileId)
-   Method: private void HandleNavigationInput(float direction)
-   Method: private void InitializeCharacterSelection()
-   Method: private async Task SpawnCharacter(CharacterData characterData, Transform position)
-   Method: private void HandleCharacterHoverEnter(string characterId)
-   Method: private void HandleCharacterHoverExit(string characterId)
-   Method: private void HandleCharacterSelected(string characterId)
-   Method: private async Task ResetToCharacterSelectionView()
-   Method: private void HandleCharacterConfirmed()
-   Method: private void HandleSelectionCancelled()
-   Method: private void SetCharactersInteractable(bool interactable, bool allowCancel)
-   Method: private void CleanupSelectionListeners()
-   Method: private void ResetSelectionState()
-   Method: private void HandleCharacterDetails(string characterId)
-   Method: private void LoadCharacterProgressionData(ProfileData profile)
-   Method: private void RotateSpotlightToIndex(int index)
-   Method: private IEnumerator SmoothlyTrackCharacter(Transform targetCharacterRoot)
-   Method: private Transform FindHipsBone(Transform characterRoot)
-   Method: private void UpdateCharacterStates(int focusedIndex)
-   Method: private void SetCharacterState(string characterId, CharacterDisplayState newState)
-   Method: private async Task ResetCameraPosition()
-   Method: public bool IsCharacterSelected(string characterId)
-   Method: public GameObject GetCharacterGameObject(string characterId)
-   Method: private void CleanupCharacterSelection()
- Class: CharacterUIManager : Manager<CharacterUIManager>
-   Field: private CanvasGroup detailsPanel
-   Field: private TextMeshProUGUI detailsCharacterNameText
-   Field: private TextMeshProUGUI levelText
-   Field: private Transform statsContainer
-   Field: private TextMeshProUGUI loreText
-   Field: private GameObject statRowPrefab
-   Field: private CanvasGroup hoverPanel
-   Field: private TextMeshProUGUI hoverCharacterNameText
-   Field: private GameObject leftClickPrompt
-   Field: private GameObject rightClickPrompt
-   Field: private CanvasGroup unlockPanel
-   Field: private TextMeshProUGUI unlockRequirementsText
-   Field: private CanvasGroup confirmationPanelPrefab
-   Field: private CanvasGroup confirmationPanel
-   Field: private float panelFadeDuration
-   Field: private float statUpdateDuration
-   Field: private Vector3 hoverPanelOffset
-   Field: private Vector3 detailsPanelOffsetGeneral
-   Field: private Vector3 detailsPanelOffsetFocused
-   Field: private Vector3 confirmationPanelOffset
-   Field: private CharacterSelectionManager characterSelectionManager
-   Field: private ProfileManager profileManager
-   Field: private string currentCharacterId
-   Field: private Dictionary<string, TextMeshProUGUI> statTextCache
-   Field: private Dictionary<string, CharacterProgressionData> progressionCache
-   Constructor: public CharacterUIManager()
-   Method: protected override void OnManagerAwake()
-   Method: public void UpdatePanelPositions(Transform characterPosition)
-   Method: private void InitializeManagers()
-   Method: private bool ValidateManagerReferences()
-   Method: private void ValidateReferences()
-   Method: private void InitializeCache()
-   Method: public void Initialize(CharacterData[] characters)
-   Method: public void ShowCharacterPreview(CharacterData character)
-   Method: public void ShowDetails(string characterId)
-   Method: public void ShowConfirmationPanel(bool show)
-   Method: public void UpdateCharacterProgress(string characterId, CharacterProgressionData progression)
-   Method: private void UpdateCharacterStats(CharacterData baseData, CharacterProgressionData progression)
-   Method: private void CreateStatRow(string statName, float baseValue, CharacterProgressionData progression)
-   Method: public void ShowUnlockRequirements(CharacterData character)
-   Method: public void HideUnlockPanel()
-   Method: private CharacterProgressionData GetCharacterProgression(string characterId)
-   Method: private void SetPanelState(CanvasGroup panel, bool visible)
-   Method: public void Cleanup()
-   Method: private void ClearUI()
-   Method: public void HideAllPanels()
-   Method: private void ClearStatsContainer()
-   Method: protected override void OnManagerDestroyed()
 Namespace: CyberPickle.Characters.Data
  Class: CharacterData : ScriptableObject
    Field: public string characterId
@@ -203,6 +35,150 @@ Namespace: CyberPickle.Characters.Data
    Method: private void OnValidate()
    Method: private void ValidateStats()
    Method: public bool ValidateReferences()
+Namespace: CyberPickle.Characters.Logic
+ Class: CharacterDisplayManager : Manager<CharacterDisplayManager>
+   Field: private float transitionDuration
+   Field: private float idleAnimationSpeed
+   Field: private float hoverAnimationSpeed
+   Field: private float highlightIntensity
+   Field: private float dimmedIntensity
+   Field: private Material lockedMaterial
+   Field: private float spotlightIntensity
+   Field: private float spotlightRange
+   Field: private float spotlightAngle
+   Field: private Dictionary<GameObject, Animator> characterAnimators
+   Field: private Dictionary<GameObject, Material[]> originalMaterials
+   Field: private Dictionary<GameObject, SkinnedMeshRenderer> characterRenderers
+   Field: private bool isInitialized
+   Constructor: public CharacterDisplayManager()
+   Method: protected override void OnManagerAwake()
+   Method: public void Initialize()
+   Method: private void ValidateReferences()
+   Method: private void SetupPointerInteraction()
+   Method: public async Task<GameObject> SpawnCharacter(CharacterData characterData, Vector3 position, Quaternion rotation)
+   Method: private void CacheCharacterComponents(GameObject character)
+   Method: private async Task InitializeCharacterVisuals(GameObject character, CharacterData characterData)
+   Method: public void UpdateCharacterState(GameObject character, CharacterDisplayState state)
+   Method: private void UpdateAnimation(GameObject character, CharacterDisplayState state)
+   Method: private void UpdateMaterials(GameObject character, CharacterDisplayState state)
+   Method: private void UpdateLighting(GameObject character, CharacterDisplayState state)
+   Method: public async Task RotateSpotlight(Light spotlight, float targetRotation, float duration)
+   Method: public void Cleanup()
+   Method: protected override void OnManagerDestroyed()
+ Enum: CharacterDisplayState
+   Value: Hidden = 0
+   Value: Locked = 1
+   Value: Idle = 2
+   Value: Hover = 3
+   Value: Selected = 4
+ Class: CharacterPointerHandler : MonoBehaviour, IPointerClickHandler, IEventSystemHandler, IPointerEnterHandler, IPointerExitHandler
+   Field: private BoxCollider pointerCollider
+   Field: private string characterId
+   Field: private bool isInteractable
+   Constructor: public CharacterPointerHandler()
+   Method: private void Awake()
+   Method: public void Initialize(string charId)
+   Method: public void SetInteractable(bool interactable, bool allowHover)
+   Method: public sealed void OnPointerEnter(PointerEventData eventData)
+   Method: public sealed void OnPointerExit(PointerEventData eventData)
+   Method: public sealed void OnPointerClick(PointerEventData eventData)
+   Method: public void AdjustColliderSize(Vector3 size, Vector3 center)
+   Property: public bool IsInteractable { get; }
+ Class: CharacterSelectionManager : Manager<CharacterSelectionManager>
+   Field: private Transform[] characterPositions
+   Field: private Light spotLight
+   Field: private CharacterData[] availableCharacters
+   Field: private CharacterDisplayManager displayManager
+   Field: private CharacterUIManager uiManager
+   Field: private Vector3 cameraFocusOffset
+   Field: private float cameraFocusFieldOfView
+   Field: private float focusTransitionDuration
+   Field: private float focusDistance
+   Field: private float focusHeightOffset
+   Field: private float lookOffset
+   Field: private float panelTransitionDuration
+   Field: private float defaultFieldOfView
+   Field: private ProfileManager profileManager
+   Field: private CameraManager cameraManager
+   Field: private Coroutine spotlightFollowCoroutine
+   Field: private Dictionary<string, GameObject> spawnedCharacters
+   Field: private Dictionary<string, CharacterDisplayState> characterStates
+   Field: private string currentlySelectedCharacterId
+   Field: private string currentlyHoveredCharacterId
+   Field: private bool isTransitioning
+   Field: private bool cameraFocused
+   Constructor: public CharacterSelectionManager()
+   Method: protected override void OnManagerAwake()
+   Method: protected override void OnManagerDestroyed()
+   Method: private bool ValidateManagers()
+   Method: private void InitializeEvents()
+   Method: private void CleanupEvents()
+   Method: private void HandleGameStateChanged(GameState newState)
+   Method: private void InitializeCharacterSelection()
+   Method: private void CleanupCharacterSelection()
+   Method: public bool IsCharacterUnlocked(string characterId)
+   Method: private void HandleCharacterHoverEnter(string characterId)
+   Method: private IEnumerator SmoothlyTrackCharacter(Transform target)
+   Method: private void HandleCharacterHoverExit(string characterId)
+   Method: private void HandleCharacterSelected(string characterId)
+   Method: private void HandleCharacterDetails(string characterId)
+   Method: private void HandleSelectionCancelled()
+   Method: private void HandleCharacterConfirmed()
+   Method: public bool IsCharacterSelected(string characterId)
+   Method: public GameObject GetCharacterGameObject(string characterId)
+Namespace: CyberPickle.Characters.UI
+ Class: CharacterUIManager : Manager<CharacterUIManager>
+   Field: private CanvasGroup detailsPanel
+   Field: private TextMeshProUGUI detailsCharacterNameText
+   Field: private TextMeshProUGUI levelText
+   Field: private Transform statsContainer
+   Field: private TextMeshProUGUI loreText
+   Field: private GameObject statRowPrefab
+   Field: private CanvasGroup hoverPanel
+   Field: private TextMeshProUGUI hoverCharacterNameText
+   Field: private GameObject leftClickPrompt
+   Field: private GameObject rightClickPrompt
+   Field: private CanvasGroup unlockPanel
+   Field: private TextMeshProUGUI unlockRequirementsText
+   Field: private CanvasGroup confirmationPanelPrefab
+   Field: private CanvasGroup confirmationPanel
+   Field: private float panelFadeDuration
+   Field: private float statUpdateDuration
+   Field: private float panelTransitionDuration
+   Field: private Vector3 hoverPanelOffset
+   Field: private Vector3 detailsPanelOffsetGeneral
+   Field: private Vector3 detailsPanelOffsetFocused
+   Field: private Vector3 confirmationPanelOffset
+   Field: private ProfileManager profileManager
+   Field: private string currentCharacterId
+   Field: private Dictionary<string, TextMeshProUGUI> statTextCache
+   Field: private Dictionary<string, CharacterProgressionData> progressionCache
+   Constructor: public CharacterUIManager()
+   Method: protected override void OnManagerAwake()
+   Method: protected override void OnManagerDestroyed()
+   Method: private void ValidateReferences()
+   Method: private void InitializeCache()
+   Method: public void Initialize(CharacterData[] characters)
+   Method: public void UpdatePanelPositions(Transform characterPosition)
+   Method: public void ShowCharacterPreview(CharacterData character, bool isUnlocked)
+   Method: public void ShowDetails(CharacterData character)
+   Method: public void ShowConfirmationPanel(bool show)
+   Method: public void ShowUnlockRequirements(CharacterData character)
+   Method: public void HideUnlockPanel()
+   Method: public void HideAllPanels()
+   Method: public void HideAllPanelsImmediate()
+   Method: public void UpdateCharacterProgress(string characterId, CharacterProgressionData progression)
+   Method: public async Task AnimatePanelToFocusedPosition(Transform characterTransform, float duration)
+   Method: public async Task AnimatePanelReturnToOverhead(Transform characterTransform, float duration)
+   Method: public async Task AnimatePanelExit(float duration)
+   Method: public void Cleanup()
+   Method: private CharacterProgressionData GetCharacterProgression(string characterId)
+   Method: public async Task AnimatePanelOverheadPosition(Transform characterTransform, float duration)
+   Method: private void SetPanelState(CanvasGroup panel, bool visible)
+   Method: private void UpdateCharacterStats(CharacterData baseData, CharacterProgressionData progression)
+   Method: private void CreateStatRow(string statName, float baseValue, CharacterProgressionData progression)
+   Method: private void ClearStatsContainer()
+   Method: private void ClearUI()
 Namespace: CyberPickle.Core
  Class: GameManager : Manager<GameManager>, IInitializable
    Field: private GameConfig gameConfig
@@ -337,7 +313,8 @@ Namespace: CyberPickle.Core.Camera
    Method: public void SetPostProcessingBlend(float blend)
    Method: public async Task FocusCameraOnCharacter(Transform characterTransform, float cameraHeightOffset, float focusDistance, float transitionDuration, float targetFOV, float lookOffset)
    Method: public async Task TransitionToPosition(Vector3 targetPosition, Quaternion targetRotation, float duration, float targetFOV)
-   Method: public async Task ResetToDefaultPosition(float duration)
+   Method: public async Task ResetToDefaultPosition(float duration, float newFOV)
+   Method: public async Task ResetToCharacterSelectionView(float duration, float newFOV)
    Property: public Transform CharacterSelectCameraPosition { get; }
 Namespace: CyberPickle.Core.Config
  Class: BootConfig : ScriptableObject

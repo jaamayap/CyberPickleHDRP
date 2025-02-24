@@ -297,15 +297,24 @@ namespace CyberPickle.Characters.Logic
             if (!IsCharacterUnlocked(characterId)) return;
 
             isTransitioning = true;
+
+            // If there's already a panel visible for another character, hide it immediately
+            // so we don't see the old overhead tween from the previous character to the new one.
+            uiManager.HideAllPanelsImmediate();
+
             currentlySelectedCharacterId = characterId;
 
-            // Visually mark as selected in the 3D display
+            // Visually mark as selected
             characterStates[characterId] = CharacterDisplayState.Selected;
             displayManager.UpdateCharacterState(spawnedCharacters[characterId], CharacterDisplayState.Selected);
 
-            // Focus the camera on the chosen character
+            // Grab transform for positioning
             var charTransform = spawnedCharacters[characterId].transform;
-            await cameraManager.FocusCameraOnCharacter(
+
+            // Fire off two asynchronous tasks in parallel:
+
+            // 1) Camera focusing task
+            var cameraTask = cameraManager.FocusCameraOnCharacter(
                 charTransform,
                 focusHeightOffset,
                 focusDistance,
@@ -313,24 +322,25 @@ namespace CyberPickle.Characters.Logic
                 cameraFocusFieldOfView,
                 lookOffset
             );
-            cameraFocused = true;
 
-            // Show the details panel text (e.g., name, stats)
+            // 2) Panel animation task (first show details text, then slide/scale to left side)
             var cData = Array.Find(availableCharacters, c => c.characterId == characterId);
-            uiManager.ShowDetails(cData);
+            uiManager.ShowDetails(cData);  // sets text/lore but doesn't do overhead offset
+            var panelTask = uiManager.AnimatePanelToFocusedPosition(charTransform, panelTransitionDuration);
 
-            // Animate the details panel to the "focused" offset at half scale
-            // (Assumes you have 'panelTransitionDuration' as a float in this class)
-            await uiManager.AnimatePanelToFocusedPosition(charTransform, panelTransitionDuration);
+            // Wait for both the camera and panel animations to finish
+            await Task.WhenAll(cameraTask, panelTask);
 
-            // Show the confirmation panel on top
+            // Now that both are done, show the confirmation panel on top
             uiManager.ShowConfirmationPanel(true);
 
-            // Finally, ensure the panels remain positioned correctly
+            // Ensure the confirmation panel (and others) remain positioned correctly
             uiManager.UpdatePanelPositions(charTransform);
 
+            cameraFocused = true;
             isTransitioning = false;
         }
+
 
         /// <summary>
         /// Right click => request details without fully selecting.
@@ -361,26 +371,36 @@ namespace CyberPickle.Characters.Logic
             // Hide the confirmation panel right away
             uiManager.ShowConfirmationPanel(false);
 
-            // If there's a currently selected character, animate the details panel back overhead
+            // If there's a currently selected character, we'll animate the panel + camera in parallel
             if (!string.IsNullOrEmpty(currentlySelectedCharacterId) &&
                 spawnedCharacters.TryGetValue(currentlySelectedCharacterId, out var selectedGO))
             {
-                // Animate details panel to overhead position at full scale
-                await uiManager.AnimatePanelReturnToOverhead(selectedGO.transform, 0.5f);
+                // Kick off two async tasks in parallel:
+                // 1) Panel returning overhead at full scale
+                var overheadTask = uiManager.AnimatePanelReturnToOverhead(selectedGO.transform, 0.5f);
 
-                // Reset the 3D display state
+                // 2) Camera returning to wide “character selection” view
+                var cameraTask = cameraManager.ResetToCharacterSelectionView(focusTransitionDuration, defaultFieldOfView);
+
+                // Wait for both to finish
+                await Task.WhenAll(overheadTask, cameraTask);
+
+                // Once both animations complete, reset display state to Idle/Locked
                 bool unlocked = IsCharacterUnlocked(currentlySelectedCharacterId);
                 characterStates[currentlySelectedCharacterId] = unlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
                 displayManager.UpdateCharacterState(selectedGO, characterStates[currentlySelectedCharacterId]);
             }
-
-            // Move the camera back to the wide “character selection” view
-            await cameraManager.ResetToCharacterSelectionView(focusTransitionDuration, defaultFieldOfView);
+            else
+            {
+                // If there's no selected character, we only need to reset the camera
+                await cameraManager.ResetToCharacterSelectionView(focusTransitionDuration, defaultFieldOfView);
+            }
 
             currentlySelectedCharacterId = null;
             cameraFocused = false;
             isTransitioning = false;
         }
+
 
 
         /// <summary>
