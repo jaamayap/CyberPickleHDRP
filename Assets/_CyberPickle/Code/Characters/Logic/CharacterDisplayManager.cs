@@ -1,13 +1,3 @@
-// File: Assets/_CyberPickle/Code/Characters/CharacterDisplayManager.cs
-//
-// Purpose: Handles the visual presentation of characters in the selection screen,
-// including model instantiation, animation control, material management, and 
-// interaction setup. Responsible for all display-related functionality and pointer
-// interaction infrastructure.
-//
-// Created: 2024-02-11
-// Updated: 2024-02-11
-
 using UnityEngine;
 using System;
 using System.Threading.Tasks;
@@ -18,10 +8,12 @@ using CyberPickle.Characters.Data;
 using DG.Tweening;
 using UnityEngine.EventSystems;
 
-namespace CyberPickle.Characters
+namespace CyberPickle.Characters.Logic
 {
     /// <summary>
     /// Manages character visualization and interaction infrastructure in the selection screen.
+    /// Responsible for spawning character models, controlling animations,
+    /// applying materials, and handling spotlight logic (purely visual aspects).
     /// </summary>
     public class CharacterDisplayManager : Manager<CharacterDisplayManager>
     {
@@ -46,7 +38,6 @@ namespace CyberPickle.Characters
 
         #region Private Fields
 
-        // Component caches for performance
         private Dictionary<GameObject, Animator> characterAnimators = new Dictionary<GameObject, Animator>();
         private Dictionary<GameObject, Material[]> originalMaterials = new Dictionary<GameObject, Material[]>();
         private Dictionary<GameObject, SkinnedMeshRenderer> characterRenderers = new Dictionary<GameObject, SkinnedMeshRenderer>();
@@ -54,7 +45,7 @@ namespace CyberPickle.Characters
 
         #endregion
 
-        #region Initialization
+        #region Manager Lifecycle
 
         protected override void OnManagerAwake()
         {
@@ -63,7 +54,8 @@ namespace CyberPickle.Characters
         }
 
         /// <summary>
-        /// Initializes the display manager and sets up interaction infrastructure
+        /// Called once before use. Prepares pointer interaction and related
+        /// display infrastructure.
         /// </summary>
         public void Initialize()
         {
@@ -83,11 +75,10 @@ namespace CyberPickle.Characters
         }
 
         /// <summary>
-        /// Sets up the required components for pointer interaction with characters
+        /// Optionally set up physics raycasting on the main camera, etc.
         /// </summary>
         private void SetupPointerInteraction()
         {
-            // Setup Physics Raycaster
             var camera = Camera.main;
             if (camera != null && camera.GetComponent<PhysicsRaycaster>() == null)
             {
@@ -96,7 +87,6 @@ namespace CyberPickle.Characters
                 Debug.Log("[CharacterDisplayManager] Added PhysicsRaycaster to main camera");
             }
 
-            // Setup Event System if needed
             if (FindObjectOfType<EventSystem>() == null)
             {
                 var eventSystem = new GameObject("Event System");
@@ -111,34 +101,28 @@ namespace CyberPickle.Characters
         #region Character Spawning and Setup
 
         /// <summary>
-        /// Spawns and initializes a character model with visual components
+        /// Spawns and initializes a character model with visual components.
         /// </summary>
-        /// <param name="characterData">Data containing character configuration</param>
-        /// <param name="position">World position for spawning</param>
-        /// <param name="rotation">Initial rotation (will be adjusted to face camera)</param>
-        /// <returns>The instantiated character GameObject, or null if spawning fails</returns>
         public async Task<GameObject> SpawnCharacter(CharacterData characterData, Vector3 position, Quaternion rotation)
         {
             if (characterData == null || characterData.characterPrefab == null)
             {
-                Debug.LogError($"[CharacterDisplayManager] Invalid character data for spawning!");
+                Debug.LogError("[CharacterDisplayManager] Invalid character data for spawning!");
                 return null;
             }
 
             try
             {
-                // Handle the actual instantiation and setup
+                // Instantiate
                 Quaternion targetRotation = Quaternion.Euler(0, 180, 0);
                 GameObject characterInstance = Instantiate(characterData.characterPrefab, position, targetRotation);
                 characterInstance.name = $"Character_{characterData.characterId}";
 
-                // Cache components for performance
+                // Cache animator, renderer, etc.
                 CacheCharacterComponents(characterInstance);
-
-                // Initialize visual state
                 await InitializeCharacterVisuals(characterInstance, characterData);
 
-                Debug.Log($"[CharacterDisplayManager] Successfully spawned character: {characterData.characterId}");
+                Debug.Log($"[CharacterDisplayManager] Spawned character: {characterData.characterId}");
                 return characterInstance;
             }
             catch (Exception e)
@@ -171,8 +155,7 @@ namespace CyberPickle.Characters
                 animator.SetTrigger(characterData.idleAnimationTrigger);
                 animator.speed = idleAnimationSpeed;
             }
-
-            await Task.Yield();
+            await Task.Yield(); // Simple async yield
         }
 
         #endregion
@@ -180,12 +163,11 @@ namespace CyberPickle.Characters
         #region Visual State Management
 
         /// <summary>
-        /// Updates the visual state of a character based on its display state
+        /// Updates the visual state (materials, animation, lighting) for a character.
         /// </summary>
         public void UpdateCharacterState(GameObject character, CharacterDisplayState state)
         {
             if (character == null) return;
-
             UpdateAnimation(character, state);
             UpdateMaterials(character, state);
             UpdateLighting(character, state);
@@ -193,28 +175,27 @@ namespace CyberPickle.Characters
 
         private void UpdateAnimation(GameObject character, CharacterDisplayState state)
         {
-            Debug.Log($"UpdateAnimation called for {character.name} with state: {state}");
-            if (!characterAnimators.TryGetValue(character, out var animator))
-                return;
+            if (!characterAnimators.TryGetValue(character, out var animator)) return;
 
-            // Reset all triggers first to prevent animation conflicts
+            // Reset triggers
             animator.ResetTrigger("Idle");
             animator.ResetTrigger("Dance");
             animator.ResetTrigger("Selected");
             animator.ResetTrigger("Locked");
 
-            string characterId = character.name.Replace("Character_", "");
-            bool isLocked = !CharacterSelectionManager.Instance.IsCharacterUnlocked(characterId);
+            string charId = character.name.Replace("Character_", "");
+
+            // Check lock status by consulting the selection manager
+            bool isLocked = !CharacterSelectionManager.Instance.IsCharacterUnlocked(charId);
 
             if (isLocked)
             {
-                // For locked characters:
-                // - On hover -> Locked animation
-                // - Otherwise -> Idle animation
+                // If the selection manager always passes "Hover" even for locked,
+                // we can do locked hover logic here
                 if (state == CharacterDisplayState.Hover)
                 {
+                    // E.g. "LockedHover" if your animator needs a separate state, or just "Locked"
                     animator.SetTrigger("Locked");
-                    Debug.Log($"SetTrigger called for {character.name} with state: {state}");
                     animator.speed = 0.5f;
                 }
                 else
@@ -225,7 +206,7 @@ namespace CyberPickle.Characters
             }
             else
             {
-                // Unlocked characters use all states normally
+                // Normal unlocked logic
                 switch (state)
                 {
                     case CharacterDisplayState.Idle:
@@ -234,7 +215,6 @@ namespace CyberPickle.Characters
                         break;
                     case CharacterDisplayState.Hover:
                         animator.SetTrigger("Dance");
-                        Debug.Log($"SetTrigger called for {character.name} with state: {state}");
                         animator.speed = hoverAnimationSpeed;
                         break;
                     case CharacterDisplayState.Selected:
@@ -242,6 +222,7 @@ namespace CyberPickle.Characters
                         animator.speed = 1f;
                         break;
                     case CharacterDisplayState.Locked:
+                        // Just in case
                         animator.SetTrigger("Locked");
                         animator.speed = 0.5f;
                         break;
@@ -249,39 +230,42 @@ namespace CyberPickle.Characters
             }
         }
 
+
         private void UpdateMaterials(GameObject character, CharacterDisplayState state)
         {
             if (!characterRenderers.TryGetValue(character, out var renderer) ||
                 !originalMaterials.ContainsKey(character))
-                return;
-
-            string characterId = character.name.Replace("Character_", "");
-            bool isLocked = !CharacterSelectionManager.Instance.IsCharacterUnlocked(characterId);
-
-            if (isLocked)
             {
-                // Always apply locked material for locked characters
-                Material[] lockedMaterials = new Material[renderer.materials.Length];
-                for (int i = 0; i < lockedMaterials.Length; i++)
+                return;
+            }
+
+            // 1) Figure out if it’s truly locked
+            string charId = character.name.Replace("Character_", "");
+            bool isLocked = !CharacterSelectionManager.Instance.IsCharacterUnlocked(charId);
+
+            // 2) If locked, apply lockedMaterial
+            if (isLocked && lockedMaterial != null)
+            {
+                var lockedMats = new Material[renderer.materials.Length];
+                for (int i = 0; i < lockedMats.Length; i++)
                 {
-                    lockedMaterials[i] = lockedMaterial;
+                    lockedMats[i] = lockedMaterial;
                 }
-                renderer.materials = lockedMaterials;
+                renderer.materials = lockedMats;
             }
             else
             {
-                // For unlocked characters, apply original materials with intensity based on state
-                Material[] currentMaterials = originalMaterials[character];
-                float intensity = 1f;
-                if (state == CharacterDisplayState.Hover || state == CharacterDisplayState.Selected)
+                // 3) Otherwise, normal logic
+                float intensity = (state == CharacterDisplayState.Hover || state == CharacterDisplayState.Selected)
+                    ? highlightIntensity
+                    : 1f;
+
+                var currentMaterials = originalMaterials[character];
+                foreach (var mat in currentMaterials)
                 {
-                    intensity = highlightIntensity;
-                }
-                foreach (var material in currentMaterials)
-                {
-                    if (material.HasProperty("_EmissionIntensity"))
+                    if (mat.HasProperty("_EmissionIntensity"))
                     {
-                        material.SetFloat("_EmissionIntensity", intensity);
+                        mat.SetFloat("_EmissionIntensity", intensity);
                     }
                 }
                 renderer.materials = currentMaterials;
@@ -290,10 +274,8 @@ namespace CyberPickle.Characters
 
         private void UpdateLighting(GameObject character, CharacterDisplayState state)
         {
-            float targetIntensity = state == CharacterDisplayState.Hover ||
-                                  state == CharacterDisplayState.Selected
-                                  ? highlightIntensity
-                                  : dimmedIntensity;
+            float targetIntensity = (state == CharacterDisplayState.Hover || state == CharacterDisplayState.Selected)
+                ? highlightIntensity : dimmedIntensity;
 
             var characterLights = character.GetComponentsInChildren<Light>();
             foreach (var light in characterLights)
@@ -307,7 +289,8 @@ namespace CyberPickle.Characters
         #region Spotlight Control
 
         /// <summary>
-        /// Rotates the spotlight to focus on a character
+        /// Rotates the given spotlight to a target rotation over time.
+        /// Adjust intensity, range, angle, etc. as needed.
         /// </summary>
         public async Task RotateSpotlight(Light spotlight, float targetRotation, float duration)
         {
@@ -316,11 +299,7 @@ namespace CyberPickle.Characters
             try
             {
                 Vector3 currentRotation = spotlight.transform.localEulerAngles;
-                Vector3 targetRotationVector = new Vector3(
-                    currentRotation.x,
-                    targetRotation,
-                    currentRotation.z
-                );
+                Vector3 targetRotationVector = new Vector3(currentRotation.x, targetRotation, currentRotation.z);
 
                 await spotlight.transform
                     .DOLocalRotate(targetRotationVector, duration)
@@ -342,7 +321,7 @@ namespace CyberPickle.Characters
         #region Cleanup
 
         /// <summary>
-        /// Cleans up cached components and materials
+        /// Clears all cached character data and resets internal state.
         /// </summary>
         public void Cleanup()
         {
@@ -359,5 +338,18 @@ namespace CyberPickle.Characters
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// Defines display states used by CharacterDisplayManager.
+    /// Typically, "Locked" is used if the character is not unlocked in the profile.
+    /// </summary>
+    public enum CharacterDisplayState
+    {
+        Hidden,
+        Locked,
+        Idle,
+        Hover,
+        Selected
     }
 }

@@ -35,6 +35,7 @@ namespace CyberPickle.Core.Camera
         [SerializeField] private bool enableMenuIdleAnimation = false; // Set to false by default
         [SerializeField] private bool enableCharacterSelectIdleAnimation = true;
 
+
         [Header("Camera Settings")]
         [SerializeField] private float defaultFieldOfView = 60f;
         public Transform CharacterSelectCameraPosition => characterSelectCameraPosition;
@@ -337,7 +338,7 @@ namespace CyberPickle.Core.Camera
             }
         }
 
-        public async Task ResetToDefaultPosition(float duration)
+        public async Task ResetToDefaultPosition(float duration, float newFOV)
         {
             if (mainCamera == null || menuCameraPosition == null)
             {
@@ -345,27 +346,37 @@ namespace CyberPickle.Core.Camera
                 return;
             }
 
-            Debug.Log("[CameraManager] Resetting camera to default position");
+            Debug.Log($"[CameraManager] Resetting camera to default with custom FOV {newFOV}");
 
             try
             {
-                // Get default values from menu camera position
                 Vector3 defaultPosition = menuCameraPosition.position;
                 Quaternion defaultRotation = menuCameraPosition.rotation;
-                float defaultFOV = mainCamera.fieldOfView; // You might want to store this as a serialized field
 
-                // Create transition sequence
+                // Create the sequence
                 Sequence resetSequence = DOTween.Sequence();
 
-                // Add position reset
-                resetSequence.Join(mainCamera.transform.DOMove(defaultPosition, duration)
-                    .SetEase(transitionCurve));
+                // Move & rotate camera
+                resetSequence.Join(
+                    mainCamera.transform.DOMove(defaultPosition, duration)
+                        .SetEase(transitionCurve)
+                );
+                resetSequence.Join(
+                    mainCamera.transform.DORotateQuaternion(defaultRotation, duration)
+                        .SetEase(transitionCurve)
+                );
 
-                // Add rotation reset
-                resetSequence.Join(mainCamera.transform.DORotateQuaternion(defaultRotation, duration)
-                    .SetEase(transitionCurve));
+                // If you want to animate the FOV along with position:
+                resetSequence.Join(
+                    DOTween.To(
+                        () => mainCamera.fieldOfView,
+                        x => mainCamera.fieldOfView = x,
+                        newFOV,
+                        duration
+                    ).SetEase(transitionCurve)
+                );
 
-                // Wait for sequence completion
+                // Wait for it to finish
                 await resetSequence.AsyncWaitForCompletion();
 
                 Debug.Log("[CameraManager] Camera reset completed successfully");
@@ -376,6 +387,30 @@ namespace CyberPickle.Core.Camera
                 Debug.LogError($"[CameraManager] Error during camera reset: {ex.Message}");
                 throw;
             }
+
+
+        }
+        public async Task ResetToCharacterSelectionView(float duration, float newFOV)
+        {
+            if (mainCamera == null || characterSelectCameraPosition == null)
+            {
+                Debug.LogError("[CameraManager] Required references are null!");
+                return;
+            }
+
+            // Move & rotate camera to the selection vantage
+            Sequence seq = DOTween.Sequence();
+            seq.Join(mainCamera.transform.DOMove(characterSelectCameraPosition.position, duration));
+            seq.Join(mainCamera.transform.DORotateQuaternion(characterSelectCameraPosition.rotation, duration));
+
+            // Adjust FOV (optional)
+            seq.Join(DOTween.To(() => mainCamera.fieldOfView,
+                                x => mainCamera.fieldOfView = x,
+                                newFOV,
+                                duration));
+
+            await seq.AsyncWaitForCompletion();
+            GameEvents.OnCameraTransitionComplete.Invoke();
         }
     }
 }

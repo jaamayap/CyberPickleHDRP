@@ -1,9 +1,3 @@
-// File: Assets/_CyberPickle/Code/Characters/CharacterUIManager.cs
-//
-// Purpose: Manages the UI elements for character selection, including hover state,
-// details panel, and stat displays. Works with CharacterSelectionManager to provide
-// visual feedback and interaction options.
-
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -16,8 +10,14 @@ using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.Events;
 using System.Threading.Tasks;
 
-namespace CyberPickle.Characters
+namespace CyberPickle.Characters.UI
 {
+    /// <summary>
+    /// Manages UI elements for character selection: hover panel, details panel,
+    /// unlock requirements, and confirmation prompts.
+    /// Only responsible for UI feedback/animations—logic or selection rules
+    /// live in other managers.
+    /// </summary>
     public class CharacterUIManager : Manager<CharacterUIManager>
     {
         [Header("Details Panel")]
@@ -40,107 +40,66 @@ namespace CyberPickle.Characters
 
         [Header("Confirm Selection Panel")]
         [SerializeField] private CanvasGroup confirmationPanelPrefab; // Prefab reference
-        private CanvasGroup confirmationPanel; // Runtime reference to instantiated panel
-
+        private CanvasGroup confirmationPanel; // Runtime reference
 
         [Header("Animation Settings")]
         [SerializeField] private float panelFadeDuration = 0.3f;
         [SerializeField] private float statUpdateDuration = 0.5f;
         [SerializeField] private float panelTransitionDuration = 0.8f;
-
+        
         [Header("Positioning")]
         [SerializeField] private Vector3 hoverPanelOffset = new Vector3(0, 2, 0);
-        [SerializeField] private Vector3 detailsPanelOffsetGeneral = new Vector3(2, 1, 0); // Offset in general view
-        [SerializeField] private Vector3 detailsPanelOffsetFocused = new Vector3(-1, 0, 0); // Offset in focused view
+        [SerializeField] private Vector3 detailsPanelOffsetGeneral = new Vector3(2, 1, 0);
+        [SerializeField] private Vector3 detailsPanelOffsetFocused = new Vector3(-1, 0, 0);
         [SerializeField] private Vector3 confirmationPanelOffset = new Vector3(0, 2, 0);
 
         // Dependencies
-        private CharacterSelectionManager characterSelectionManager;
         private ProfileManager profileManager;
 
-        // State tracking
+        // State
         private string currentCharacterId;
         private Dictionary<string, TextMeshProUGUI> statTextCache;
         private Dictionary<string, CharacterProgressionData> progressionCache;
 
+        #region Manager Overrides
+
         protected override void OnManagerAwake()
         {
             base.OnManagerAwake();
-            InitializeManagers();
+            profileManager = ProfileManager.Instance;  // if needed for progression
             ValidateReferences();
             InitializeCache();
         }
 
-        public void UpdatePanelPositions(Transform characterPosition)
+        protected override void OnManagerDestroyed()
         {
-            if (characterPosition == null) return;
-
-            // Animate panel position if transitioning from preview to selected
-            if (detailsPanel != null && characterSelectionManager.IsCharacterSelected(currentCharacterId))
-            {
-                Vector3 targetPosition = characterPosition.position + detailsPanelOffsetFocused;
-                detailsPanel.transform.DOLocalMove(targetPosition, panelTransitionDuration)
-                    .SetEase(Ease.InOutQuad) // Ease-in-out for smooth sliding
-                    .SetUpdate(true); // Ensure update in late update for smooth movement
-                detailsPanel.transform.DOScale(new Vector3(0.5f, 0.5f, 0.5f), panelTransitionDuration)
-                    .SetEase(Ease.InOutQuad);
-            }
-            else if (detailsPanel != null)
-            {
-                // Preview state: position above the head (no animation needed here, handled by ShowDetails)
-                Vector3 targetPosition = characterPosition.position + detailsPanelOffsetGeneral;
-                detailsPanel.transform.position = targetPosition;
-                detailsPanel.transform.localScale = Vector3.one;
-            }
-
-            // Position other panels as before (hover, unlock, confirmation)
-            if (hoverPanel != null)
-            {
-                hoverPanel.transform.position = characterPosition.position + hoverPanelOffset;
-            }
-
-            if (unlockPanel != null)
-            {
-                unlockPanel.transform.position = characterPosition.position + hoverPanelOffset;
-            }
-
-            if (confirmationPanel != null)
-            {
-                confirmationPanel.transform.position = characterPosition.position + confirmationPanelOffset;
-            }
-        }
-        private void InitializeManagers()
-        {
-            characterSelectionManager = CharacterSelectionManager.Instance;
-            profileManager = ProfileManager.Instance;
-
-            if (!ValidateManagerReferences())
-            {
-                Debug.LogError("[CharacterUIManager] Failed to initialize required managers!");
-            }
+            base.OnManagerDestroyed();
+            Cleanup();
         }
 
-        private bool ValidateManagerReferences()
-        {
-            return characterSelectionManager != null && profileManager != null;
-        }
+        #endregion
+
+        #region Initialization
 
         private void ValidateReferences()
         {
-            if (detailsPanel == null) Debug.LogError("[CharacterUIManager] Details panel is missing!");
-            if (hoverPanel == null) Debug.LogError("[CharacterUIManager] Hover panel is missing!");
-            if (unlockPanel == null) Debug.LogError("[CharacterUIManager] Unlock panel is missing!");
-            if (statsContainer == null) Debug.LogError("[CharacterUIManager] Stats container is missing!");
-            if (statRowPrefab == null) Debug.LogError("[CharacterUIManager] Stat row prefab is missing!");
+            if (!detailsPanel) Debug.LogError("[CharacterUIManager] Details panel is missing!");
+            if (!hoverPanel) Debug.LogError("[CharacterUIManager] Hover panel is missing!");
+            if (!unlockPanel) Debug.LogError("[CharacterUIManager] Unlock panel is missing!");
+            if (!statsContainer) Debug.LogError("[CharacterUIManager] Stats container is missing!");
+            if (!statRowPrefab) Debug.LogError("[CharacterUIManager] Stat row prefab is missing!");
         }
 
         private void InitializeCache()
         {
             statTextCache = new Dictionary<string, TextMeshProUGUI>();
             progressionCache = new Dictionary<string, CharacterProgressionData>();
-            HideAllPanels();
+            HideAllPanelsImmediate();
         }
 
+        /// <summary>
+        /// Called externally once. Prepares progression data if needed, etc.
+        /// </summary>
         public void Initialize(CharacterData[] characters)
         {
             ClearUI();
@@ -151,30 +110,56 @@ namespace CyberPickle.Characters
                     progressionCache[character.characterId] = GetCharacterProgression(character.characterId);
                 }
             }
-            Debug.Log("[CharacterUIManager] Initialized with " + characters.Length + " characters");
+            Debug.Log($"[CharacterUIManager] Initialized with {characters.Length} characters");
         }
 
-        public void ShowCharacterPreview(CharacterData character)
+        #endregion
+
+        #region Public UI Handling
+
+        /// <summary>
+        /// Updates the panel positions relative to the given character's transform.
+        /// Should be called each frame or on hover/selection changes.
+        /// </summary>
+        public void UpdatePanelPositions(Transform characterPosition)
         {
-            if (character == null) return;
+            if (!characterPosition) return;
 
-            currentCharacterId = character.characterId;
-            bool isUnlocked = characterSelectionManager.IsCharacterUnlocked(character.characterId);
-
-            // Always reset panels before updating
-            HideAllPanels();
-
-            // Update hover panel content
-            if (hoverCharacterNameText != null)
+            // Keep the hover/unlock/confirmation panels updated if you like
+            if (hoverPanel)
             {
-                hoverCharacterNameText.text = character.displayName;
+                hoverPanel.transform.position = characterPosition.position + hoverPanelOffset;
             }
 
-            // Hide click prompts for locked characters
-            if (leftClickPrompt != null) leftClickPrompt.SetActive(isUnlocked);
-            if (rightClickPrompt != null) rightClickPrompt.SetActive(isUnlocked);
+            if (unlockPanel)
+            {
+                unlockPanel.transform.position = characterPosition.position + hoverPanelOffset;
+            }
 
-            // Show the appropriate panel based on unlock state
+            if (confirmationPanel)
+            {
+                confirmationPanel.transform.position = characterPosition.position + confirmationPanelOffset;
+            }
+
+            // SKIP MOVING THE DETAILS PANEL HERE, to avoid overriding the tween
+        }
+
+        /// <summary>
+        /// Shows the hover panel or unlock panel depending on unlock status.
+        /// </summary>
+        public void ShowCharacterPreview(CharacterData character, bool isUnlocked)
+        {
+            if (!character) return;
+            currentCharacterId = character.characterId;
+
+            // Reset panels first
+            HideAllPanelsImmediate();
+
+            if (hoverCharacterNameText) hoverCharacterNameText.text = character.displayName;
+            if (leftClickPrompt) leftClickPrompt.SetActive(isUnlocked);
+            if (rightClickPrompt) rightClickPrompt.SetActive(isUnlocked);
+
+            // Show hover panel if unlocked, else show unlock requirements
             if (isUnlocked)
             {
                 SetPanelState(hoverPanel, true);
@@ -185,154 +170,289 @@ namespace CyberPickle.Characters
             }
         }
 
-        public void ShowDetails(string characterId)
+        /// <summary>
+        /// Fills and shows the character details panel: name, lore, stats, etc.
+        /// </summary>
+        public void ShowDetails(CharacterData character)
         {
-            var character = characterSelectionManager.GetCharacterData(characterId);
-            if (character == null) return;
+            if (!character) return;
+            currentCharacterId = character.characterId;
 
-            currentCharacterId = characterId;
+            if (detailsCharacterNameText) detailsCharacterNameText.text = character.displayName;
+            if (loreText) loreText.text = character.lore;
 
-            // Update details panel content
-            if (detailsCharacterNameText != null)
-            {
-                detailsCharacterNameText.text = character.displayName;
-            }
+            var progression = progressionCache.TryGetValue(character.characterId, out var cachedProg)
+                ? cachedProg
+                : GetCharacterProgression(character.characterId);
 
-            if (loreText != null)
-            {
-                loreText.text = character.lore;
-            }
-
-            // Get progression data
-            var progression = progressionCache.TryGetValue(characterId, out var cachedProgression)
-                ? cachedProgression
-                : GetCharacterProgression(characterId);
-
-            if (levelText != null && progression != null)
+            if (levelText && progression != null)
             {
                 levelText.text = $"Level {progression.CharacterLevel}";
             }
 
-            // Update and show stats
             UpdateCharacterStats(character, progression);
+            SetPanelState(detailsPanel, true);
 
-            // Position the panel based on selection state
-            var characterPosition = characterSelectionManager.GetCharacterGameObject(characterId)?.transform;
-            if (characterPosition != null && detailsPanel != null)
-            {
-                // Ensure the panel is active and visible
-                detailsPanel.gameObject.SetActive(true); // Reactivate if inactive
-                SetPanelState(detailsPanel, true); // Set alpha to 1, enable interaction/raycasts
-
-                if (characterSelectionManager.IsCharacterSelected(characterId))
-                {
-                    // Selected state: position instantly on the left
-                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetFocused;
-                    detailsPanel.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
-                }
-                else
-                {
-                    // Preview state: position above the head
-                    detailsPanel.transform.position = characterPosition.position + detailsPanelOffsetGeneral;
-                    detailsPanel.transform.localScale = Vector3.one;
-                }
-            }
-
-            // Ensure panel is visible
-
+            // Hide other panels
             SetPanelState(hoverPanel, false);
             SetPanelState(unlockPanel, false);
-
         }
 
+        /// <summary>
+        /// Displays the confirmation panel prefab for final selection,
+        /// or hides it if show=false.
+        /// </summary>
         public void ShowConfirmationPanel(bool show)
         {
-            Debug.Log($"[CharacterUIManager] ShowConfirmationPanel called with show={show}");
-
             if (!show)
             {
-                if (confirmationPanel != null)
+                if (confirmationPanel)
                 {
-                    // Clean up existing listeners before destroying
                     var buttons = confirmationPanel.GetComponentsInChildren<Button>();
-                    foreach (var button in buttons)
-                    {
-                        button.onClick.RemoveAllListeners();
-                    }
+                    foreach (var b in buttons) b.onClick.RemoveAllListeners();
                     Destroy(confirmationPanel.gameObject);
                     confirmationPanel = null;
                 }
                 return;
             }
 
-            if (confirmationPanel == null)
+            if (!confirmationPanel && confirmationPanelPrefab)
             {
-                if (confirmationPanelPrefab == null)
-                {
-                    Debug.LogError("[CharacterUIManager] Confirmation panel prefab is missing!");
-                    return;
-                }
-
                 var instance = Instantiate(confirmationPanelPrefab, hoverPanel.transform.parent);
                 confirmationPanel = instance.GetComponent<CanvasGroup>();
 
-                if (confirmationPanel != null)
+                // Positioning
+                if (confirmationPanel)
                 {
-                    var characterPosition = characterSelectionManager.GetCharacterGameObject(currentCharacterId)?.transform;
-                    if (characterPosition != null)
-                    {
-                        confirmationPanel.transform.position = characterPosition.position + confirmationPanelOffset;
-                    }
+                    SetPanelState(confirmationPanel, true);
                 }
 
+                // Hook up confirm/cancel buttons
                 var buttons = instance.GetComponentsInChildren<Button>();
                 foreach (var button in buttons)
                 {
-                    button.onClick.RemoveAllListeners(); // Clear any existing listeners
+                    button.onClick.RemoveAllListeners(); // clear existing
                     if (button.gameObject.name.Contains("Confirm"))
                     {
-                        button.onClick.AddListener(() => {
-                            Debug.Log("[CharacterUIManager] Confirm button clicked");
-                            GameEvents.OnCharacterConfirmed?.Invoke();
-                        });
+                        button.onClick.AddListener(() => GameEvents.OnCharacterConfirmed?.Invoke());
                     }
                     else if (button.gameObject.name.Contains("Cancel"))
                     {
-                        button.onClick.AddListener(() => {
-                            Debug.Log("[CharacterUIManager] Cancel button clicked");
-                            GameEvents.OnCharacterSelectionCancelled?.Invoke();
-                        });
+                        button.onClick.AddListener(() => GameEvents.OnCharacterSelectionCancelled?.Invoke());
                     }
                 }
             }
-
-            if (confirmationPanel != null)
+            else if (confirmationPanel)
             {
                 confirmationPanel.gameObject.SetActive(true);
                 SetPanelState(confirmationPanel, true);
             }
         }
 
+        /// <summary>
+        /// Displays requirements for locked characters.
+        /// </summary>
+        public void ShowUnlockRequirements(CharacterData character)
+        {
+            if (!unlockRequirementsText) return;
+            string requirements = "Requirements to unlock:\n";
+
+            if (character.requiredPlayerLevel > 1)
+            {
+                requirements += $"• Level {character.requiredPlayerLevel}\n";
+            }
+            if (character.requiredAchievements != null && character.requiredAchievements.Length > 0)
+            {
+                foreach (var ach in character.requiredAchievements)
+                {
+                    requirements += $"• {ach}\n";
+                }
+            }
+
+            unlockRequirementsText.text = requirements;
+            SetPanelState(unlockPanel, true);
+        }
+
+        /// <summary>
+        /// Hides the Unlock Panel specifically.
+        /// </summary>
+        public void HideUnlockPanel()
+        {
+            SetPanelState(unlockPanel, false);
+        }
+
+        /// <summary>
+        /// Hides all panels gracefully with a fade out (async).
+        /// </summary>
+        public async void HideAllPanels()
+        {
+            SetPanelState(hoverPanel, false);
+            SetPanelState(unlockPanel, false);
+            await AnimatePanelExit(panelTransitionDuration);  // fade out details
+        }
+
+        /// <summary>
+        /// Immediately hides all panels (no fade).
+        /// </summary>
+        public void HideAllPanelsImmediate()
+        {
+            if (hoverPanel) hoverPanel.alpha = 0f;
+            if (unlockPanel) unlockPanel.alpha = 0f;
+            if (detailsPanel) detailsPanel.alpha = 0f;
+
+            if (hoverPanel) hoverPanel.gameObject.SetActive(false);
+            if (unlockPanel) unlockPanel.gameObject.SetActive(false);
+            if (detailsPanel) detailsPanel.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Updates progression data for the given character.
+        /// </summary>
         public void UpdateCharacterProgress(string characterId, CharacterProgressionData progression)
         {
             if (string.IsNullOrEmpty(characterId) || progression == null) return;
-
             progressionCache[characterId] = progression;
 
+            // If currently showing that character, update stats
             if (characterId == currentCharacterId)
             {
-                var character = characterSelectionManager.GetCharacterData(characterId);
-                if (character != null)
-                {
-                    UpdateCharacterStats(character, progression);
-                }
+                // We need the base data, typically from outside
+                // e.g. CharacterSelectionManager or somewhere else
+                // For now, we do a debug check
+                Debug.Log($"[CharacterUIManager] UpdateCharacterProgress called for {characterId}, but base data not re-fetched here.");
             }
+        }
+
+        public async Task AnimatePanelToFocusedPosition(Transform characterTransform, float duration)
+        {
+            if (!detailsPanel || !characterTransform) return;
+
+            // Ensure it's visible
+            detailsPanel.gameObject.SetActive(true);
+            SetPanelState(detailsPanel, true);
+
+            Vector3 targetPos = characterTransform.position + detailsPanelOffsetFocused;
+
+            // Tween in world space
+            detailsPanel.transform.DOMove(targetPos, duration)
+                .SetEase(Ease.InOutQuad)
+                .SetUpdate(true);
+
+            // Scale to half
+            detailsPanel.transform.DOScale(Vector3.one * 0.5f, duration)
+                .SetEase(Ease.InOutQuad);
+
+            await detailsPanel.transform
+                .DOMove(targetPos, duration)
+                .AsyncWaitForCompletion();
+        }
+
+        public async Task AnimatePanelReturnToOverhead(Transform characterTransform, float duration)
+        {
+            // Exactly the same logic as AnimatePanelOverheadPosition, 
+            // but some devs prefer a separate name for clarity.
+            await AnimatePanelOverheadPosition(characterTransform, duration);
+        }
+
+        /// <summary>
+        /// Animates the details panel off-screen, then hides it.
+        /// </summary>
+        public async Task AnimatePanelExit(float duration)
+        {
+            if (!detailsPanel) return;
+
+            Sequence seq = DOTween.Sequence();
+            seq.Append(detailsPanel.DOFade(0f, duration).SetEase(Ease.InOutQuad));
+            seq.Join(detailsPanel.transform.DOLocalMoveY(detailsPanel.transform.position.y - 200f, duration)
+                .SetEase(Ease.InOutQuad));
+            await seq.AsyncWaitForCompletion();
+
+            detailsPanel.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Clears all UI and data references.
+        /// </summary>
+        public void Cleanup()
+        {
+            ClearUI();
+            if (confirmationPanel)
+            {
+                var buttons = confirmationPanel.GetComponentsInChildren<Button>();
+                foreach (var b in buttons) b.onClick.RemoveAllListeners();
+                Destroy(confirmationPanel.gameObject);
+                confirmationPanel = null;
+            }
+            progressionCache.Clear();
+        }
+
+        #endregion
+
+        #region Private Helpers
+
+        private CharacterProgressionData GetCharacterProgression(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId) || profileManager == null) return null;
+            var profile = profileManager.ActiveProfile;
+            if (profile?.CharacterProgress == null) return null;
+
+            profile.CharacterProgress.TryGetValue(characterId, out var prog);
+            return prog;
+        }
+
+        /// <summary>
+        /// Animates the details panel above the character's head (general/preview),
+        /// at full scale (Vector3.one).
+        /// </summary>
+        public async Task AnimatePanelOverheadPosition(Transform characterTransform, float duration)
+        {
+            if (!detailsPanel || !characterTransform) return;
+
+            // Make sure it's active and visible
+            detailsPanel.gameObject.SetActive(true);
+            SetPanelState(detailsPanel, true);
+
+            // Overhead position in *world* coordinates
+            Vector3 targetPos = characterTransform.position + detailsPanelOffsetGeneral;
+
+            // Move in world space:
+            detailsPanel.transform.DOMove(targetPos, duration)
+                .SetEase(Ease.InOutQuad)
+                .SetUpdate(true);
+
+            // Scale to normal size:
+            detailsPanel.transform.DOScale(Vector3.one, duration)
+                .SetEase(Ease.InOutQuad);
+
+            // Wait for the movement to complete
+            await detailsPanel.transform
+                .DOMove(targetPos, duration)
+                .AsyncWaitForCompletion();
+        }
+
+        
+
+
+        private void SetPanelState(CanvasGroup panel, bool visible)
+        {
+            if (!panel) return;
+            panel.gameObject.SetActive(true);
+
+            panel.DOFade(visible ? 1f : 0f, panelFadeDuration)
+                .OnComplete(() =>
+                {
+                    // After fade out, disable object if needed
+                    if (!visible) panel.gameObject.SetActive(false);
+                });
+            panel.interactable = visible;
+            panel.blocksRaycasts = visible;
         }
 
         private void UpdateCharacterStats(CharacterData baseData, CharacterProgressionData progression)
         {
             ClearStatsContainer();
 
+            // Example stats we show:
             CreateStatRow("Health", baseData.maxHealth, progression);
             CreateStatRow("Defense", baseData.defense, progression);
             CreateStatRow("Power", baseData.power, progression);
@@ -343,170 +463,47 @@ namespace CyberPickle.Characters
 
         private void CreateStatRow(string statName, float baseValue, CharacterProgressionData progression)
         {
-            if (statRowPrefab == null || statsContainer == null) return;
+            if (!statRowPrefab || !statsContainer) return;
 
-            GameObject statRow = Instantiate(statRowPrefab, statsContainer);
-            var texts = statRow.GetComponentsInChildren<TextMeshProUGUI>();
+            var row = Instantiate(statRowPrefab, statsContainer);
+            var texts = row.GetComponentsInChildren<TextMeshProUGUI>();
+            if (texts.Length < 2) return;
 
-            if (texts.Length >= 2)
+            texts[0].text = statName;
+            texts[1].text = baseValue.ToString("F1");
+
+            string statKey = $"{currentCharacterId}_{statName}";
+            statTextCache[statKey] = texts[1];
+
+            if (progression?.Stats != null && progression.Stats.TryGetValue(statName, out float progressedValue))
             {
-                texts[0].text = statName;
-                texts[1].text = baseValue.ToString("F1");
-
-                string statKey = $"{currentCharacterId}_{statName}";
-                statTextCache[statKey] = texts[1];
-
-                // Animate if progressed value exists
-                if (progression?.Stats != null && progression.Stats.TryGetValue(statName, out float progressedValue))
-                {
-                    DOTween.To(
-                        () => baseValue,
-                        (float value) => texts[1].text = value.ToString("F1"),
-                        progressedValue,
-                        statUpdateDuration
-                    );
-                }
+                // Animate from baseValue to progressedValue
+                DOTween.To(
+                    () => baseValue,
+                    v => texts[1].text = v.ToString("F1"),
+                    progressedValue,
+                    statUpdateDuration
+                );
             }
         }
-
-        public void ShowUnlockRequirements(CharacterData character)
-        {
-            if (unlockRequirementsText == null) return;
-
-            string requirements = "Requirements to unlock:\n";
-
-            if (character.requiredPlayerLevel > 1)
-            {
-                requirements += $"• Level {character.requiredPlayerLevel}\n";
-            }
-
-            if (character.requiredAchievements != null && character.requiredAchievements.Length > 0)
-            {
-                foreach (var achievement in character.requiredAchievements)
-                {
-                    requirements += $"• {achievement}\n";
-                }
-            }
-
-            unlockRequirementsText.text = requirements;
-            SetPanelState(unlockPanel, true);
-        }
-
-        public void HideUnlockPanel()
-        {
-            if (unlockPanel != null)
-            {
-                SetPanelState(unlockPanel, false); // Use the existing method to hide the panel
-            }
-
-            Debug.Log("[CharacterUIManager] Unlock panel hidden");
-        }
-        private CharacterProgressionData GetCharacterProgression(string characterId)
-        {
-            if (string.IsNullOrEmpty(characterId) || profileManager == null) return null;
-
-            var profile = profileManager.ActiveProfile;
-            if (profile?.CharacterProgress == null) return null;
-
-            profile.CharacterProgress.TryGetValue(characterId, out var progression);
-            return progression;
-        }
-
-        private void SetPanelState(CanvasGroup panel, bool visible)
-        {
-            if (panel == null) return;
-
-            panel.DOFade(visible ? 1f : 0f, panelFadeDuration);
-            panel.interactable = visible;
-            panel.blocksRaycasts = visible;
-        }
-
-        public void Cleanup()
-        {
-            ClearUI();
-            if (confirmationPanel != null)
-            {
-                var buttons = confirmationPanel.GetComponentsInChildren<Button>();
-                foreach (var button in buttons)
-                {
-                    button.onClick.RemoveAllListeners();
-                }
-                Destroy(confirmationPanel.gameObject);
-                confirmationPanel = null;
-            }
-            progressionCache.Clear();
-        }
-
-        private void ClearUI()
-        {
-            HideAllPanels();
-            ClearStatsContainer();
-            currentCharacterId = null;
-        }
-
-        public async void HideAllPanels()
-        {
-            SetPanelState(hoverPanel, false);
-            SetPanelState(unlockPanel, false);
-            await AnimatePanelExit(panelTransitionDuration); // Await the details panel exit animation
-        }
-
-        public async Task AnimatePanelToFocusedPosition(Transform characterTransform, float duration)
-        {
-            if (detailsPanel == null || characterTransform == null) return;
-
-            // Ensure the panel is active and visible before animating
-            detailsPanel.gameObject.SetActive(true); // Reactivate if inactive
-            SetPanelState(detailsPanel, true); // Set alpha to 1, enable interaction/raycasts
-
-            Vector3 startPosition = detailsPanel.transform.position;
-            Vector3 targetPosition = characterTransform.position + detailsPanelOffsetFocused;
-
-            // Animate position and scale
-            detailsPanel.transform.DOLocalMove(targetPosition, duration)
-                .SetEase(Ease.InOutQuad)
-                .SetUpdate(true);
-            detailsPanel.transform.DOScale(new Vector3(0.5f, 0.5f, 0.5f), duration)
-                .SetEase(Ease.InOutQuad);
-
-            // Wait for the animation to complete
-            await detailsPanel.transform.DOLocalMove(targetPosition, duration).AsyncWaitForCompletion();
-        }
-
-        public async Task AnimatePanelExit(float duration)
-        {
-            if (detailsPanel == null) return;
-
-            // Fade out and slide off (or just fade out for simplicity)
-            Sequence sequence = DOTween.Sequence();
-            sequence.Append(detailsPanel.DOFade(0f, duration).SetEase(Ease.InOutQuad)); // Fade out
-            sequence.Join(detailsPanel.transform.DOLocalMoveY(detailsPanel.transform.position.y - 200f, duration)
-                .SetEase(Ease.InOutQuad)); // Slide upward or off-screen
-
-            // Wait for the animation to complete
-            await sequence.AsyncWaitForCompletion();
-
-            // Ensure panel is hidden after animation
-            detailsPanel.gameObject.SetActive(false);
-        }
-
 
         private void ClearStatsContainer()
         {
-            if (statsContainer == null) return;
-
+            if (!statsContainer) return;
             foreach (Transform child in statsContainer)
             {
                 Destroy(child.gameObject);
             }
-
             statTextCache.Clear();
         }
 
-        protected override void OnManagerDestroyed()
+        private void ClearUI()
         {
-            base.OnManagerDestroyed();
-            Cleanup();
+            HideAllPanelsImmediate();
+            ClearStatsContainer();
+            currentCharacterId = null;
         }
+
+        #endregion
     }
 }

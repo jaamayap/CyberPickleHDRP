@@ -2274,6 +2274,7 @@ MonoBehaviour:
     type: 3}
   panelFadeDuration: 0.01
   statUpdateDuration: 0.5
+  panelTransitionDuration: 0.8
   hoverPanelOffset: {x: 0, y: 2.5, z: 0}
   detailsPanelOffsetGeneral: {x: 0, y: 3, z: 0}
   detailsPanelOffsetFocused: {x: -1.4, y: 1, z: 0}
@@ -6416,8 +6417,8 @@ Transform:
   m_GameObject: {fileID: 1013192007}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 2, y: 2, z: 6.1}
+  m_LocalPosition: {x: 0, y: 0, z: 10.1}
+  m_LocalScale: {x: 2, y: 2, z: 2.66}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1217927980}
@@ -8600,7 +8601,6 @@ MonoBehaviour:
   - {fileID: 231454459}
   - {fileID: 1337011364}
   spotLight: {fileID: 298827913}
-  spotlightRotationDuration: 0.5
   availableCharacters:
   - {fileID: 11400000, guid: 40b27c80777c6844aaa4d1578dc40df2, type: 2}
   - {fileID: 11400000, guid: 34f83cd0e273e874e91e3ff3bb8dece5, type: 2}
@@ -8610,12 +8610,10 @@ MonoBehaviour:
   cameraFocusOffset: {x: 0, y: 0, z: 3}
   cameraFocusFieldOfView: 40
   focusTransitionDuration: 1
-  focusHeightOffset: 1
   focusDistance: -4
-  focusRotationAngles: {x: 0, y: 0, z: 0}
+  focusHeightOffset: 1
   lookOffset: 1.4
-  spotlightRotationSpeed: 4
-  spotlightVerticalOffset: 1.5
+  panelTransitionDuration: 0.8
   defaultFieldOfView: 60
 --- !u!4 &1509142461
 Transform:

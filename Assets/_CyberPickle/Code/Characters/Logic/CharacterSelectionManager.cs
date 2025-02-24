@@ -1,22 +1,4 @@
-﻿// File: Assets/_CyberPickle/Code/Characters/CharacterSelectionManager.cs
-//
-// Purpose: Manages the character selection screen functionality in Cyber Pickle.
-// This manager coordinates character display, UI interactions, profile data handling,
-// and state transitions. It acts as the central coordinator for the character
-// selection flow and maintains the state of displayed characters.
-//
-// Dependencies:
-// - CharacterDisplayManager: Handles visual presentation of characters
-// - CharacterUIManager: Manages UI elements and interactions
-// - ProfileManager: Handles profile data and persistence
-// - GameManager: Controls game state transitions
-// - InputManager: Processes player input
-// - CameraManager: Controls camera transitions and effects
-//
-// Created: 2024-02-11
-// Updated: 2024-02-29
-
-using UnityEngine;
+﻿using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -27,45 +9,21 @@ using CyberPickle.Core.Camera;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Characters.Data;
-using CyberPickle.Core.Input;
-using CyberPickle.Core;
+using CyberPickle.Characters.UI;     // For CharacterUIManager
 using DG.Tweening;
 using System.Collections;
 
-namespace CyberPickle.Characters
+namespace CyberPickle.Characters.Logic
 {
     /// <summary>
-    /// Defines possible display states for characters in the selection screen
-    /// </summary>
-    public enum CharacterDisplayState
-    {
-        /// <summary>Character is not visible</summary>
-        Hidden,
-        /// <summary>Character is visible but not unlocked</summary>
-        Locked,
-        /// <summary>Character is in default display state</summary>
-        Idle,
-        /// <summary>Character is being hovered over</summary>
-        Hover,
-        /// <summary>Character has been selected</summary>
-        Selected,
-
-    }
-
-    /// <summary>
-    /// Central manager for the character selection screen functionality.
-    /// Coordinates between display, UI, and game state systems.
+    /// Manages the character selection flow: spawns characters, checks unlock status,
+    /// updates display states, and coordinates with UI/Display managers. 
     /// </summary>
     public class CharacterSelectionManager : Manager<CharacterSelectionManager>
     {
-        private bool cameraFocused = false;
-
-        #region Serialized Fields
-
         [Header("Scene References")]
         [SerializeField] private Transform[] characterPositions;
         [SerializeField] private Light spotLight;
-        [SerializeField] private float spotlightRotationDuration = 0.5f;
 
         [Header("Character References")]
         [SerializeField] private CharacterData[] availableCharacters;
@@ -78,303 +36,95 @@ namespace CyberPickle.Characters
         [SerializeField] private Vector3 cameraFocusOffset = new Vector3(0, 2, -3);
         [SerializeField] private float cameraFocusFieldOfView = 40f;
         [SerializeField] private float focusTransitionDuration = 1f;
-        [SerializeField] private float focusHeightOffset = 0f;
         [SerializeField] private float focusDistance = -5f;
-        [SerializeField] private Vector3 focusRotationAngles = new Vector3(10f, 0f, 0f);
+        [SerializeField] private float focusHeightOffset = 0f;
         [SerializeField] private float lookOffset = 2f;
-        [SerializeField] private float panelTransitionDuration = 0.8f;
-        [SerializeField] private float spotlightRotationSpeed = 3f;    // Adjust how quickly the spotlight aims
-        [SerializeField] private float spotlightVerticalOffset = 1.5f; // How high above the feet to aim
-        #endregion
-
-        #region Private Fields
-
-        // Core service references
+        [SerializeField] private float panelTransitionDuration = 0.8f; // add to the top
+        [SerializeField] private float defaultFieldOfView = 60f; // fallback FOV
+        
+        // Core references
         private ProfileManager profileManager;
-        private GameManager gameManager;
-        private InputManager inputManager;
         private CameraManager cameraManager;
-
-        // State tracking
+        private Coroutine spotlightFollowCoroutine;
+        // State
         private Dictionary<string, GameObject> spawnedCharacters = new Dictionary<string, GameObject>();
         private Dictionary<string, CharacterDisplayState> characterStates = new Dictionary<string, CharacterDisplayState>();
         private string currentlySelectedCharacterId;
         private string currentlyHoveredCharacterId;
         private bool isTransitioning;
-        private int currentSpotlightIndex;
-        private Vector3 characterSelectionCameraPosition;
+        private bool cameraFocused;
 
-        // Stores whether each character was interactable before selection
-        private Dictionary<string, bool> oldInteractableStates = new Dictionary<string, bool>();
-
-
-        // Stores Hover/Selected/Locked 
-        private Dictionary<string, CharacterDisplayState> oldDisplayStates = new Dictionary<string, CharacterDisplayState>();
-
-
-        [SerializeField] private float defaultFieldOfView = 60f;  // Or whatever default FOV you want
-
-        #endregion
-
-        #region Public Methods
-
-        /// <summary>
-        /// Retrieves character data for the specified character ID
-        /// </summary>
-        /// <param name="characterId">The ID of the character to retrieve</param>
-        /// <returns>CharacterData if found, null otherwise</returns>
-        public CharacterData GetCharacterData(string characterId)
-        {
-            return Array.Find(availableCharacters, c => c.characterId == characterId);
-        }
-
-        /// <summary>
-        /// Checks if a character is unlocked for the current profile
-        /// </summary>
-        /// <param name="characterId">The ID of the character to check</param>
-        /// <returns>True if the character is unlocked, false otherwise</returns>
-        public bool IsCharacterUnlocked(string characterId)
-        {
-            if (string.IsNullOrEmpty(characterId)) return false;
-
-            var characterData = Array.Find(availableCharacters, c => c.characterId == characterId);
-            if (characterData == null) return false;
-
-            // Check if unlocked by default
-            if (characterData.unlockedByDefault) return true;
-
-            // Check profile data for unlock status
-            var profile = profileManager.ActiveProfile;
-            if (profile?.CharacterProgress == null) return false;
-
-            return profile.CharacterProgress.ContainsKey(characterId);
-        }
-
-        /// <summary>
-        /// Handles the selection of a character and triggers the transition to level selection
-        /// </summary>
-        /// <param name="characterId">The ID of the character to select</param>
-        /// <returns>True if selection was successful, false otherwise</returns>
-        public async Task<bool> SelectCharacter(string characterId)
-        {
-            if (!IsCharacterUnlocked(characterId) || isTransitioning) return false;
-
-            isTransitioning = true;
-
-            try
-            {
-                currentlySelectedCharacterId = characterId;
-                SetCharacterState(characterId, CharacterDisplayState.Selected);
-
-                var profile = profileManager.ActiveProfile;
-                if (profile != null)
-                {
-                    await profileManager.UpdateProfileAsync(profile);
-                }
-
-                GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
-                return true;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[CharacterSelectionManager] Failed to select character: {e.Message}");
-                return false;
-            }
-            finally
-            {
-                isTransitioning = false;
-            }
-        }
-
-        #endregion
-
-        #region Protected Methods
+        #region Manager Overrides
 
         protected override void OnManagerAwake()
         {
             base.OnManagerAwake();
-            Debug.Log($"[CharacterSelectionManager] OnManagerAwake called. Instance ID: {GetInstanceID()}");
-            InitializeManagerReferences();
-            ValidateReferences();
-            displayManager.Initialize();  // Initialize display manager early
-        }
-
-        protected override void OnManagerEnabled()
-        {
-            base.OnManagerEnabled();
-            Debug.Log($"[CharacterSelectionManager] OnEnable called. Instance ID: {GetInstanceID()}");
-
-            // Ensure manager references are valid on enable
-            if (!EnsureManagerReferences())
-            {
-                Debug.LogError("[CharacterSelectionManager] Failed to get manager references in OnEnable!");
-                return;
-            }
-
-            SubscribeToEvents();
-        }
-
-        protected override void OnManagerDisabled()
-        {
-            base.OnManagerDisabled();
-            UnsubscribeFromEvents();
+            if (!ValidateManagers()) return;
+            displayManager.Initialize();
+            InitializeEvents();
         }
 
         protected override void OnManagerDestroyed()
         {
             base.OnManagerDestroyed();
+            CleanupEvents();
             CleanupCharacterSelection();
-            UnsubscribeFromEvents();
         }
 
         #endregion
 
-        #region Manager Reference Handling
+        #region Initialization
 
-        private void InitializeManagerReferences()
+        private bool ValidateManagers()
         {
-            Debug.Log("[CharacterSelectionManager] Initializing manager references");
-            EnsureManagerReferences();
-        }
+            profileManager = ProfileManager.Instance;
+            cameraManager = CameraManager.Instance;
 
-        private bool EnsureManagerReferences()
-        {
-            if (profileManager == null)
-            {
-                profileManager = ProfileManager.Instance;
-                Debug.Log($"[CharacterSelectionManager] Got ProfileManager instance: {(profileManager != null ? "Success" : "Failed")}");
-            }
-
-            if (gameManager == null)
-            {
-                gameManager = GameManager.Instance;
-            }
-
-            if (inputManager == null)
-            {
-                inputManager = InputManager.Instance;
-            }
-
-            if (cameraManager == null)
-            {
-                cameraManager = CameraManager.Instance;
-            }
-
-            bool referencesValid = ValidateManagerReferences();
-            Debug.Log($"[CharacterSelectionManager] Manager references valid: {referencesValid}");
-            return referencesValid;
-        }
-
-        private bool ValidateManagerReferences()
-        {
-            if (profileManager == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] ProfileManager reference is null!");
-                return false;
-            }
-
-            if (gameManager == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] GameManager reference is null!");
-                return false;
-            }
-
-            if (inputManager == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] InputManager reference is null!");
-                return false;
-            }
-
-            if (cameraManager == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] CameraManager reference is null!");
-                return false;
-            }
-
-            if (displayManager == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] DisplayManager reference is null!");
-                return false;
-            }
-
-            if (uiManager == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] UIManager reference is null!");
-                return false;
-            }
-
-            return true;
-        }
-
-        #endregion
-
-
-
-
-
-
-        #region Private Methods
-
-
-
-        private void ValidateReferences()
-        {
+            bool valid = true;
+            if (!profileManager) { Debug.LogError("[CharacterSelectionManager] Missing ProfileManager"); valid = false; }
+            if (!cameraManager) { Debug.LogError("[CharacterSelectionManager] Missing CameraManager"); valid = false; }
+            if (!displayManager) { Debug.LogError("[CharacterSelectionManager] Missing DisplayManager"); valid = false; }
+            if (!uiManager) { Debug.LogError("[CharacterSelectionManager] Missing UIManager"); valid = false; }
             if (characterPositions == null || characterPositions.Length == 0)
             {
-                Debug.LogError("[CharacterSelectionManager] Character positions not assigned!");
+                Debug.LogError("[CharacterSelectionManager] No character positions assigned!");
+                valid = false;
             }
-
             if (availableCharacters == null || availableCharacters.Length == 0)
             {
                 Debug.LogError("[CharacterSelectionManager] No available characters configured!");
+                valid = false;
             }
-
-            if (spotLight == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] Spotlight not assigned!");
-            }
+            return valid;
         }
 
-        /// <summary>
-        /// Subscribes to all relevant game events for character selection functionality
-        /// </summary>
-        private void SubscribeToEvents()
+        private void InitializeEvents()
         {
-            // Core game state events
             GameEvents.OnGameStateChanged.AddListener(HandleGameStateChanged);
-            GameEvents.OnProfileSelected.AddListener(HandleProfileSelected);
-            GameEvents.OnProfileNavigationInput.AddListener(HandleNavigationInput);
-
-            // Character pointer interaction events
             GameEvents.OnCharacterHoverEnter.AddListener(HandleCharacterHoverEnter);
             GameEvents.OnCharacterHoverExit.AddListener(HandleCharacterHoverExit);
             GameEvents.OnCharacterSelected.AddListener(HandleCharacterSelected);
             GameEvents.OnCharacterDetailsRequested.AddListener(HandleCharacterDetails);
             GameEvents.OnCharacterSelectionCancelled.AddListener(HandleSelectionCancelled);
-
-            Debug.Log("[CharacterSelectionManager] Subscribed to all events");
+            GameEvents.OnCharacterConfirmed.AddListener(HandleCharacterConfirmed);
+            Debug.Log("[CharacterSelectionManager] Events subscribed.");
         }
 
-        /// <summary>
-        /// Unsubscribes from all events to prevent memory leaks
-        /// </summary>
-        private void UnsubscribeFromEvents()
+        private void CleanupEvents()
         {
-            // Core game state events
             GameEvents.OnGameStateChanged.RemoveListener(HandleGameStateChanged);
-            GameEvents.OnProfileSelected.RemoveListener(HandleProfileSelected);
-            GameEvents.OnProfileNavigationInput.RemoveListener(HandleNavigationInput);
-
-            // Character pointer interaction events
             GameEvents.OnCharacterHoverEnter.RemoveListener(HandleCharacterHoverEnter);
             GameEvents.OnCharacterHoverExit.RemoveListener(HandleCharacterHoverExit);
             GameEvents.OnCharacterSelected.RemoveListener(HandleCharacterSelected);
             GameEvents.OnCharacterDetailsRequested.RemoveListener(HandleCharacterDetails);
             GameEvents.OnCharacterSelectionCancelled.RemoveListener(HandleSelectionCancelled);
-
-            Debug.Log("[CharacterSelectionManager] Unsubscribed from all events");
+            GameEvents.OnCharacterConfirmed.RemoveListener(HandleCharacterConfirmed);
+            Debug.Log("[CharacterSelectionManager] Events unsubscribed.");
         }
 
+        #endregion
+
+        #region GameState Handling
 
         private void HandleGameStateChanged(GameState newState)
         {
@@ -382,647 +132,299 @@ namespace CyberPickle.Characters
             {
                 case GameState.CharacterSelect:
                     InitializeCharacterSelection();
-                    characterSelectionCameraPosition = Camera.main.transform.position;
                     break;
-                case GameState.MainMenu:
                 case GameState.LevelSelect:
+                case GameState.MainMenu:
                     CleanupCharacterSelection();
                     break;
             }
         }
 
-        private void HandleProfileSelected(string profileId)
-        {
-            var profile = profileManager.GetProfile(profileId);
-            if (profile != null)
-            {
-                LoadCharacterProgressionData(profile);
-            }
-        }
-
-        private void HandleNavigationInput(float direction)
-        {
-            if (isTransitioning) return;
-
-            int newIndex = currentSpotlightIndex;
-            if (direction > 0 && currentSpotlightIndex < characterPositions.Length - 1)
-            {
-                newIndex++;
-            }
-            else if (direction < 0 && currentSpotlightIndex > 0)
-            {
-                newIndex--;
-            }
-
-            if (newIndex != currentSpotlightIndex)
-            {
-                RotateSpotlightToIndex(newIndex);
-            }
-        }
-
+        /// <summary>
+        /// Spawns and sets up all characters for selection.
+        /// </summary>
         private async void InitializeCharacterSelection()
         {
-            Debug.Log("[CharacterSelectionManager] Starting character selection initialization");
-
-            // Ensure manager references are valid before proceeding
-            if (!EnsureManagerReferences())
+            if (profileManager?.ActiveProfile == null)
             {
-                Debug.LogError("[CharacterSelectionManager] Cannot initialize character selection - invalid manager references!");
+                Debug.LogError("[CharacterSelectionManager] No active profile, cannot init character selection.");
                 return;
             }
 
+
             isTransitioning = true;
+            CleanupCharacterSelection();
 
-            try
-            {
-                Debug.Log($"[CharacterSelectionManager] ProfileManager state - Instance: {(profileManager != null ? "exists" : "null")}, " +
-                    $"ActiveProfile: {(profileManager?.ActiveProfile != null ? profileManager.ActiveProfile.ProfileId : "null")}");
-
-                CleanupCharacterSelection();
-
-                var profile = profileManager.ActiveProfile;
-                if (profile == null)
-                {
-                    Debug.LogError("[CharacterSelectionManager] No active profile found! Character selection cannot proceed.");
-                    return;
-                }
-
-                LoadCharacterProgressionData(profile);
-
-                // Spawn all characters
-
-                for (int i = 0; i < availableCharacters.Length; i++)
-                {
-                    var characterData = availableCharacters[i];
-                    await SpawnCharacter(characterData, characterPositions[i]);
-                }
-
-                uiManager.Initialize(availableCharacters);
-                currentSpotlightIndex = 0;
-                RotateSpotlightToIndex(currentSpotlightIndex);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[CharacterSelectionManager] Error during initialization: {e.Message}\n{e.StackTrace}");
-            }
-            finally
-            {
-                isTransitioning = false;
-            }
-        }
-
-        private async Task SpawnCharacter(CharacterData characterData, Transform position)
-        {
-            try
-            {
-                GameObject characterInstance = await displayManager.SpawnCharacter(
-                    characterData,
-                    position.position,
-                    position.rotation
-                );
-
-                if (characterInstance != null)
-                {
-                    // Add debug logging to verify setup
-                    Debug.Log($"[CharacterSelectionManager] Setting up character {characterData.characterId}");
-
-                    // Check if pointer handler exists and is properly initialized
-                    var pointerHandler = characterInstance.GetComponent<CharacterPointerHandler>();
-                    if (pointerHandler == null)
-                    {
-                        pointerHandler = characterInstance.AddComponent<CharacterPointerHandler>();
-                        Debug.Log($"[CharacterSelectionManager] Added CharacterPointerHandler to {characterData.characterId}");
-                    }
-                    pointerHandler.Initialize(characterData.characterId);
-
-                    // Verify layer setup
-                    characterInstance.layer = LayerMask.NameToLayer("Character");
-                    Debug.Log($"[CharacterSelectionManager] Set layer for {characterData.characterId} to Character");
-
-                    // Store references
-                    spawnedCharacters[characterData.characterId] = characterInstance;
-
-                    // Determine character state
-                    bool isUnlocked = IsCharacterUnlocked(characterData.characterId);
-                    characterStates[characterData.characterId] = isUnlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
-
-                    // Update interactability
-                    if (isUnlocked)
-                    {
-                        pointerHandler.SetInteractable(true);
-                    }
-                    else
-                    {
-                        // Allow hover but disable click for locked characters
-                        pointerHandler.SetInteractable(false, allowHover: true);
-                        Debug.Log($"[CharacterSelectionManager] Character {characterData.characterId} is locked but hoverable");
-                    }
-
-                    Debug.Log($"[CharacterSelectionManager] Character setup complete - ID: {characterData.characterId}, Unlocked: {isUnlocked}");
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[CharacterSelectionManager] Failed to spawn character {characterData.characterId}: {e.Message}");
-            }
-        }
-
-
-        /// <summary>
-        /// Handles mouse hover enter events for characters
-        /// </summary>
-        /// <param name="characterId">ID of the character being hovered</param>
-        private void HandleCharacterHoverEnter(string characterId)
-        {
-            if (isTransitioning || cameraFocused) return;
-
+            // Actually spawn each character
             for (int i = 0; i < availableCharacters.Length; i++)
             {
-                if (availableCharacters[i].characterId == characterId)
+                var cData = availableCharacters[i];
+                GameObject instance = await displayManager.SpawnCharacter(
+                    cData, characterPositions[i].position, characterPositions[i].rotation
+                );
+
+                if (!instance) continue;
+
+                // Layer and name
+                instance.layer = LayerMask.NameToLayer("Character");
+                // Set pointer handler
+                var pointerHandler = instance.GetComponent<CharacterPointerHandler>();
+                if (pointerHandler == null)
                 {
-                    if (currentSpotlightIndex != i)
-                    {
-                        RotateSpotlightToIndex(i);
-                    }
-
-                    var characterTransform = characterPositions[i];
-
-                    bool isUnlocked = IsCharacterUnlocked(characterId);
-                    // Set hover state - for locked characters this means "Locked" state
-                    SetCharacterState(characterId, CharacterDisplayState.Hover);
-
-                    // Update UI based on lock state
-                    if (isUnlocked)
-                    {
-                        uiManager.UpdatePanelPositions(characterTransform);
-                        uiManager.ShowCharacterPreview(availableCharacters[i]);
-                    }
-                    else
-                    {
-                        uiManager.HideAllPanels();
-                        uiManager.UpdatePanelPositions(characterTransform);
-                        uiManager.ShowUnlockRequirements(availableCharacters[i]);
-                    }
-                    break;
+                    pointerHandler = instance.AddComponent<CharacterPointerHandler>();
                 }
+                pointerHandler.Initialize(cData.characterId);
+
+                // Store references
+                spawnedCharacters[cData.characterId] = instance;
+
+                // Determine initial display state
+                bool unlocked = IsCharacterUnlocked(cData.characterId);
+                characterStates[cData.characterId] = unlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
+
+                // Let pointer handler block clicks if locked
+                pointerHandler.SetInteractable(unlocked, allowHover: true);
+                // Update visuals
+                displayManager.UpdateCharacterState(instance, characterStates[cData.characterId]);
             }
+
+            // Pass data to UI manager
+            uiManager.Initialize(availableCharacters);
+
+            isTransitioning = false;
         }
 
+        private void CleanupCharacterSelection()
+        {
+            foreach (var characterGO in spawnedCharacters.Values)
+            {
+                if (characterGO) Destroy(characterGO);
+            }
+            spawnedCharacters.Clear();
+            characterStates.Clear();
+
+            // Reset local state
+            currentlySelectedCharacterId = null;
+            currentlyHoveredCharacterId = null;
+            cameraFocused = false;
+            isTransitioning = false;
+
+            // UI cleanup
+            uiManager?.Cleanup();
+        }
+
+        #endregion
+
+        #region Character Unlock / Profile
+
+        public bool IsCharacterUnlocked(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId)) return false;
+            var cData = Array.Find(availableCharacters, c => c.characterId == characterId);
+            if (!cData) return false;
+
+            // If unlocked by default
+            if (cData.unlockedByDefault) return true;
+
+            // Check profile data
+            var profile = profileManager?.ActiveProfile;
+            if (profile?.CharacterProgress == null) return false;
+            return profile.CharacterProgress.ContainsKey(characterId);
+        }
+
+        #endregion
+
+        #region Hover / Selection Event Handlers
+
         /// <summary>
-        /// Handles mouse hover exit events for characters
+        /// Pointer hovers over a character.
         /// </summary>
-        /// <param name="characterId">ID of the character no longer being hovered</param>
+        private void HandleCharacterHoverEnter(string characterId)
+        {
+            if (spotlightFollowCoroutine != null) StopCoroutine(spotlightFollowCoroutine);
+            var characterTransform = spawnedCharacters[characterId].transform;
+            spotlightFollowCoroutine = StartCoroutine(SmoothlyTrackCharacter(characterTransform));
+
+            if (isTransitioning || cameraFocused) return;
+
+            currentlyHoveredCharacterId = characterId;
+            if (!spawnedCharacters.TryGetValue(characterId, out var characterGO)) return;
+
+            bool unlocked = IsCharacterUnlocked(characterId);
+            characterStates[characterId] = CharacterDisplayState.Hover;
+            displayManager.UpdateCharacterState(characterGO, characterStates[characterId]);
+
+            // Show the preview or unlock panel
+            var cData = Array.Find(availableCharacters, c => c.characterId == characterId);
+            uiManager.ShowCharacterPreview(cData, unlocked);
+
+            // <--- CRITICAL: position the hover panel over the correct character
+            uiManager.UpdatePanelPositions(characterGO.transform);
+        }
+
+        private IEnumerator SmoothlyTrackCharacter(Transform target)
+        {
+            while (true)
+            {
+                Vector3 targetPos = target.position + Vector3.up * 1.5f; // offset above character's feet
+                Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
+                spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 3f);
+                yield return null;
+            }
+        }
+        /// <summary>
+        /// Pointer no longer hovering over a character.
+        /// </summary>
         private void HandleCharacterHoverExit(string characterId)
         {
-            bool isUnlocked = IsCharacterUnlocked(characterId);
+            if (!spawnedCharacters.ContainsKey(characterId)) return;
 
-            // Set the state back - for locked characters this means Idle
-            SetCharacterState(characterId, isUnlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Idle);
+            bool unlocked = IsCharacterUnlocked(characterId);
+            characterStates[characterId] = unlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
 
-            if (!isUnlocked)
-            {
-                uiManager.HideUnlockPanel();
-            }
+            displayManager.UpdateCharacterState(spawnedCharacters[characterId], characterStates[characterId]);
+            uiManager.HideUnlockPanel();
+            currentlyHoveredCharacterId = null;
         }
 
         /// <summary>
-        /// Handles character selection via mouse click
+        /// Left click on character => select the character.
         /// </summary>
-        /// <param name="characterId">ID of the selected character</param>
         private async void HandleCharacterSelected(string characterId)
         {
-            // Guard checks
-            if (isTransitioning || string.IsNullOrEmpty(characterId)) return;
+            // Guard clauses
+            if (isTransitioning || !spawnedCharacters.ContainsKey(characterId)) return;
+            if (!IsCharacterUnlocked(characterId)) return;
+
             isTransitioning = true;
             currentlySelectedCharacterId = characterId;
 
-            if (!spawnedCharacters.TryGetValue(characterId, out GameObject selectedCharacter))
-            {
-                Debug.LogError($"[CharacterSelectionManager] Selected character {characterId} not found");
-                isTransitioning = false;
-                return;
-            }
+            // Visually mark as selected in the 3D display
+            characterStates[characterId] = CharacterDisplayState.Selected;
+            displayManager.UpdateCharacterState(spawnedCharacters[characterId], CharacterDisplayState.Selected);
 
-            try
-            {
-                //  Store current states before we override them
-                oldInteractableStates.Clear();
-                oldDisplayStates.Clear();
-                foreach (var kvp in spawnedCharacters)
-                {
-                    string id = kvp.Key;
-                    GameObject obj = kvp.Value;
-
-                    // Capture 'interactable' from CharacterPointerHandler
-                    var pointerHandler = obj.GetComponent<CharacterPointerHandler>();
-                    if (pointerHandler != null)
-                    {
-                        oldInteractableStates[id] = pointerHandler.IsInteractable;
-                    }
-
-                    // Capture display state from characterStates dictionary
-                    if (characterStates.TryGetValue(id, out var currentState))
-                    {
-                        oldDisplayStates[id] = currentState;
-                    }
-                }
-
-                //  Disable interactions for everyone so the user can’t hover/click others
-                //    but allow a 'Cancel' if you want. For example:
-                SetCharactersInteractable(false, allowCancel: true);
-
-                //  Change this selected one to "Selected" state
-                SetCharacterState(characterId, CharacterDisplayState.Selected);
-
-                // Determine if this is a direct left-click or after preview
-                bool isPreview = currentlyHoveredCharacterId == characterId && currentlyHoveredCharacterId != currentlySelectedCharacterId;
-
-                // Animate panel and focus camera
-                if (isPreview)
-                {
-                    // Slide panel from above head to left while camera focuses
-                    await uiManager.AnimatePanelToFocusedPosition(
-                        selectedCharacter.transform,
-                        panelTransitionDuration
-                    );
-                }
-                else
-                {
-                    // Direct left-click: position panel instantly on the left
-                    uiManager.ShowDetails(characterId); // This will position it on the left instantly
-                }
-
-                //  Focus camera on the selected character
-                await cameraManager.FocusCameraOnCharacter(
-                    selectedCharacter.transform,
-                    focusHeightOffset,
-                    focusDistance,
-                    focusTransitionDuration,
-                    cameraFocusFieldOfView,
-                    lookOffset
-                );
-
-                cameraFocused = true;
-                isTransitioning = false;
-
-                // Show details & confirmation UI
-                uiManager.ShowDetails(characterId);
-                uiManager.ShowConfirmationPanel(true);
-
-                // Add listeners for confirm/cancel
-                GameEvents.OnCharacterConfirmed.AddListener(HandleCharacterConfirmed);
-                GameEvents.OnCharacterSelectionCancelled.AddListener(HandleSelectionCancelled);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[CharacterSelectionManager] Error in HandleCharacterSelected: {ex.Message}");
-                isTransitioning = false;
-            }
-        }
-
-
-
-        private async Task ResetToCharacterSelectionView()
-        {
-            if (cameraManager == null) return;
-
-            await cameraManager.TransitionToPosition(
-                 cameraManager.CharacterSelectCameraPosition.position,
-                 cameraManager.CharacterSelectCameraPosition.rotation,
-                 focusTransitionDuration,
-                 defaultFieldOfView
+            // Focus the camera on the chosen character
+            var charTransform = spawnedCharacters[characterId].transform;
+            await cameraManager.FocusCameraOnCharacter(
+                charTransform,
+                focusHeightOffset,
+                focusDistance,
+                focusTransitionDuration,
+                cameraFocusFieldOfView,
+                lookOffset
             );
+            cameraFocused = true;
+
+            // Show the details panel text (e.g., name, stats)
+            var cData = Array.Find(availableCharacters, c => c.characterId == characterId);
+            uiManager.ShowDetails(cData);
+
+            // Animate the details panel to the "focused" offset at half scale
+            // (Assumes you have 'panelTransitionDuration' as a float in this class)
+            await uiManager.AnimatePanelToFocusedPosition(charTransform, panelTransitionDuration);
+
+            // Show the confirmation panel on top
+            uiManager.ShowConfirmationPanel(true);
+
+            // Finally, ensure the panels remain positioned correctly
+            uiManager.UpdatePanelPositions(charTransform);
+
+            isTransitioning = false;
         }
 
-
-        private async void HandleCharacterConfirmed()
+        /// <summary>
+        /// Right click => request details without fully selecting.
+        /// </summary>
+        private async void HandleCharacterDetails(string characterId)
         {
-            try
+            if (isTransitioning || !IsCharacterUnlocked(characterId)) return;
+
+            currentlyHoveredCharacterId = characterId;
+            var cData = Array.Find(availableCharacters, c => c.characterId == characterId);
+            uiManager.ShowDetails(cData);
+            await uiManager.AnimatePanelOverheadPosition(spawnedCharacters[characterId].transform, 0.3f);
+            // <--- CRITICAL: again, update panel position for the details panel
+            if (spawnedCharacters.TryGetValue(characterId, out var characterGO))
             {
-                CleanupSelectionListeners();
-                await SelectCharacter(currentlySelectedCharacterId);
-                ResetSelectionState();
-                GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[CharacterSelectionManager] Error during character confirmation: {ex.Message}");
-                ResetSelectionState();
+                uiManager.UpdatePanelPositions(characterGO.transform);
             }
         }
 
-
+        /// <summary>
+        /// The "Cancel" button or event was triggered.
+        /// </summary>
         private async void HandleSelectionCancelled()
         {
             if (isTransitioning) return;
             isTransitioning = true;
 
-            try
+            // Hide the confirmation panel right away
+            uiManager.ShowConfirmationPanel(false);
+
+            // If there's a currently selected character, animate the details panel back overhead
+            if (!string.IsNullOrEmpty(currentlySelectedCharacterId) &&
+                spawnedCharacters.TryGetValue(currentlySelectedCharacterId, out var selectedGO))
             {
-                // Hide UI
-                uiManager.ShowConfirmationPanel(false);
-                uiManager.HideAllPanels();
+                // Animate details panel to overhead position at full scale
+                await uiManager.AnimatePanelReturnToOverhead(selectedGO.transform, 0.5f);
 
-                // Animate panel exit while camera resets
-                await uiManager.AnimatePanelExit(panelTransitionDuration);
-
-                // Return to the wide camera view
-                await ResetToCharacterSelectionView();
-
-                // 1) Restore each character's old display + interactable states
-                foreach (var kvp in spawnedCharacters)
-                {
-                    string id = kvp.Key;
-                    GameObject obj = kvp.Value;
-
-                    // Display State
-                    if (oldDisplayStates.TryGetValue(id, out CharacterDisplayState oldState))
-                    {
-                        SetCharacterState(id, oldState);
-                    }
-
-                    // Interactable
-                    var pointerHandler = obj.GetComponent<CharacterPointerHandler>();
-                    if (pointerHandler != null && oldInteractableStates.TryGetValue(id, out bool oldInteractable))
-                    {
-                        pointerHandler.SetInteractable(oldInteractable);
-                    }
-                }
-
-                // 2) Clear our dictionaries so they don't accumulate old data
-                oldDisplayStates.Clear();
-                oldInteractableStates.Clear();
-                currentlySelectedCharacterId = null; // Clear selected character
-                currentlyHoveredCharacterId = null; // Clear preview state
-
-                // 3) Reset internal selection state
-                ResetSelectionState();
-                cameraFocused = false;
+                // Reset the 3D display state
+                bool unlocked = IsCharacterUnlocked(currentlySelectedCharacterId);
+                characterStates[currentlySelectedCharacterId] = unlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
+                displayManager.UpdateCharacterState(selectedGO, characterStates[currentlySelectedCharacterId]);
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[CharacterSelectionManager] Error during HandleSelectionCancelled: {ex.Message}");
-            }
-            finally
-            {
-                isTransitioning = false;
-            }
-        }
 
+            // Move the camera back to the wide “character selection” view
+            await cameraManager.ResetToCharacterSelectionView(focusTransitionDuration, defaultFieldOfView);
 
-
-
-
-        private void SetCharactersInteractable(bool interactable, bool allowCancel = false)
-        {
-            foreach (var character in spawnedCharacters.Values)
-            {
-                var pointerHandler = character.GetComponent<CharacterPointerHandler>();
-                if (pointerHandler != null)
-                {
-                    // For selected character, only allow cancel interaction
-                    if (character.name.Contains(currentlySelectedCharacterId))
-                    {
-                        pointerHandler.SetInteractable(allowCancel, allowHover: false);
-                    }
-                    else
-                    {
-                        pointerHandler.SetInteractable(interactable, allowHover: interactable);
-                    }
-                }
-            }
-        }
-
-        private void CleanupSelectionListeners()
-        {
-            GameEvents.OnCharacterConfirmed.RemoveListener(HandleCharacterConfirmed);
-            GameEvents.OnCharacterSelectionCancelled.RemoveListener(HandleSelectionCancelled);
-        }
-
-        private void ResetSelectionState()
-        {
+            currentlySelectedCharacterId = null;
+            cameraFocused = false;
             isTransitioning = false;
-            CleanupSelectionListeners();
+        }
+
+
+        /// <summary>
+        /// The "Confirm" button was pressed => finalize selection.
+        /// </summary>
+        private async void HandleCharacterConfirmed()
+        {
+            if (string.IsNullOrEmpty(currentlySelectedCharacterId)) return;
+
+            // Mark selection in profile if needed
+            var profile = profileManager?.ActiveProfile;
+            if (profile != null)
+            {
+                // For example: "profile.LastSelectedCharacterId = currentlySelectedCharacterId;"
+                await profileManager.UpdateProfileAsync(profile);
+            }
+
+            // Hide UI, go to next state
+            uiManager.ShowConfirmationPanel(false);
             uiManager.HideAllPanels();
+
+            // Switch game state to level select
+            GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
         }
 
+        #endregion
+
+        #region External Helpers
 
         /// <summary>
-        /// Handles requests to view character details
+        /// For external checks: is a character ID currently selected?
         /// </summary>
-        /// <param name="characterId">ID of the character whose details were requested</param>
-        private void HandleCharacterDetails(string characterId)
-        {
-            if (isTransitioning || !IsCharacterUnlocked(characterId)) return;
-            currentlyHoveredCharacterId = characterId;
-            uiManager.ShowDetails(characterId);
-        }
-
-
-        private void LoadCharacterProgressionData(ProfileData profile)
-        {
-            if (profile == null) return;
-
-            foreach (var characterProgress in profile.CharacterProgress)
-            {
-                string characterId = characterProgress.Key;
-                var progressData = characterProgress.Value;
-                uiManager.UpdateCharacterProgress(characterId, progressData);
-            }
-        }
-
-        private Coroutine spotlightFollowCoroutine;
-
-        private void RotateSpotlightToIndex(int index)
-        {
-            // Basic checks
-            if (index < 0 || index >= characterPositions.Length || isTransitioning) return;
-
-            // Mark we’re transitioning only while we pick new index
-            isTransitioning = true;
-            currentSpotlightIndex = index;
-
-            // Update the character states or UI
-            UpdateCharacterStates(index);
-
-            // Get the character data and GameObject
-            CharacterData charData = availableCharacters[index];
-            if (!spawnedCharacters.TryGetValue(charData.characterId, out GameObject characterObj))
-            {
-                Debug.LogError($"[CharacterSelectionManager] Character not found at index {index} ({charData.characterId})");
-                isTransitioning = false;
-                return;
-            }
-
-            // Stop any old tracking so we only have one coroutine running
-            if (spotlightFollowCoroutine != null)
-            {
-                StopCoroutine(spotlightFollowCoroutine);
-            }
-
-            // Start a new coroutine that smoothly follows the character
-            spotlightFollowCoroutine = StartCoroutine(SmoothlyTrackCharacter(characterObj.transform));
-            isTransitioning = false;
-        }
-
-        /// <summary>
-        /// Continuously rotates the spotlight to face the given transform,
-        /// using a smooth Slerp so it doesn't snap suddenly.
-        /// </summary>
-        private IEnumerator SmoothlyTrackCharacter(Transform targetCharacterRoot)
-        {
-            // Early exit if we don't have a target
-            if (!targetCharacterRoot)
-            {
-                Debug.LogError("[CharacterSelectionManager] SmoothlyTrackCharacter called with null target.");
-                yield break;
-            }
-
-            // Find the Hips bone (the Transform we want to track)
-            Transform hipsBone = FindHipsBone(targetCharacterRoot);
-
-            // If Hips bone is not found, log an error and exit the coroutine
-            if (!hipsBone)
-            {
-                Debug.LogError($"[CharacterSelectionManager] Hips bone not found on {targetCharacterRoot.name} or its children.");
-                yield break;
-            }
-
-            // Track the Hips bone's position
-            while (true)
-            {
-                // Calculate look-at point (with vertical offset)
-                Vector3 lookAtPoint = hipsBone.position + Vector3.up * spotlightVerticalOffset;
-
-                // Calculate the desired rotation for the spotlight
-                Quaternion targetRotation = Quaternion.LookRotation(lookAtPoint - spotLight.transform.position);
-
-                // Smoothly rotate the spotlight towards the target
-                spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * spotlightRotationSpeed);
-
-                yield return null; // Wait for the next frame
-            }
-        }
-
-        // Helper function to find the Hips bone
-        private Transform FindHipsBone(Transform characterRoot)
-        {
-            // Check if the current transform is the Hips bone
-            if (characterRoot.name.EndsWith(":Hips"))
-            {
-                return characterRoot;
-            }
-
-            // Recursively search in children
-            foreach (Transform child in characterRoot)
-            {
-                Transform hips = FindHipsBone(child);
-                if (hips != null)
-                {
-                    return hips;
-                }
-            }
-
-            return null; // Hips bone not found
-        }
-
-
-
-        private void UpdateCharacterStates(int focusedIndex)
-        {
-            for (int i = 0; i < availableCharacters.Length; i++)
-            {
-                var characterData = availableCharacters[i];
-                var characterId = characterData.characterId;
-
-                if (!IsCharacterUnlocked(characterId))
-                {
-                    SetCharacterState(characterId, CharacterDisplayState.Locked);
-                    continue;
-                }
-
-                if (i == focusedIndex)
-                {
-                    SetCharacterState(characterId, CharacterDisplayState.Hover);
-                }
-                // If this is the character that was right‑clicked for details,
-                // keep it on Hover instead of forcing Idle.
-                else if (characterId == currentlyHoveredCharacterId)
-                {
-                    // Do nothing, or explicitly set Hover again
-                    SetCharacterState(characterId, CharacterDisplayState.Hover);
-                }
-                else
-                {
-                    SetCharacterState(characterId, CharacterDisplayState.Idle);
-                }
-            }
-
-            if (!string.IsNullOrEmpty(currentlyHoveredCharacterId))
-            {
-                var characterData = Array.Find(availableCharacters, c => c.characterId == currentlyHoveredCharacterId);
-                if (characterData != null)
-                {
-                    uiManager.ShowCharacterPreview(characterData);
-                    uiManager.UpdatePanelPositions(characterPositions[focusedIndex]);
-                }
-            }
-        }
-
-        private void SetCharacterState(string characterId, CharacterDisplayState newState)
-        {
-            if (!spawnedCharacters.ContainsKey(characterId)) return;
-
-            characterStates[characterId] = newState;
-            displayManager.UpdateCharacterState(spawnedCharacters[characterId], newState);
-        }
-
-
-
-        private async Task ResetCameraPosition()
-        {
-            if (cameraManager == null)
-            {
-                Debug.LogError("[CharacterSelectionManager] CameraManager is null");
-                return;
-            }
-
-            await cameraManager.ResetToDefaultPosition(focusTransitionDuration);
-        }
-
         public bool IsCharacterSelected(string characterId)
         {
-            return !string.IsNullOrEmpty(currentlySelectedCharacterId);
+            return (characterId == currentlySelectedCharacterId);
         }
 
+        /// <summary>
+        /// If other scripts need the actual character instance.
+        /// </summary>
         public GameObject GetCharacterGameObject(string characterId)
         {
-            if (spawnedCharacters.TryGetValue(characterId, out GameObject character))
-            {
-                return character;
-            }
-            else
-            {
-                Debug.LogError($"[CharacterSelectionManager] Character with ID '{characterId}' not found in spawnedCharacters.");
-                return null;
-            }
-        }
-        private void CleanupCharacterSelection()
-        {
-            foreach (var character in spawnedCharacters.Values)
-            {
-                if (character != null)
-                {
-                    Destroy(character);
-                }
-            }
-
-            spawnedCharacters.Clear();
-            characterStates.Clear();
-            currentlySelectedCharacterId = null;
-            currentlyHoveredCharacterId = null;
-            isTransitioning = false;
-            uiManager.Cleanup();
+            spawnedCharacters.TryGetValue(characterId, out var result);
+            return result;
         }
 
         #endregion
