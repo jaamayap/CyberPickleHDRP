@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 301d435364f2ca844ba05e6d744a6668, type: 3}
+  m_Name: Character 4
+  m_EditorClassIdentifier: 
+  characterId: c
+  displayName: Character 4
+  description: asdf
+  lore: asdasdff
+  characterPrefab: {fileID: 0}
+  characterIcon: {fileID: 0}
+  lockedMaterial: {fileID: 0}
+  maxHealth: 100
+  healthRegeneration: 1
+  defense: 10
+  power: 10
+  speed: 5
+  magneticField: 1
+  dexterity: 10
+  luck: 1
+  areaOfEffect: 1
+  unlockedByDefault: 0
+  requiredPlayerLevel: 0
+  requiredAchievements: []
+  idleAnimationTrigger: Idle
+  hoverAnimationTrigger: Dance
+  selectAnimationTrigger: Selected
+  lockedAnimationTrigger: Locked
