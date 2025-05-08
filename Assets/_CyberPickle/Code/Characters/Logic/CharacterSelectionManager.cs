@@ -41,7 +41,7 @@ namespace CyberPickle.Characters.Logic
         [SerializeField] private float lookOffset = 2f;
         [SerializeField] private float panelTransitionDuration = 0.8f; // add to the top
         [SerializeField] private float defaultFieldOfView = 60f; // fallback FOV
-        
+
         // Core references
         private ProfileManager profileManager;
         private CameraManager cameraManager;
@@ -262,16 +262,48 @@ namespace CyberPickle.Characters.Logic
             uiManager.UpdatePanelPositions(characterGO.transform);
         }
 
-        private IEnumerator SmoothlyTrackCharacter(Transform target)
+        private IEnumerator SmoothlyTrackCharacter(Transform characterRootTransform) // Parameter is the root transform of the character
         {
-            while (true)
+            if (characterRootTransform == null)
             {
-                Vector3 targetPos = target.position + Vector3.up * 1.5f; // offset above character's feet
-                Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
-                spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 3f);
-                yield return null;
+                Debug.LogError("[CharacterSelectionManager] SmoothlyTrackCharacter: characterRootTransform is null.");
+                yield break;
+            }
+
+            SkinnedMeshRenderer smr = characterRootTransform.GetComponentInChildren<SkinnedMeshRenderer>();
+
+            if (smr == null)
+            {
+                Debug.LogWarning($"[CharacterSelectionManager] No SkinnedMeshRenderer found on '{characterRootTransform.name}' or its children. Spotlight will track the root transform's position. Animation movement might not be followed.");
+                // Fallback to tracking the root transform's position if no SkinnedMeshRenderer is found
+                while (true)
+                {
+                    if (!characterRootTransform.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed
+
+                    Vector3 targetPos = characterRootTransform.position + Vector3.up * 1.5f; // offset above character's feet
+                    Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
+                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f); // Increased Slerp speed slightly
+                    yield return null;
+                }
+            }
+            else
+            {
+                // Track the center of the SkinnedMeshRenderer's bounds
+                while (true)
+                {
+                    if (!smr.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed or SMR becomes inactive
+
+                    Vector3 targetPos = smr.bounds.center; // This gives the world space center of the renderer's bounding box
+                                                           // You might want a slight upward offset from the bounds.center if it's too low
+                                                           // targetPos += Vector3.up * 0.2f; // Example offset, adjust as needed
+
+                    Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
+                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f); // Increased Slerp speed slightly for responsiveness
+                    yield return null;
+                }
             }
         }
+
         /// <summary>
         /// Pointer no longer hovering over a character.
         /// </summary>

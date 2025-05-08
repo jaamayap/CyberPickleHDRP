@@ -56,6 +56,463 @@ namespace CyberPickle.Progression
 
 // --- END FILE ---
 
+// File: Shop/ShopManager.cs
+// Size: 18307 characters
+// ---
+// File: Assets/Code/Shop/ShopManager.cs
+//
+// Purpose: Manages the game's shop system, handling purchase requests,
+// equipment upgrades, and shop interface integration.
+// Integrates with EquipmentManager and CurrencyManager.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Threading.Tasks;
+using CyberPickle.Core.Management;
+using CyberPickle.Core.Interfaces;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Shop.Equipment;
+using CyberPickle.Shop.Equipment.Data;
+using CyberPickle.Shop.Currency;
+using System.Collections.Generic;
+
+namespace CyberPickle.Shop
+{
+    /// <summary>
+    /// Result of a shop transaction
+    /// </summary>
+    public class ShopTransactionResult
+    {
+        /// <summary>
+        /// Whether the transaction was successful
+        /// </summary>
+        public bool Success { get; private set; }
+
+        /// <summary>
+        /// Description of the result
+        /// </summary>
+        public string Message { get; private set; }
+
+        /// <summary>
+        /// The cost of the transaction
+        /// </summary>
+        public float Cost { get; private set; }
+
+        /// <summary>
+        /// The type of currency used
+        /// </summary>
+        public CurrencyType CurrencyType { get; private set; }
+
+        /// <summary>
+        /// The equipment that was purchased/upgraded
+        /// </summary>
+        public EquipmentData Equipment { get; private set; }
+
+        private ShopTransactionResult(bool success, string message, float cost = 0, CurrencyType currencyType = CurrencyType.NeuralCredits, EquipmentData equipment = null)
+        {
+            Success = success;
+            Message = message;
+            Cost = cost;
+            CurrencyType = currencyType;
+            Equipment = equipment;
+        }
+
+        /// <summary>
+        /// Create a successful transaction result
+        /// </summary>
+        public static ShopTransactionResult Succeeded(string message, float cost, CurrencyType currencyType, EquipmentData equipment = null)
+        {
+            return new ShopTransactionResult(true, message, cost, currencyType, equipment);
+        }
+
+        /// <summary>
+        /// Create a failed transaction result
+        /// </summary>
+        public static ShopTransactionResult Failed(string message)
+        {
+            return new ShopTransactionResult(false, message);
+        }
+    }
+
+    /// <summary>
+    /// Type of shop transaction
+    /// </summary>
+    public enum ShopTransactionType
+    {
+        Purchase,
+        Upgrade,
+        Unlock
+    }
+
+    /// <summary>
+    /// Manager class for the shop system
+    /// </summary>
+    public class ShopManager : Manager<ShopManager>, IInitializable
+    {
+        [Header("Shop Settings")]
+        [SerializeField] private float upgradeBaseCostMultiplier = 0.5f;
+        [SerializeField] private float upgradeLevelCostMultiplier = 1.5f;
+
+        // Events
+        public event Action<EquipmentData, ShopTransactionType> OnPurchaseCompleted;
+        public event Action<EquipmentData, ShopTransactionType, string> OnPurchaseFailed;
+
+        // Dependencies
+        private EquipmentManager equipmentManager;
+        private CurrencyManager currencyManager;
+        private ProfileManager profileManager;
+
+        // Initialization flag
+        private bool isInitialized = false;
+
+        /// <summary>
+        /// Initialize the Shop Manager
+        /// </summary>
+        public void Initialize()
+        {
+            if (isInitialized) return;
+
+            Debug.Log("[ShopManager] Initializing...");
+
+            // Get dependencies
+            equipmentManager = EquipmentManager.Instance;
+            currencyManager = CurrencyManager.Instance;
+            profileManager = ProfileManager.Instance;
+
+            if (equipmentManager == null)
+            {
+                Debug.LogError("[ShopManager] EquipmentManager not found!");
+                return;
+            }
+
+            if (currencyManager == null)
+            {
+                Debug.LogError("[ShopManager] CurrencyManager not found!");
+                return;
+            }
+
+            if (profileManager == null)
+            {
+                Debug.LogError("[ShopManager] ProfileManager not found!");
+                return;
+            }
+
+            isInitialized = true;
+            Debug.Log("[ShopManager] Initialized successfully");
+        }
+
+        #region Purchase Methods
+
+        /// <summary>
+        /// Purchase a new equipment item
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to purchase</param>
+        /// <param name="currencyType">Type of currency to use</param>
+        /// <returns>Result of the transaction</returns>
+        public async Task<ShopTransactionResult> PurchaseEquipment(string equipmentId, CurrencyType currencyType)
+        {
+            if (!isInitialized)
+                return ShopTransactionResult.Failed("Shop manager not initialized");
+
+            // Get equipment data
+            var equipment = equipmentManager.GetEquipmentById(equipmentId);
+            if (equipment == null)
+                return ShopTransactionResult.Failed($"Equipment with ID {equipmentId} not found");
+
+            // Check if already unlocked
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return ShopTransactionResult.Failed("No active profile");
+
+            if (profile.IsEquipmentUnlocked(equipmentId))
+                return ShopTransactionResult.Failed($"{equipment.displayName} is already unlocked");
+
+            // Calculate cost based on currency type
+            float cost = currencyType == CurrencyType.NeuralCredits ? equipment.neuralCreditCost : equipment.cyberCoinCost;
+            if (cost <= 0)
+                return ShopTransactionResult.Failed($"{equipment.displayName} cannot be purchased with {currencyType}");
+
+            // Check if player has enough currency
+            if (!currencyManager.HasSufficientFunds(cost, currencyType))
+            {
+                string message = $"Insufficient {currencyType} for {equipment.displayName}. Required: {cost}, Available: {(currencyType == CurrencyType.NeuralCredits ? currencyManager.NeuralCredits : currencyManager.CyberCoins)}";
+                OnPurchaseFailed?.Invoke(equipment, ShopTransactionType.Purchase, message);
+                return ShopTransactionResult.Failed(message);
+            }
+
+            // Spend currency
+            bool spentSuccess = await currencyManager.SpendCurrency(cost, currencyType);
+            if (!spentSuccess)
+                return ShopTransactionResult.Failed($"Failed to spend {currencyType} for {equipment.displayName}");
+
+            // Unlock equipment
+            bool unlockSuccess = equipmentManager.UnlockEquipment(equipmentId);
+            if (!unlockSuccess)
+            {
+                // Refund currency if unlock fails
+                await currencyManager.AddCurrency(cost, currencyType);
+                return ShopTransactionResult.Failed($"Failed to unlock {equipment.displayName}");
+            }
+
+            // Notify purchase completed
+            OnPurchaseCompleted?.Invoke(equipment, ShopTransactionType.Purchase);
+
+            return ShopTransactionResult.Succeeded(
+                $"Successfully purchased {equipment.displayName}",
+                cost,
+                currencyType,
+                equipment
+            );
+        }
+
+        /// <summary>
+        /// Unlocks equipment without spending currency (for rewards, achievements, etc.)
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to unlock</param>
+        /// <returns>Result of the transaction</returns>
+        public async Task<ShopTransactionResult> UnlockEquipmentFree(string equipmentId)
+        {
+            if (!isInitialized)
+                return ShopTransactionResult.Failed("Shop manager not initialized");
+
+            // Get equipment data
+            var equipment = equipmentManager.GetEquipmentById(equipmentId);
+            if (equipment == null)
+                return ShopTransactionResult.Failed($"Equipment with ID {equipmentId} not found");
+
+            // Check if already unlocked
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return ShopTransactionResult.Failed("No active profile");
+
+            if (profile.IsEquipmentUnlocked(equipmentId))
+                return ShopTransactionResult.Failed($"{equipment.displayName} is already unlocked");
+
+            // Unlock equipment
+            bool unlockSuccess = equipmentManager.UnlockEquipment(equipmentId);
+            if (!unlockSuccess)
+                return ShopTransactionResult.Failed($"Failed to unlock {equipment.displayName}");
+
+            // Notify purchase completed (as an unlock)
+            OnPurchaseCompleted?.Invoke(equipment, ShopTransactionType.Unlock);
+
+            return ShopTransactionResult.Succeeded(
+                $"Successfully unlocked {equipment.displayName}",
+                0,
+                CurrencyType.NeuralCredits,
+                equipment
+            );
+        }
+
+        /// <summary>
+        /// Calculates the cost to upgrade a piece of equipment
+        /// </summary>
+        /// <param name="equipment">The equipment to upgrade</param>
+        /// <param name="currentLevel">Current level of the equipment</param>
+        /// <param name="targetLevel">Target level to upgrade to</param>
+        /// <returns>The cost in Neural Credits</returns>
+        public int CalculateUpgradeCost(EquipmentData equipment, int currentLevel, int targetLevel)
+        {
+            if (equipment == null || currentLevel >= targetLevel || currentLevel < 1 || targetLevel > equipment.maxUpgradeLevel)
+                return 0;
+
+            return equipment.GetUpgradeCost(currentLevel, targetLevel);
+        }
+
+        /// <summary>
+        /// Upgrade an equipment item to a higher level
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to upgrade</param>
+        /// <param name="targetLevel">Target level to upgrade to</param>
+        /// <returns>Result of the transaction</returns>
+        /// <summary>
+        /// Upgrade an equipment item to a higher level
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to upgrade</param>
+        /// <param name="targetLevel">Target level to upgrade to</param>
+        /// <returns>Result of the transaction</returns>
+        public async Task<ShopTransactionResult> UpgradeEquipment(string equipmentId, int targetLevel)
+        {
+            if (!isInitialized)
+                return ShopTransactionResult.Failed("Shop manager not initialized");
+
+            // Get equipment data
+            var equipment = equipmentManager.GetEquipmentById(equipmentId);
+            if (equipment == null)
+                return ShopTransactionResult.Failed($"Equipment with ID {equipmentId} not found");
+
+            // Check if equipment is unlocked
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return ShopTransactionResult.Failed("No active profile");
+
+            if (!profile.IsEquipmentUnlocked(equipmentId) && !equipment.unlockedByDefault)
+                return ShopTransactionResult.Failed($"{equipment.displayName} is not unlocked yet");
+
+            // Get current equipment level
+            int currentLevel = profile.GetEquipmentLevel(equipmentId);
+
+            // If no progression data exists yet, create it (level 1)
+            if (currentLevel == 0)
+            {
+                profile.GetOrCreateEquipmentProgression(equipmentId);
+                currentLevel = 1;
+            }
+
+            // Validate target level
+            if (targetLevel <= currentLevel)
+                return ShopTransactionResult.Failed($"{equipment.displayName} is already at level {currentLevel}");
+
+            if (targetLevel > equipment.maxUpgradeLevel)
+                return ShopTransactionResult.Failed($"Cannot upgrade {equipment.displayName} beyond level {equipment.maxUpgradeLevel}");
+
+            // Calculate upgrade cost
+            int cost = CalculateUpgradeCost(equipment, currentLevel, targetLevel);
+            if (cost <= 0)
+                return ShopTransactionResult.Failed($"Invalid upgrade cost for {equipment.displayName}");
+
+            // Check if player has enough currency (always Neural Credits for upgrades)
+            if (!currencyManager.HasSufficientFunds(cost, CurrencyType.NeuralCredits))
+            {
+                string message = $"Insufficient Neural Credits for upgrading {equipment.displayName}. Required: {cost}, Available: {currencyManager.NeuralCredits}";
+                OnPurchaseFailed?.Invoke(equipment, ShopTransactionType.Upgrade, message);
+                return ShopTransactionResult.Failed(message);
+            }
+
+            // Spend currency
+            bool spentSuccess = await currencyManager.SpendCurrency(cost, CurrencyType.NeuralCredits);
+            if (!spentSuccess)
+                return ShopTransactionResult.Failed($"Failed to spend Neural Credits for {equipment.displayName} upgrade");
+
+            // Update equipment level in profile data
+            bool upgradeSuccess = profile.UpgradeEquipment(equipmentId, targetLevel);
+            if (!upgradeSuccess)
+            {
+                // Refund currency if upgrade fails
+                await currencyManager.AddCurrency(cost, CurrencyType.NeuralCredits);
+                return ShopTransactionResult.Failed($"Failed to upgrade {equipment.displayName}");
+            }
+
+            // Update the profile
+            var updateResult = await profileManager.UpdateProfileAsync(profile);
+            if (!updateResult.Success)
+            {
+                // Refund currency if profile update fails
+                await currencyManager.AddCurrency(cost, CurrencyType.NeuralCredits);
+                return ShopTransactionResult.Failed($"Failed to save {equipment.displayName} upgrade: {updateResult.Message}");
+            }
+
+            // Notify purchase completed
+            OnPurchaseCompleted?.Invoke(equipment, ShopTransactionType.Upgrade);
+
+            return ShopTransactionResult.Succeeded(
+                $"Successfully upgraded {equipment.displayName} to level {targetLevel}",
+                cost,
+                CurrencyType.NeuralCredits,
+                equipment
+            );
+        }
+
+
+        #endregion
+
+        #region Shop Query Methods
+
+        /// <summary>
+        /// Gets all equipment available for purchase (not yet unlocked)
+        /// </summary>
+        /// <returns>List of available equipment</returns>
+        public Dictionary<EquipmentSlotType, List<EquipmentData>> GetAvailableEquipment()
+        {
+            Dictionary<EquipmentSlotType, List<EquipmentData>> result = new Dictionary<EquipmentSlotType, List<EquipmentData>>();
+
+            // Initialize all slot types with empty lists
+            foreach (EquipmentSlotType slotType in Enum.GetValues(typeof(EquipmentSlotType)))
+            {
+                result[slotType] = new List<EquipmentData>();
+            }
+
+            if (!isInitialized || profileManager.ActiveProfile == null)
+                return result;
+
+            var profile = profileManager.ActiveProfile;
+
+            // Get all equipment by slot type
+            foreach (EquipmentSlotType slotType in Enum.GetValues(typeof(EquipmentSlotType)))
+            {
+                // Get all equipment of this type
+                var equipmentList = equipmentManager.GetEquipmentBySlotType(slotType);
+
+                // Filter out already unlocked equipment
+                foreach (var equipment in equipmentList)
+                {
+                    if (!profile.IsEquipmentUnlocked(equipment.equipmentId) && !equipment.unlockedByDefault)
+                    {
+                        // Check if player meets level requirement
+                        if (profile.Level >= equipment.requiredPlayerLevel)
+                        {
+                            result[slotType].Add(equipment);
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Gets all equipment that can be upgraded
+        /// </summary>
+        /// <returns>List of upgradeable equipment</returns>
+        /// <summary>
+        /// Gets all equipment that can be upgraded
+        /// </summary>
+        /// <returns>List of upgradeable equipment</returns>
+        public List<EquipmentData> GetUpgradeableEquipment()
+        {
+            List<EquipmentData> result = new List<EquipmentData>();
+
+            if (!isInitialized || profileManager.ActiveProfile == null)
+                return result;
+
+            var profile = profileManager.ActiveProfile;
+
+            // Get all unlocked equipment
+            var unlockedEquipment = equipmentManager.GetUnlockedEquipment();
+
+            foreach (var equipment in unlockedEquipment)
+            {
+                // Check current equipment level from profile data
+                int currentLevel = profile.GetEquipmentLevel(equipment.equipmentId);
+
+                // If level is 0, it means no progression data exists yet, so it's level 1
+                if (currentLevel == 0)
+                    currentLevel = 1;
+
+                // Can upgrade if current level is less than max level
+                if (currentLevel < equipment.maxUpgradeLevel)
+                {
+                    result.Add(equipment);
+                }
+            }
+
+            return result;
+        }
+
+        #endregion
+
+        protected override void OnManagerDestroyed()
+        {
+            base.OnManagerDestroyed();
+        }
+    }
+}
+// --- END FILE ---
+
 // File: Characters/Data/CharacterData.cs
 // Size: 5601 characters
 // ---
@@ -690,7 +1147,7 @@ namespace CyberPickle.Characters.Logic
 // --- END FILE ---
 
 // File: Characters/Logic/CharacterSelectionManager.cs
-// Size: 18932 characters
+// Size: 21019 characters
 // ---
 using UnityEngine;
 using System;
@@ -735,7 +1192,7 @@ namespace CyberPickle.Characters.Logic
         [SerializeField] private float lookOffset = 2f;
         [SerializeField] private float panelTransitionDuration = 0.8f; // add to the top
         [SerializeField] private float defaultFieldOfView = 60f; // fallback FOV
-        
+
         // Core references
         private ProfileManager profileManager;
         private CameraManager cameraManager;
@@ -956,16 +1413,48 @@ namespace CyberPickle.Characters.Logic
             uiManager.UpdatePanelPositions(characterGO.transform);
         }
 
-        private IEnumerator SmoothlyTrackCharacter(Transform target)
+        private IEnumerator SmoothlyTrackCharacter(Transform characterRootTransform) // Parameter is the root transform of the character
         {
-            while (true)
+            if (characterRootTransform == null)
             {
-                Vector3 targetPos = target.position + Vector3.up * 1.5f; // offset above character's feet
-                Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
-                spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 3f);
-                yield return null;
+                Debug.LogError("[CharacterSelectionManager] SmoothlyTrackCharacter: characterRootTransform is null.");
+                yield break;
+            }
+
+            SkinnedMeshRenderer smr = characterRootTransform.GetComponentInChildren<SkinnedMeshRenderer>();
+
+            if (smr == null)
+            {
+                Debug.LogWarning($"[CharacterSelectionManager] No SkinnedMeshRenderer found on '{characterRootTransform.name}' or its children. Spotlight will track the root transform's position. Animation movement might not be followed.");
+                // Fallback to tracking the root transform's position if no SkinnedMeshRenderer is found
+                while (true)
+                {
+                    if (!characterRootTransform.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed
+
+                    Vector3 targetPos = characterRootTransform.position + Vector3.up * 1.5f; // offset above character's feet
+                    Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
+                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f); // Increased Slerp speed slightly
+                    yield return null;
+                }
+            }
+            else
+            {
+                // Track the center of the SkinnedMeshRenderer's bounds
+                while (true)
+                {
+                    if (!smr.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed or SMR becomes inactive
+
+                    Vector3 targetPos = smr.bounds.center; // This gives the world space center of the renderer's bounding box
+                                                           // You might want a slight upward offset from the bounds.center if it's too low
+                                                           // targetPos += Vector3.up * 0.2f; // Example offset, adjust as needed
+
+                    Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
+                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f); // Increased Slerp speed slightly for responsiveness
+                    yield return null;
+                }
             }
         }
+
         /// <summary>
         /// Pointer no longer hovering over a character.
         /// </summary>
@@ -3692,6 +4181,1415 @@ namespace CyberPickle.Core.VFX
 
 // --- END FILE ---
 
+// File: Shop/Currency/CurrencyData.cs
+// Size: 5161 characters
+// ---
+// File: Shop/Currency/CurrencyData.cs
+//
+// Purpose: Defines the currency data structure for the game's economy system.
+// Manages Neural Credits and CyberCoins, the two main currencies in Cyber Pickle.
+//
+// Created: 2024-02-24
+// Updated: 2024-02-24
+
+using Newtonsoft.Json;
+using System;
+using UnityEngine;
+
+namespace CyberPickle.Shop.Currency
+{
+    /// <summary>
+    /// Manages the player's currency data for both Neural Credits and CyberCoins
+    /// </summary>
+    [Serializable]
+    public class CurrencyData
+    {
+        [JsonProperty("neuralCredits")]
+        private float neuralCredits;
+
+        [JsonProperty("cyberCoins")]
+        private float cyberCoins;
+
+        [JsonIgnore] public float NeuralCredits => neuralCredits;
+        [JsonIgnore] public float CyberCoins => cyberCoins;
+
+        /// <summary>
+        /// Creates a new CurrencyData instance with zero balance
+        /// </summary>
+        public CurrencyData()
+        {
+            neuralCredits = 0f;
+            cyberCoins = 0f;
+        }
+
+        /// <summary>
+        /// Creates a new CurrencyData instance with specified initial values
+        /// </summary>
+        /// <param name="initialNeuralCredits">Initial Neural Credits amount</param>
+        /// <param name="initialCyberCoins">Initial CyberCoins amount</param>
+        public CurrencyData(float initialNeuralCredits, float initialCyberCoins)
+        {
+            neuralCredits = Mathf.Max(0, initialNeuralCredits);
+            cyberCoins = Mathf.Max(0, initialCyberCoins);
+        }
+
+        /// <summary>
+        /// Adds Neural Credits to the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to add (must be positive)</param>
+        public void AddNeuralCredits(float amount)
+        {
+            if (amount > 0)
+            {
+                neuralCredits += amount;
+                Debug.Log($"[CurrencyData] Added {amount} Neural Credits. New balance: {neuralCredits}");
+            }
+        }
+
+        /// <summary>
+        /// Adds CyberCoins to the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to add (must be positive)</param>
+        public void AddCyberCoins(float amount)
+        {
+            if (amount > 0)
+            {
+                cyberCoins += amount;
+                Debug.Log($"[CurrencyData] Added {amount} CyberCoins. New balance: {cyberCoins}");
+            }
+        }
+
+        /// <summary>
+        /// Attempts to spend Neural Credits from the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to spend</param>
+        /// <returns>True if sufficient funds were available and spent, false otherwise</returns>
+        public bool SpendNeuralCredits(float amount)
+        {
+            if (amount <= 0)
+            {
+                Debug.LogWarning("[CurrencyData] Attempted to spend non-positive amount of Neural Credits");
+                return false;
+            }
+
+            if (neuralCredits >= amount)
+            {
+                neuralCredits -= amount;
+                Debug.Log($"[CurrencyData] Spent {amount} Neural Credits. Remaining balance: {neuralCredits}");
+                return true;
+            }
+
+            Debug.Log($"[CurrencyData] Insufficient Neural Credits. Required: {amount}, Available: {neuralCredits}");
+            return false;
+        }
+
+        /// <summary>
+        /// Attempts to spend CyberCoins from the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to spend</param>
+        /// <returns>True if sufficient funds were available and spent, false otherwise</returns>
+        public bool SpendCyberCoins(float amount)
+        {
+            if (amount <= 0)
+            {
+                Debug.LogWarning("[CurrencyData] Attempted to spend non-positive amount of CyberCoins");
+                return false;
+            }
+
+            if (cyberCoins >= amount)
+            {
+                cyberCoins -= amount;
+                Debug.Log($"[CurrencyData] Spent {amount} CyberCoins. Remaining balance: {cyberCoins}");
+                return true;
+            }
+
+            Debug.Log($"[CurrencyData] Insufficient CyberCoins. Required: {amount}, Available: {cyberCoins}");
+            return false;
+        }
+
+        /// <summary>
+        /// Sets exact Neural Credits amount (for debugging or admin purposes)
+        /// </summary>
+        /// <param name="amount">Amount to set</param>
+        internal void SetNeuralCredits(float amount)
+        {
+            neuralCredits = Mathf.Max(0, amount);
+            Debug.Log($"[CurrencyData] Neural Credits set to {neuralCredits}");
+        }
+
+        /// <summary>
+        /// Sets exact CyberCoins amount (for debugging or admin purposes)
+        /// </summary>
+        /// <param name="amount">Amount to set</param>
+        internal void SetCyberCoins(float amount)
+        {
+            cyberCoins = Mathf.Max(0, amount);
+            Debug.Log($"[CurrencyData] CyberCoins set to {cyberCoins}");
+        }
+    }
+}
+
+// --- END FILE ---
+
+// File: Shop/Currency/CurrencyManager.cs
+// Size: 11256 characters
+// ---
+// File: Assets/Code/Shop/Currency/CurrencyManager.cs
+//
+// Purpose: Manages the game's currency system including Neural Credits and CyberCoins.
+// Handles currency transactions, persistence, and provides events for UI updates.
+// Works with the profile system to persist currency data.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Threading.Tasks;
+using CyberPickle.Core.Management;
+using CyberPickle.Core.Interfaces;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Core.Events;
+
+namespace CyberPickle.Shop.Currency
+{
+    /// <summary>
+    /// Manages the game's currency system including earning, spending, and displaying currencies
+    /// </summary>
+    public class CurrencyManager : Manager<CurrencyManager>, IInitializable
+    {
+        [Header("Currency Settings")]
+        [SerializeField] private float neuralCreditStartAmount = 500f;
+        [SerializeField] private float cyberCoinStartAmount = 50f;
+
+        // Events
+        public event Action<CurrencyType, float, float> OnCurrencyChanged;  // Type, OldAmount, NewAmount
+        public event Action<CurrencyType, float> OnCurrencyAdded;           // Type, Amount
+        public event Action<CurrencyType, float> OnCurrencySpent;           // Type, Amount
+        public event Action<CurrencyType> OnInsufficientFunds;              // Type
+
+        // Dependencies
+        private ProfileManager profileManager;
+
+        // Runtime cache
+        private float cachedNeuralCredits;
+        private float cachedCyberCoins;
+        private bool isInitialized = false;
+
+        /// <summary>
+        /// Get the current amount of Neural Credits
+        /// </summary>
+        public float NeuralCredits => cachedNeuralCredits;
+
+        /// <summary>
+        /// Get the current amount of CyberCoins
+        /// </summary>
+        public float CyberCoins => cachedCyberCoins;
+
+        /// <summary>
+        /// Initialize the Currency Manager
+        /// </summary>
+        public void Initialize()
+        {
+            if (isInitialized) return;
+
+            Debug.Log("[CurrencyManager] Initializing...");
+
+            // Get profile manager reference
+            profileManager = ProfileManager.Instance;
+            if (profileManager == null)
+            {
+                Debug.LogError("[CurrencyManager] ProfileManager not found!");
+                return;
+            }
+
+            // Subscribe to profile events
+            profileManager.SubscribeToProfileSwitched(OnProfileSwitched);
+            profileManager.SubscribeToNewProfileCreated(OnNewProfileCreated);
+
+            // Initialize cache from current profile
+            RefreshCurrencyCache();
+
+            isInitialized = true;
+            Debug.Log("[CurrencyManager] Initialized successfully");
+        }
+
+        /// <summary>
+        /// Refresh the currency cache from the current profile
+        /// </summary>
+        private void RefreshCurrencyCache()
+        {
+            var profile = profileManager.ActiveProfile;
+            if (profile != null)
+            {
+                cachedNeuralCredits = profile.NeuralCredits;
+                cachedCyberCoins = profile.CyberCoins;
+                Debug.Log($"[CurrencyManager] Refreshed currency cache: NC: {cachedNeuralCredits}, CC: {cachedCyberCoins}");
+            }
+            else
+            {
+                cachedNeuralCredits = 0;
+                cachedCyberCoins = 0;
+                Debug.LogWarning("[CurrencyManager] No active profile found during cache refresh");
+            }
+        }
+
+        /// <summary>
+        /// Event handler for when a profile is switched
+        /// </summary>
+        private void OnProfileSwitched(string profileId)
+        {
+            Debug.Log($"[CurrencyManager] Profile switched to {profileId}, refreshing currency");
+            RefreshCurrencyCache();
+        }
+
+        /// <summary>
+        /// Event handler for when a new profile is created
+        /// </summary>
+        private void OnNewProfileCreated(string profileId)
+        {
+            Debug.Log($"[CurrencyManager] New profile created: {profileId}, initializing starting currency");
+            SetupInitialCurrency(profileId);
+        }
+
+        /// <summary>
+        /// Sets up the initial currency for a new profile
+        /// </summary>
+        private async void SetupInitialCurrency(string profileId)
+        {
+            var profile = profileManager.GetProfile(profileId);
+            if (profile == null) return;
+
+            // Add starting currency
+            profile.AddCurrency(neuralCreditStartAmount, CurrencyType.NeuralCredits);
+            profile.AddCurrency(cyberCoinStartAmount, CurrencyType.CyberCoins);
+
+            // Update profile
+            await profileManager.UpdateProfileAsync(profile);
+
+            // Refresh cache if this is the active profile
+            if (profileManager.ActiveProfile?.ProfileId == profileId)
+            {
+                RefreshCurrencyCache();
+            }
+
+            Debug.Log($"[CurrencyManager] Initial currency setup for profile {profileId}: NC: {neuralCreditStartAmount}, CC: {cyberCoinStartAmount}");
+        }
+
+        #region Currency Operations
+
+        /// <summary>
+        /// Add currency to the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to add (must be positive)</param>
+        /// <param name="type">Type of currency to add</param>
+        /// <returns>True if currency was added successfully, false otherwise</returns>
+        public async Task<bool> AddCurrency(float amount, CurrencyType type)
+        {
+            if (!isInitialized || amount <= 0)
+                return false;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+            {
+                Debug.LogError("[CurrencyManager] No active profile!");
+                return false;
+            }
+
+            // Cache old values for event
+            float oldAmount = type == CurrencyType.NeuralCredits ? cachedNeuralCredits : cachedCyberCoins;
+
+            // Add currency to profile
+            bool success = profile.AddCurrency(amount, type);
+            if (!success)
+            {
+                Debug.LogError($"[CurrencyManager] Failed to add {amount} {type} currency");
+                return false;
+            }
+
+            // Update profile
+            var result = await profileManager.UpdateProfileAsync(profile);
+            if (!result.Success)
+            {
+                Debug.LogError($"[CurrencyManager] Failed to update profile: {result.Message}");
+                return false;
+            }
+
+            // Update cache
+            if (type == CurrencyType.NeuralCredits)
+                cachedNeuralCredits += amount;
+            else
+                cachedCyberCoins += amount;
+
+            // Fire events
+            float newAmount = type == CurrencyType.NeuralCredits ? cachedNeuralCredits : cachedCyberCoins;
+            OnCurrencyAdded?.Invoke(type, amount);
+            OnCurrencyChanged?.Invoke(type, oldAmount, newAmount);
+
+            GameEvents.OnCurrencyChanged?.Invoke((int)newAmount);
+
+            Debug.Log($"[CurrencyManager] Added {amount} {type}. New balance: {newAmount}");
+            return true;
+        }
+
+        /// <summary>
+        /// Spend currency from the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to spend (must be positive)</param>
+        /// <param name="type">Type of currency to spend</param>
+        /// <returns>True if sufficient funds were available and spent, false otherwise</returns>
+        public async Task<bool> SpendCurrency(float amount, CurrencyType type)
+        {
+            if (!isInitialized || amount <= 0)
+                return false;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+            {
+                Debug.LogError("[CurrencyManager] No active profile!");
+                return false;
+            }
+
+            // Check if player has enough currency
+            float currentAmount = type == CurrencyType.NeuralCredits ? cachedNeuralCredits : cachedCyberCoins;
+            if (currentAmount < amount)
+            {
+                Debug.Log($"[CurrencyManager] Insufficient {type} funds. Required: {amount}, Available: {currentAmount}");
+                OnInsufficientFunds?.Invoke(type);
+                return false;
+            }
+
+            // Cache old value for event
+            float oldAmount = currentAmount;
+
+            // Spend currency
+            bool success = profile.SpendCurrency(amount, type);
+            if (!success)
+            {
+                Debug.LogError($"[CurrencyManager] Failed to spend {amount} {type} currency");
+                OnInsufficientFunds?.Invoke(type);
+                return false;
+            }
+
+            // Update profile
+            var result = await profileManager.UpdateProfileAsync(profile);
+            if (!result.Success)
+            {
+                Debug.LogError($"[CurrencyManager] Failed to update profile: {result.Message}");
+                return false;
+            }
+
+            // Update cache
+            if (type == CurrencyType.NeuralCredits)
+                cachedNeuralCredits -= amount;
+            else
+                cachedCyberCoins -= amount;
+
+            // Fire events
+            float newAmount = type == CurrencyType.NeuralCredits ? cachedNeuralCredits : cachedCyberCoins;
+            OnCurrencySpent?.Invoke(type, amount);
+            OnCurrencyChanged?.Invoke(type, oldAmount, newAmount);
+
+            GameEvents.OnCurrencyChanged?.Invoke((int)newAmount);
+
+            Debug.Log($"[CurrencyManager] Spent {amount} {type}. New balance: {newAmount}");
+            return true;
+        }
+
+        /// <summary>
+        /// Check if the player has enough currency without spending it
+        /// </summary>
+        /// <param name="amount">Amount to check</param>
+        /// <param name="type">Type of currency to check</param>
+        /// <returns>True if player has sufficient funds, false otherwise</returns>
+        public bool HasSufficientFunds(float amount, CurrencyType type)
+        {
+            if (!isInitialized || amount <= 0)
+                return false;
+
+            if (type == CurrencyType.NeuralCredits)
+                return cachedNeuralCredits >= amount;
+            else
+                return cachedCyberCoins >= amount;
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Cleanup when the manager is destroyed
+        /// </summary>
+        protected override void OnManagerDestroyed()
+        {
+            if (profileManager != null)
+            {
+                profileManager.UnsubscribeFromProfileSwitched(OnProfileSwitched);
+                profileManager.UnsubscribeFromNewProfileCreated(OnNewProfileCreated);
+            }
+
+            base.OnManagerDestroyed();
+        }
+    }
+}
+// --- END FILE ---
+
+// File: Shop/Equipment/EquipmentManager.cs
+// Size: 18645 characters
+// ---
+// File: Assets/Code/Shop/Equipment/EquipmentManager.cs
+//
+// Purpose: Manages all equipment data and operations in Cyber Pickle.
+// Handles equipping, unequipping, loading, and equipment state tracking.
+// Works with the profile system to persist equipment data.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using CyberPickle.Core.Management;
+using CyberPickle.Core.Interfaces;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Shop.Equipment.Data;
+using CyberPickle.Core.Events;
+
+namespace CyberPickle.Shop.Equipment
+{
+    /// <summary>
+    /// Manager class for all equipment operations in the game.
+    /// Provides methods for loading, equipping, and managing equipment.
+    /// </summary>
+    public class EquipmentManager : Manager<EquipmentManager>, IInitializable
+    {
+        [Header("Equipment Data")]
+        [SerializeField] private WeaponData[] availableWeapons;
+        [SerializeField] private PowerUpData[] availablePowerUps;
+        [SerializeField] private ArmorData[] availableArmors;
+        [SerializeField] private AmuletData[] availableAmulets;
+
+        [Header("Default Equipment")]
+        [SerializeField] private WeaponData defaultHandWeapon;
+        [SerializeField] private ArmorData defaultArmor;
+
+        // Events
+        public event Action<EquipmentData> OnEquipmentEquipped;
+        public event Action<EquipmentData> OnEquipmentUnequipped;
+        public event Action<EquipmentData> OnEquipmentUnlocked;
+        public event Action<EquipmentData, int> OnEquipmentUpgraded;
+
+        // Dependencies
+        private ProfileManager profileManager;
+
+        // Cached data lookups
+        private Dictionary<string, EquipmentData> equipmentDataLookup = new Dictionary<string, EquipmentData>();
+        private Dictionary<EquipmentSlotType, List<EquipmentData>> equipmentBySlotType = new Dictionary<EquipmentSlotType, List<EquipmentData>>();
+
+        // Initialization flag
+        private bool isInitialized = false;
+
+        /// <summary>
+        /// Initialize the Equipment Manager
+        /// </summary>
+        public void Initialize()
+        {
+            if (isInitialized) return;
+
+            Debug.Log("[EquipmentManager] Initializing...");
+
+            // Get profile manager reference
+            profileManager = ProfileManager.Instance;
+            if (profileManager == null)
+            {
+                Debug.LogError("[EquipmentManager] ProfileManager not found!");
+                return;
+            }
+
+            // Setup data lookups
+            BuildEquipmentLookups();
+
+            // Subscribe to profile events
+            profileManager.SubscribeToProfileSwitched(OnProfileSwitched);
+
+            isInitialized = true;
+            Debug.Log("[EquipmentManager] Initialized successfully");
+        }
+
+        /// <summary>
+        /// Builds the equipment lookup dictionaries for quick access
+        /// </summary>
+        private void BuildEquipmentLookups()
+        {
+            equipmentDataLookup.Clear();
+            equipmentBySlotType.Clear();
+
+            // Initialize slot type lists
+            foreach (EquipmentSlotType slotType in Enum.GetValues(typeof(EquipmentSlotType)))
+            {
+                equipmentBySlotType[slotType] = new List<EquipmentData>();
+            }
+
+            // Add all weapons
+            foreach (var weapon in availableWeapons)
+            {
+                if (weapon == null) continue;
+                AddToLookups(weapon);
+            }
+
+            // Add all power-ups
+            foreach (var powerUp in availablePowerUps)
+            {
+                if (powerUp == null) continue;
+                AddToLookups(powerUp);
+            }
+
+            // Add all armors
+            foreach (var armor in availableArmors)
+            {
+                if (armor == null) continue;
+                AddToLookups(armor);
+            }
+
+            // Add all amulets
+            foreach (var amulet in availableAmulets)
+            {
+                if (amulet == null) continue;
+                AddToLookups(amulet);
+            }
+
+            Debug.Log($"[EquipmentManager] Built equipment lookups with {equipmentDataLookup.Count} items");
+        }
+
+        /// <summary>
+        /// Adds an equipment item to the lookup dictionaries
+        /// </summary>
+        private void AddToLookups(EquipmentData equipment)
+        {
+            if (equipment == null || string.IsNullOrEmpty(equipment.equipmentId)) return;
+
+            // Add to ID lookup
+            equipmentDataLookup[equipment.equipmentId] = equipment;
+
+            // Add to slot type lookup
+            if (equipmentBySlotType.TryGetValue(equipment.slotType, out var slotList))
+            {
+                slotList.Add(equipment);
+            }
+        }
+
+        /// <summary>
+        /// Event handler for when the profile is switched
+        /// </summary>
+        private void OnProfileSwitched(string profileId)
+        {
+            Debug.Log($"[EquipmentManager] Profile switched to {profileId}");
+            // Nothing specific needed here, equipment state is stored in profile
+        }
+
+        #region Equipment Operations
+
+        /// <summary>
+        /// Equips an item for the active character
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to equip</param>
+        /// <returns>True if equipped successfully, false otherwise</returns>
+        public bool EquipItem(string equipmentId)
+        {
+            if (!isInitialized || string.IsNullOrEmpty(equipmentId))
+                return false;
+
+            // Get the equipment data
+            if (!equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+            {
+                Debug.LogError($"[EquipmentManager] Equipment with ID {equipmentId} not found!");
+                return false;
+            }
+
+            // Get active profile
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+            {
+                Debug.LogError("[EquipmentManager] No active profile!");
+                return false;
+            }
+
+            // Check if equipment is unlocked
+            if (!profile.IsEquipmentUnlocked(equipmentId) && !equipmentData.unlockedByDefault)
+            {
+                Debug.LogError($"[EquipmentManager] Equipment {equipmentId} is not unlocked!");
+                return false;
+            }
+
+            // Get active character's progression data
+            string characterId = GetActiveCharacterId();
+            if (string.IsNullOrEmpty(characterId) || !profile.CharacterProgress.TryGetValue(characterId, out var characterData))
+            {
+                Debug.LogError("[EquipmentManager] No active character or character progress not found!");
+                return false;
+            }
+
+            // Equip the item based on type
+            bool success = characterData.EquipItem(equipmentId, equipmentData.slotType);
+            if (success)
+            {
+                Debug.Log($"[EquipmentManager] Successfully equipped {equipmentData.displayName} ({equipmentId})");
+                OnEquipmentEquipped?.Invoke(equipmentData);
+
+                // Update profile data
+                profileManager.UpdateProfileAsync(profile).ContinueWith(_ => {
+                    Debug.Log("[EquipmentManager] Profile updated after equipment change");
+                });
+            }
+            else
+            {
+                Debug.LogError($"[EquipmentManager] Failed to equip {equipmentData.displayName} ({equipmentId})");
+            }
+
+            return success;
+        }
+
+        /// <summary>
+        /// Unequips an item from the active character
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to unequip</param>
+        /// <returns>True if unequipped successfully, false otherwise</returns>
+        /// <summary>
+        /// Unequips an item from the active character
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to unequip</param>
+        /// <returns>True if unequipped successfully, false otherwise</returns>
+        public bool UnequipItem(string equipmentId)
+        {
+            if (!isInitialized || string.IsNullOrEmpty(equipmentId))
+                return false;
+
+            // Get equipment data for event broadcast later
+            if (!equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+            {
+                Debug.LogError($"[EquipmentManager] Equipment with ID {equipmentId} not found!");
+                return false;
+            }
+
+            // Get active profile and character
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+            {
+                Debug.LogError("[EquipmentManager] No active profile!");
+                return false;
+            }
+
+            // Get active character's progression data
+            string characterId = GetActiveCharacterId();
+            if (string.IsNullOrEmpty(characterId) || !profile.CharacterProgress.TryGetValue(characterId, out var characterData))
+            {
+                Debug.LogError("[EquipmentManager] No active character or character progress not found!");
+                return false;
+            }
+
+            // Check if the item is equipped
+            if (!characterData.IsEquipped(equipmentId))
+            {
+                Debug.LogWarning($"[EquipmentManager] Equipment {equipmentId} is not equipped");
+                return false;
+            }
+
+            // Unequip the item using our extension method
+            bool success = characterData.UnequipItem(equipmentId);
+
+            if (success)
+            {
+                Debug.Log($"[EquipmentManager] Successfully unequipped {equipmentData.displayName} ({equipmentId})");
+                OnEquipmentUnequipped?.Invoke(equipmentData);
+
+                // Update profile data
+                profileManager.UpdateProfileAsync(profile).ContinueWith(_ => {
+                    Debug.Log("[EquipmentManager] Profile updated after equipment change");
+                });
+            }
+            else
+            {
+                Debug.LogError($"[EquipmentManager] Failed to unequip {equipmentData.displayName} ({equipmentId})");
+            }
+
+            return success;
+        }
+
+        /// <summary>
+        /// Unlocks a piece of equipment in the profile
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment to unlock</param>
+        /// <returns>True if unlocked successfully, false otherwise</returns>
+        public bool UnlockEquipment(string equipmentId)
+        {
+            if (!isInitialized || string.IsNullOrEmpty(equipmentId))
+                return false;
+
+            // Get the equipment data
+            if (!equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+            {
+                Debug.LogError($"[EquipmentManager] Equipment with ID {equipmentId} not found!");
+                return false;
+            }
+
+            // Get active profile
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+            {
+                Debug.LogError("[EquipmentManager] No active profile!");
+                return false;
+            }
+
+            // Check if already unlocked
+            if (profile.IsEquipmentUnlocked(equipmentId))
+            {
+                Debug.Log($"[EquipmentManager] Equipment {equipmentId} is already unlocked");
+                return true;
+            }
+
+            // Unlock the equipment
+            bool success = profile.UnlockEquipment(equipmentId);
+            if (success)
+            {
+                Debug.Log($"[EquipmentManager] Successfully unlocked {equipmentData.displayName} ({equipmentId})");
+                OnEquipmentUnlocked?.Invoke(equipmentData);
+
+                // Update profile data
+                profileManager.UpdateProfileAsync(profile).ContinueWith(_ => {
+                    Debug.Log("[EquipmentManager] Profile updated after equipment unlock");
+                });
+            }
+            else
+            {
+                Debug.LogError($"[EquipmentManager] Failed to unlock {equipmentData.displayName} ({equipmentId})");
+            }
+
+            return success;
+        }
+
+        #endregion
+
+        #region Equipment Queries
+
+        /// <summary>
+        /// Get the active character ID from the current profile
+        /// </summary>
+        private string GetActiveCharacterId()
+        {
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return null;
+
+            // The active character ID would typically come from the profile
+            // This might need to be retrieved differently depending on your implementation
+            return profile.ProfileId; // Using profile ID as the character ID for now
+        }
+
+        /// <summary>
+        /// Gets equipment data by ID
+        /// </summary>
+        /// <param name="equipmentId">ID of the equipment</param>
+        /// <returns>Equipment data or null if not found</returns>
+        public EquipmentData GetEquipmentById(string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId) || !equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+                return null;
+
+            return equipmentData;
+        }
+
+        /// <summary>
+        /// Gets all equipment of a specific slot type
+        /// </summary>
+        /// <param name="slotType">Slot type to filter by</param>
+        /// <returns>List of equipment data for that slot</returns>
+        public List<EquipmentData> GetEquipmentBySlotType(EquipmentSlotType slotType)
+        {
+            if (equipmentBySlotType.TryGetValue(slotType, out var equipmentList))
+                return new List<EquipmentData>(equipmentList);
+
+            return new List<EquipmentData>();
+        }
+
+        /// <summary>
+        /// Gets all equipment that is currently unlocked for the active profile
+        /// </summary>
+        /// <returns>List of unlocked equipment</returns>
+        public List<EquipmentData> GetUnlockedEquipment()
+        {
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return new List<EquipmentData>();
+
+            var unlockedEquipment = new List<EquipmentData>();
+            foreach (var equipment in equipmentDataLookup.Values)
+            {
+                if (profile.IsEquipmentUnlocked(equipment.equipmentId) || equipment.unlockedByDefault)
+                {
+                    unlockedEquipment.Add(equipment);
+                }
+            }
+
+            return unlockedEquipment;
+        }
+
+        /// <summary>
+        /// Gets all equipment of a specific type that is currently unlocked
+        /// </summary>
+        /// <param name="slotType">Slot type to filter by</param>
+        /// <returns>List of unlocked equipment of the specified type</returns>
+        public List<EquipmentData> GetUnlockedEquipmentByType(EquipmentSlotType slotType)
+        {
+            return GetUnlockedEquipment().Where(e => e.slotType == slotType).ToList();
+        }
+
+        /// <summary>
+        /// Gets all equipment currently equipped on the active character
+        /// </summary>
+        /// <returns>Dictionary of equipped items by slot type</returns>
+        public Dictionary<EquipmentSlotType, List<EquipmentData>> GetEquippedEquipment()
+        {
+            var result = new Dictionary<EquipmentSlotType, List<EquipmentData>>();
+
+            // Initialize all slot types with empty lists
+            foreach (EquipmentSlotType slotType in Enum.GetValues(typeof(EquipmentSlotType)))
+            {
+                result[slotType] = new List<EquipmentData>();
+            }
+
+            // Get active profile and character
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return result;
+
+            string characterId = GetActiveCharacterId();
+            if (string.IsNullOrEmpty(characterId) || !profile.CharacterProgress.TryGetValue(characterId, out var characterData))
+                return result;
+
+            // Add hand weapons
+            foreach (var weaponId in characterData.EquippedHandWeapons)
+            {
+                if (equipmentDataLookup.TryGetValue(weaponId, out var weaponData))
+                {
+                    result[EquipmentSlotType.HandWeapon].Add(weaponData);
+                }
+            }
+
+            // Add body weapon
+            if (!string.IsNullOrEmpty(characterData.EquippedBodyWeapon) &&
+                equipmentDataLookup.TryGetValue(characterData.EquippedBodyWeapon, out var bodyWeaponData))
+            {
+                result[EquipmentSlotType.BodyWeapon].Add(bodyWeaponData);
+            }
+
+            // Add power-ups
+            foreach (var powerUpId in characterData.EquippedPowerupIds)
+            {
+                if (equipmentDataLookup.TryGetValue(powerUpId, out var powerUpData))
+                {
+                    result[EquipmentSlotType.PowerUp].Add(powerUpData);
+                }
+            }
+
+            // Add armor
+            if (!string.IsNullOrEmpty(characterData.EquippedArmor) &&
+                equipmentDataLookup.TryGetValue(characterData.EquippedArmor, out var armorData))
+            {
+                result[EquipmentSlotType.Armor].Add(armorData);
+            }
+
+            // Add amulet
+            if (!string.IsNullOrEmpty(characterData.EquippedAmulet) &&
+                equipmentDataLookup.TryGetValue(characterData.EquippedAmulet, out var amuletData))
+            {
+                result[EquipmentSlotType.Amulet].Add(amuletData);
+            }
+
+            return result;
+        }
+
+        #endregion
+
+        protected override void OnManagerDestroyed()
+        {
+            if (profileManager != null)
+            {
+                profileManager.UnsubscribeFromProfileSwitched(OnProfileSwitched);
+            }
+
+            base.OnManagerDestroyed();
+        }
+    }
+}
+
+// --- END FILE ---
+
+// File: Shop/Mining/MiningManager.cs
+// Size: 17111 characters
+// ---
+// File: Assets/Code/Shop/Mining/MiningManager.cs
+//
+// Purpose: Manages the Neural Mining System in Cyber Pickle.
+// Handles node management, passive income generation, collection, and upgrades.
+// Works with the profile system to persist mining data.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using CyberPickle.Core.Management;
+using CyberPickle.Core.Interfaces;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Shop.Currency;
+
+namespace CyberPickle.Shop.Mining
+{
+    /// <summary>
+    /// Manager for the Neural Mining System
+    /// </summary>
+    public class MiningManager : Manager<MiningManager>, IInitializable
+    {
+        [Header("Mining Settings")]
+        [SerializeField] private float basePassiveRate = 10f;        // CyberCoins per hour per node
+        [SerializeField] private float activePlayRate = 30f;         // CyberCoins per hour per node during active play
+        [SerializeField] private float levelUpgradeMultiplier = 0.2f; // 20% increase per level
+        [SerializeField] private int maxNodeLevel = 10;
+        [SerializeField] private float maxOfflineHours = 24f;        // Maximum hours of offline collection
+
+        [Header("Node Costs")]
+        [SerializeField] private int firstNodeCost = 0;              // First node is free
+        [SerializeField] private int baseNodeCost = 500;             // Base cost for new nodes
+        [SerializeField] private float nodeScalingFactor = 1.5f;     // Cost multiplier per node
+        [SerializeField] private int baseUpgradeCost = 250;          // Base cost for upgrading nodes
+        [SerializeField] private float upgradeLevelScalingFactor = 2f; // Cost multiplier per level
+
+        // Events
+        public event Action<float> OnCyberCoinsCollected;
+        public event Action<string, int> OnNodeUpgraded;
+        public event Action<string> OnNodePurchased;
+        public event Action<float> OnPerformanceMultiplierApplied;
+        public event Action<Dictionary<string, MiningNodeData>> OnMiningStatsUpdated;
+
+        // Dependencies
+        private ProfileManager profileManager;
+        private CurrencyManager currencyManager;
+
+        // Runtime tracking
+        private DateTime lastCollectionTime;
+        private float currentPerformanceMultiplier = 1f;
+        private bool isPlaying = false;
+
+        // Initialization flag
+        private bool isInitialized = false;
+
+        /// <summary>
+        /// Initialize the Mining Manager
+        /// </summary>
+        public void Initialize()
+        {
+            if (isInitialized) return;
+
+            Debug.Log("[MiningManager] Initializing...");
+
+            // Get dependencies
+            profileManager = ProfileManager.Instance;
+            currencyManager = CurrencyManager.Instance;
+
+            if (profileManager == null)
+            {
+                Debug.LogError("[MiningManager] ProfileManager not found!");
+                return;
+            }
+
+            if (currencyManager == null)
+            {
+                Debug.LogError("[MiningManager] CurrencyManager not found!");
+                return;
+            }
+
+            // Subscribe to profile events
+            profileManager.SubscribeToProfileSwitched(OnProfileSwitched);
+            profileManager.SubscribeToNewProfileCreated(OnNewProfileCreated);
+
+            // Set last collection time to now
+            lastCollectionTime = DateTime.UtcNow;
+
+            isInitialized = true;
+            Debug.Log("[MiningManager] Initialized successfully");
+        }
+
+        private void OnEnable()
+        {
+            if (isInitialized)
+            {
+                // Set up automatic collection check
+                InvokeRepeating(nameof(UpdateMiningStats), 1f, 60f); // Check every minute
+            }
+        }
+
+        private void OnDisable()
+        {
+            CancelInvoke(nameof(UpdateMiningStats));
+        }
+
+        /// <summary>
+        /// Event handler for when a profile is switched
+        /// </summary>
+        private void OnProfileSwitched(string profileId)
+        {
+            Debug.Log($"[MiningManager] Profile switched to {profileId}");
+            // Reset last collection time
+            lastCollectionTime = DateTime.UtcNow;
+            // Reset performance multiplier
+            currentPerformanceMultiplier = 1f;
+            // Update mining stats
+            UpdateMiningStats();
+        }
+
+        /// <summary>
+        /// Event handler for when a new profile is created
+        /// </summary>
+        private void OnNewProfileCreated(string profileId)
+        {
+            Debug.Log($"[MiningManager] New profile created: {profileId}");
+            // Add starter node for new profile
+            AddStarterNode(profileId);
+        }
+
+        /// <summary>
+        /// Add a starter mining node for a new profile
+        /// </summary>
+        private async void AddStarterNode(string profileId)
+        {
+            var profile = profileManager.GetProfile(profileId);
+            if (profile == null) return;
+
+            // Add first node for free
+            string nodeId = $"node_{Guid.NewGuid().ToString().Substring(0, 8)}";
+            MiningNodeData starterNode = new MiningNodeData(nodeId)
+            {
+                // Default properties are set in the constructor
+            };
+
+            // Add to profile
+            if (profile.MiningNodes.Count == 0)
+            {
+                var miningNodes = profile.MiningNodes as Dictionary<string, MiningNodeData>;
+                if (miningNodes != null)
+                {
+                    miningNodes[nodeId] = starterNode;
+                    await profileManager.UpdateProfileAsync(profile);
+                    Debug.Log($"[MiningManager] Added starter node {nodeId} to profile {profileId}");
+                    OnNodePurchased?.Invoke(nodeId);
+                }
+            }
+        }
+
+        #region Mining Node Management
+
+        /// <summary>
+        /// Purchase a new mining node
+        /// </summary>
+        /// <returns>True if successful, false otherwise</returns>
+        public async Task<bool> PurchaseNewNode()
+        {
+            if (!isInitialized)
+                return false;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return false;
+
+            // Calculate cost based on current node count
+            int nodeCount = profile.MiningNodes.Count;
+            int cost = CalculateNodePurchaseCost(nodeCount);
+
+            // Check if player has enough Neural Credits
+            if (!currencyManager.HasSufficientFunds(cost, CurrencyType.NeuralCredits))
+            {
+                Debug.Log($"[MiningManager] Insufficient Neural Credits to purchase node. Required: {cost}, Available: {currencyManager.NeuralCredits}");
+                return false;
+            }
+
+            // Spend Neural Credits
+            bool spentSuccess = await currencyManager.SpendCurrency(cost, CurrencyType.NeuralCredits);
+            if (!spentSuccess)
+                return false;
+
+            // Create new node
+            string nodeId = $"node_{Guid.NewGuid().ToString().Substring(0, 8)}";
+            MiningNodeData newNode = new MiningNodeData(nodeId);
+
+            // Add to profile
+            var miningNodes = profile.MiningNodes as Dictionary<string, MiningNodeData>;
+            if (miningNodes != null)
+            {
+                miningNodes[nodeId] = newNode;
+                await profileManager.UpdateProfileAsync(profile);
+                Debug.Log($"[MiningManager] Purchased new node {nodeId} for {cost} Neural Credits");
+                OnNodePurchased?.Invoke(nodeId);
+                return true;
+            }
+
+            // Failed to add node, refund Neural Credits
+            await currencyManager.AddCurrency(cost, CurrencyType.NeuralCredits);
+            return false;
+        }
+
+        /// <summary>
+        /// Upgrade a mining node
+        /// </summary>
+        /// <param name="nodeId">ID of the node to upgrade</param>
+        /// <returns>True if successful, false otherwise</returns>
+        public async Task<bool> UpgradeNode(string nodeId)
+        {
+            if (!isInitialized || string.IsNullOrEmpty(nodeId))
+                return false;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return false;
+
+            // Get the node
+            var miningNodes = profile.MiningNodes as Dictionary<string, MiningNodeData>;
+            if (miningNodes == null || !miningNodes.TryGetValue(nodeId, out var node))
+            {
+                Debug.LogError($"[MiningManager] Node {nodeId} not found");
+                return false;
+            }
+
+            // Check if node is already at max level
+            if (node.Level >= maxNodeLevel)
+            {
+                Debug.Log($"[MiningManager] Node {nodeId} is already at max level {maxNodeLevel}");
+                return false;
+            }
+
+            // Calculate upgrade cost
+            int cost = CalculateNodeUpgradeCost(node.Level);
+
+            // Check if player has enough Neural Credits
+            if (!currencyManager.HasSufficientFunds(cost, CurrencyType.NeuralCredits))
+            {
+                Debug.Log($"[MiningManager] Insufficient Neural Credits to upgrade node. Required: {cost}, Available: {currencyManager.NeuralCredits}");
+                return false;
+            }
+
+            // Spend Neural Credits
+            bool spentSuccess = await currencyManager.SpendCurrency(cost, CurrencyType.NeuralCredits);
+            if (!spentSuccess)
+                return false;
+
+            // Upgrade node
+            bool upgradeSuccess = node.Upgrade();
+            if (!upgradeSuccess)
+            {
+                // Refund Neural Credits if upgrade fails
+                await currencyManager.AddCurrency(cost, CurrencyType.NeuralCredits);
+                return false;
+            }
+
+            // Update profile
+            await profileManager.UpdateProfileAsync(profile);
+            Debug.Log($"[MiningManager] Upgraded node {nodeId} to level {node.Level} for {cost} Neural Credits");
+            OnNodeUpgraded?.Invoke(nodeId, node.Level);
+            return true;
+        }
+
+        /// <summary>
+        /// Calculate the cost to purchase a new node
+        /// </summary>
+        /// <param name="currentNodeCount">Current number of nodes</param>
+        /// <returns>Cost in Neural Credits</returns>
+        public int CalculateNodePurchaseCost(int currentNodeCount)
+        {
+            if (currentNodeCount == 0)
+                return firstNodeCost;
+
+            return Mathf.RoundToInt(baseNodeCost * Mathf.Pow(nodeScalingFactor, currentNodeCount - 1));
+        }
+
+        /// <summary>
+        /// Calculate the cost to upgrade a node
+        /// </summary>
+        /// <param name="currentLevel">Current level of the node</param>
+        /// <returns>Cost in Neural Credits</returns>
+        public int CalculateNodeUpgradeCost(int currentLevel)
+        {
+            return Mathf.RoundToInt(baseUpgradeCost * Mathf.Pow(upgradeLevelScalingFactor, currentLevel - 1));
+        }
+
+        #endregion
+
+        #region Mining Collection
+
+        /// <summary>
+        /// Collect accumulated CyberCoins
+        /// </summary>
+        /// <returns>Amount of CyberCoins collected</returns>
+        public async Task<float> CollectMining()
+        {
+            if (!isInitialized)
+                return 0f;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return 0f;
+
+            // Calculate how many hours have passed since last collection
+            TimeSpan timeSinceLastCollection = DateTime.UtcNow - lastCollectionTime;
+            float hoursElapsed = Mathf.Min((float)timeSinceLastCollection.TotalHours, maxOfflineHours);
+
+            // Calculate total earnings
+            float totalEarnings = await CalculatePendingEarnings();
+
+            // If there's anything to collect
+            if (totalEarnings > 0)
+            {
+                // Add CyberCoins to player's balance
+                await currencyManager.AddCurrency(totalEarnings, CurrencyType.CyberCoins);
+
+                // Reset collection time
+                lastCollectionTime = DateTime.UtcNow;
+
+                // Reset performance multiplier after collection
+                currentPerformanceMultiplier = 1f;
+
+                Debug.Log($"[MiningManager] Collected {totalEarnings} CyberCoins after {hoursElapsed:F1} hours");
+                OnCyberCoinsCollected?.Invoke(totalEarnings);
+            }
+
+            return totalEarnings;
+        }
+
+        /// <summary>
+        /// Calculate pending earnings from all mining nodes
+        /// </summary>
+        /// <returns>Total pending CyberCoins</returns>
+        public async Task<float> CalculatePendingEarnings()
+        {
+            if (!isInitialized)
+                return 0f;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return 0f;
+
+            float totalEarnings = 0f;
+
+            // Get all nodes
+            var miningNodes = profile.MiningNodes;
+            foreach (var node in miningNodes.Values)
+            {
+                // Calculate earnings for this node
+                float nodeEarnings = node.PendingCoins;
+                totalEarnings += nodeEarnings;
+            }
+
+            // Apply performance multiplier
+            totalEarnings *= currentPerformanceMultiplier;
+
+            return totalEarnings;
+        }
+
+        /// <summary>
+        /// Apply a performance multiplier to mining rate based on gameplay
+        /// </summary>
+        /// <param name="multiplier">Multiplier to apply</param>
+        public void ApplyPerformanceMultiplier(float multiplier)
+        {
+            // Ensure multiplier is at least 1.0
+            multiplier = Mathf.Max(1f, multiplier);
+
+            // If the new multiplier is higher, use it
+            if (multiplier > currentPerformanceMultiplier)
+            {
+                currentPerformanceMultiplier = multiplier;
+                Debug.Log($"[MiningManager] Applied performance multiplier: {multiplier:F2}x");
+                OnPerformanceMultiplierApplied?.Invoke(multiplier);
+            }
+        }
+
+        /// <summary>
+        /// Update mining stats and notify listeners
+        /// </summary>
+        private void UpdateMiningStats()
+        {
+            if (!isInitialized) return;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null) return;
+
+            // Notify listeners
+            OnMiningStatsUpdated?.Invoke(profile.MiningNodes as Dictionary<string, MiningNodeData>);
+        }
+
+        /// <summary>
+        /// Get the current mining rate
+        /// </summary>
+        /// <returns>Mining rate in CyberCoins per hour</returns>
+        public float GetCurrentMiningRate()
+        {
+            if (!isInitialized)
+                return 0f;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+                return 0f;
+
+            float totalRate = 0f;
+
+            // Calculate rate from all nodes
+            foreach (var node in profile.MiningNodes.Values)
+            {
+                // Rate depends on whether game is being played
+                float nodeRate = isPlaying ? activePlayRate : basePassiveRate;
+
+                // Apply level bonus
+                nodeRate *= (1f + (node.Level - 1) * levelUpgradeMultiplier);
+
+                totalRate += nodeRate;
+            }
+
+            // Apply performance multiplier
+            totalRate *= currentPerformanceMultiplier;
+
+            return totalRate;
+        }
+
+        /// <summary>
+        /// Set the gameplay state for mining rate calculation
+        /// </summary>
+        /// <param name="playing">Whether the game is being played</param>
+        public void SetPlayingState(bool playing)
+        {
+            isPlaying = playing;
+            Debug.Log($"[MiningManager] Playing state set to: {playing}");
+        }
+
+        #endregion
+
+        protected override void OnManagerDestroyed()
+        {
+            if (profileManager != null)
+            {
+                profileManager.UnsubscribeFromProfileSwitched(OnProfileSwitched);
+                profileManager.UnsubscribeFromNewProfileCreated(OnNewProfileCreated);
+            }
+
+            CancelInvoke(nameof(UpdateMiningStats));
+
+            base.OnManagerDestroyed();
+        }
+    }
+}
+// --- END FILE ---
+
 // File: UI/Effects/GlitchTextEffect.cs
 // Size: 7856 characters
 // ---
@@ -3882,6 +5780,507 @@ namespace CyberPickle.UI.Effects
                     }
                 }
             }
+        }
+    }
+}
+
+// --- END FILE ---
+
+// File: UI/EquipmentHubManager/EquipmentHubManager.cs
+// Size: 11249 characters
+// ---
+// File: Assets/Code/UI/EquipmentHub/EquipmentHubManager.cs
+//
+// Purpose: Manages the Equipment Hub scene where the player configures character equipment, 
+// accesses the shop, and manages mining operations before starting a game. Controls the
+// scene's UI sections and handles transitions between different parts of the Equipment Hub.
+//
+// Created: 2025-02-26
+// Updated: 2025-02-26
+
+using UnityEngine;
+using System.Collections;
+using CyberPickle.Core.Management;
+using CyberPickle.Core.Interfaces;
+using CyberPickle.Core.Events;
+using CyberPickle.Core.States;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Characters.Data;
+using CyberPickle.UI.Transitions;
+using UnityEngine.SceneManagement;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    /// <summary>
+    /// Manages the Equipment Hub scene where the player configures character equipment, 
+    /// accesses the shop, and manages mining operations before starting a game
+    /// </summary>
+    public class EquipmentHubManager : Manager<EquipmentHubManager>, IInitializable
+    {
+        [Header("Scene References")]
+        [SerializeField] private Transform characterSpawnPoint;
+        [SerializeField] private FadeScreenController fadeController;
+
+        [Header("UI Sections")]
+        [SerializeField] private GameObject equipmentSection;
+        [SerializeField] private GameObject shopSection;
+        [SerializeField] private GameObject miningSection;
+        [SerializeField] private GameObject navigationPanel;
+
+        [Header("Navigation Buttons")]
+        [SerializeField] private UnityEngine.UI.Button equipmentButton;
+        [SerializeField] private UnityEngine.UI.Button shopButton;
+        [SerializeField] private UnityEngine.UI.Button miningButton;
+        [SerializeField] private UnityEngine.UI.Button startGameButton;
+        [SerializeField] private UnityEngine.UI.Button backButton;
+
+        // Manager dependencies
+        private ProfileManager profileManager;
+
+        // Runtime data
+        private GameObject spawnedCharacter;
+        private CharacterData currentCharacterData;
+        private string currentCharacterId;
+        private bool isInitialized = false;
+
+        /// <summary>
+        /// Initializes the Equipment Hub manager and UI
+        /// </summary>
+        public void Initialize()
+        {
+            if (isInitialized) return;
+
+            Debug.Log("[EquipmentHubManager] Initializing");
+
+            // Get manager dependencies
+            profileManager = ProfileManager.Instance;
+            if (profileManager == null)
+            {
+                Debug.LogError("[EquipmentHubManager] Profile Manager not found!");
+                return;
+            }
+
+            // Set initial section visibility
+            SetInitialVisibility();
+
+            // Setup navigation buttons
+            SetupNavigationButtons();
+
+            // Load character model
+            StartCoroutine(LoadCharacterModel());
+
+            isInitialized = true;
+            Debug.Log("[EquipmentHubManager] Initialized successfully");
+        }
+
+        /// <summary>
+        /// Sets the initial visibility of UI sections
+        /// </summary>
+        private void SetInitialVisibility()
+        {
+            // Show equipment section by default, hide others
+            if (equipmentSection != null) equipmentSection.SetActive(true);
+            if (shopSection != null) shopSection.SetActive(false);
+            if (miningSection != null) miningSection.SetActive(false);
+
+            // Ensure navigation panel is visible
+            if (navigationPanel != null) navigationPanel.SetActive(true);
+
+            // Fade in the scene if fade controller exists
+            if (fadeController != null)
+                fadeController.FadeFromBlack();
+        }
+
+        /// <summary>
+        /// Sets up button listeners for navigation
+        /// </summary>
+        private void SetupNavigationButtons()
+        {
+            if (equipmentButton != null)
+                equipmentButton.onClick.AddListener(() => SwitchToSection("Equipment"));
+
+            if (shopButton != null)
+                shopButton.onClick.AddListener(() => SwitchToSection("Shop"));
+
+            if (miningButton != null)
+                miningButton.onClick.AddListener(() => SwitchToSection("Mining"));
+
+            if (startGameButton != null)
+                startGameButton.onClick.AddListener(StartGame);
+
+            if (backButton != null)
+                backButton.onClick.AddListener(ReturnToCharacterSelect);
+        }
+
+        /// <summary>
+        /// Loads the selected character model
+        /// </summary>
+        private IEnumerator LoadCharacterModel()
+        {
+            // Get the character ID from profile (for now we'll use a placeholder)
+            // Later this should come from the profile's selected character
+            currentCharacterId = "default_character";
+
+            // When we have profile integration, use this:
+            // var profile = profileManager.ActiveProfile;
+            // if (profile != null)
+            //    currentCharacterId = profile.LastSelectedCharacterId;
+
+            // Load character data - update path as needed for your project
+            currentCharacterData = Resources.Load<CharacterData>($"Characters/{currentCharacterId}");
+
+            if (currentCharacterData == null)
+            {
+                Debug.LogError($"[EquipmentHubManager] Character data not found for ID: {currentCharacterId}");
+                yield break;
+            }
+
+            // Make sure we have a spawn point
+            if (characterSpawnPoint == null)
+            {
+                Debug.LogError("[EquipmentHubManager] Character spawn point is null!");
+                yield break;
+            }
+
+            // Instantiate the character model
+            spawnedCharacter = Instantiate(currentCharacterData.characterPrefab, characterSpawnPoint);
+            spawnedCharacter.transform.localPosition = Vector3.zero;
+            spawnedCharacter.transform.localRotation = Quaternion.Euler(0, 180, 0); // Face forward
+
+            // Setup character animations
+            var animator = spawnedCharacter.GetComponent<Animator>();
+            if (animator != null)
+            {
+                animator.SetTrigger("Idle");
+            }
+
+            Debug.Log($"[EquipmentHubManager] Character model loaded: {currentCharacterData.displayName}");
+
+            // Initialize sections that need the character reference
+            InitializeEquipmentSection();
+        }
+
+        /// <summary>
+        /// Initializes the equipment section with character data
+        /// </summary>
+        private void InitializeEquipmentSection()
+        {
+            // Initialize equipment UI with character data
+            // This would be expanded with your equipment UI logic
+        }
+
+        /// <summary>
+        /// Switches the active section in the hub
+        /// </summary>
+        /// <param name="sectionName">The name of the section to activate</param>
+        public void SwitchToSection(string sectionName)
+        {
+            // Hide all sections first
+            if (equipmentSection != null) equipmentSection.SetActive(false);
+            if (shopSection != null) shopSection.SetActive(false);
+            if (miningSection != null) miningSection.SetActive(false);
+
+            // Show the requested section
+            switch (sectionName)
+            {
+                case "Equipment":
+                    if (equipmentSection != null)
+                    {
+                        equipmentSection.SetActive(true);
+                        Debug.Log("[EquipmentHubManager] Switched to Equipment section");
+                    }
+                    break;
+                case "Shop":
+                    if (shopSection != null)
+                    {
+                        shopSection.SetActive(true);
+                        Debug.Log("[EquipmentHubManager] Switched to Shop section");
+                    }
+                    break;
+                case "Mining":
+                    if (miningSection != null)
+                    {
+                        miningSection.SetActive(true);
+                        Debug.Log("[EquipmentHubManager] Switched to Mining section");
+                    }
+                    break;
+                default:
+                    Debug.LogWarning($"[EquipmentHubManager] Unknown section: {sectionName}");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Starts the game and transitions to the level select screen
+        /// </summary>
+        public void StartGame()
+        {
+            StartCoroutine(TransitionToLevelSelect());
+        }
+
+        /// <summary>
+        /// Returns to the character selection screen
+        /// </summary>
+        public void ReturnToCharacterSelect()
+        {
+            StartCoroutine(TransitionToCharacterSelect());
+        }
+
+        /// <summary>
+        /// Transitions to the level selection scene
+        /// </summary>
+        private IEnumerator TransitionToLevelSelect()
+        {
+            // Fade out
+            if (fadeController != null)
+            {
+                fadeController.FadeToBlack();
+                yield return new WaitForSeconds(fadeController.FadeDuration);
+            }
+
+            // Change game state
+            GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
+
+            // Load level select scene
+            SceneManager.LoadScene("LevelSelect");
+        }
+
+        /// <summary>
+        /// Transitions back to the character selection scene
+        /// </summary>
+        private IEnumerator TransitionToCharacterSelect()
+        {
+            // Fade out
+            if (fadeController != null)
+            {
+                fadeController.FadeToBlack();
+                yield return new WaitForSeconds(fadeController.FadeDuration);
+            }
+
+            // Change game state
+            GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+
+            // Load character select scene
+            SceneManager.LoadScene("CharacterSelect");
+        }
+
+        /// <summary>
+        /// Cleanup when the manager is destroyed
+        /// </summary>
+        protected override void OnManagerDestroyed()
+        {
+            // Clean up button listeners
+            if (equipmentButton != null)
+                equipmentButton.onClick.RemoveAllListeners();
+
+            if (shopButton != null)
+                shopButton.onClick.RemoveAllListeners();
+
+            if (miningButton != null)
+                miningButton.onClick.RemoveAllListeners();
+
+            if (startGameButton != null)
+                startGameButton.onClick.RemoveAllListeners();
+
+            if (backButton != null)
+                backButton.onClick.RemoveAllListeners();
+
+            // Call base method
+            base.OnManagerDestroyed();
+        }
+    }
+}
+
+// --- END FILE ---
+
+// File: UI/Transitions/FadeScreenController.cs
+// Size: 6554 characters
+// ---
+// File: Assets/Code/UI/Transitions/FadeScreenController.cs
+//
+// Purpose: Controls screen fading transitions between scenes or major state changes.
+// Provides fade-to-black and fade-from-black functionality with configurable duration and easing.
+// Supports displaying a loading indicator during transitions.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using DG.Tweening;
+using TMPro;
+
+namespace CyberPickle.UI.Transitions
+{
+    /// <summary>
+    /// Controls screen fading transitions between scenes or major state changes
+    /// </summary>
+    public class FadeScreenController : MonoBehaviour
+    {
+        [Header("Fade Settings")]
+        [SerializeField] private Image fadeImage;
+        [SerializeField] private float fadeDuration = 0.5f;
+        [SerializeField] private Ease fadeEase = Ease.InOutQuad;
+
+        [Header("Loading Indicator")]
+        [SerializeField] private GameObject loadingIndicator;
+        [SerializeField] private TextMeshProUGUI loadingText;
+
+        private Sequence currentFadeSequence;
+
+        /// <summary>
+        /// Duration of the fade transition
+        /// </summary>
+        public float FadeDuration => fadeDuration;
+
+        private void Awake()
+        {
+            ValidateReferences();
+
+            // Make sure we start with a transparent fade image
+            if (fadeImage != null)
+            {
+                fadeImage.color = new Color(fadeImage.color.r, fadeImage.color.g, fadeImage.color.b, 0f);
+                fadeImage.gameObject.SetActive(false);
+            }
+
+            if (loadingIndicator != null)
+                loadingIndicator.SetActive(false);
+        }
+
+        private void ValidateReferences()
+        {
+            // Ensure fade image exists
+            if (fadeImage == null)
+            {
+                Debug.LogError("[FadeScreenController] Fade image not assigned! Creating a new one...");
+
+                // Create a canvas if needed
+                Canvas canvas = GetComponent<Canvas>();
+                if (canvas == null)
+                {
+                    canvas = gameObject.AddComponent<Canvas>();
+                    canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                    canvas.sortingOrder = 999; // Ensure it's on top
+
+                    // Add a canvas scaler
+                    CanvasScaler scaler = gameObject.AddComponent<CanvasScaler>();
+                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                    scaler.referenceResolution = new Vector2(1920, 1080);
+
+                    // Add a graphic raycaster
+                    gameObject.AddComponent<GraphicRaycaster>();
+                }
+
+                // Create fade image
+                GameObject imageObj = new GameObject("FadeImage");
+                imageObj.transform.SetParent(transform, false);
+
+                RectTransform rectTransform = imageObj.AddComponent<RectTransform>();
+                rectTransform.anchorMin = Vector2.zero;
+                rectTransform.anchorMax = Vector2.one;
+                rectTransform.sizeDelta = Vector2.zero;
+                rectTransform.anchoredPosition = Vector2.zero;
+
+                fadeImage = imageObj.AddComponent<Image>();
+                fadeImage.color = Color.black;
+                fadeImage.raycastTarget = false;
+
+                Debug.Log("[FadeScreenController] Created fade image");
+            }
+        }
+
+        /// <summary>
+        /// Fades the screen to black
+        /// </summary>
+        public void FadeToBlack()
+        {
+            if (fadeImage == null) return;
+
+            fadeImage.gameObject.SetActive(true);
+
+            // Kill any existing fade
+            if (currentFadeSequence != null && currentFadeSequence.IsActive())
+                currentFadeSequence.Kill();
+
+            // Create fade sequence
+            currentFadeSequence = DOTween.Sequence();
+            currentFadeSequence.Append(fadeImage.DOFade(1f, fadeDuration).SetEase(fadeEase));
+
+            if (loadingIndicator != null)
+            {
+                currentFadeSequence.AppendCallback(() => {
+                    loadingIndicator.SetActive(true);
+                });
+            }
+
+            Debug.Log("[FadeScreenController] Fading to black");
+        }
+
+        /// <summary>
+        /// Fades the screen from black back to transparent
+        /// </summary>
+        public void FadeFromBlack()
+        {
+            if (fadeImage == null) return;
+
+            // Kill any existing fade
+            if (currentFadeSequence != null && currentFadeSequence.IsActive())
+                currentFadeSequence.Kill();
+
+            if (loadingIndicator != null)
+                loadingIndicator.SetActive(false);
+
+            // Create fade sequence
+            currentFadeSequence = DOTween.Sequence();
+            currentFadeSequence.Append(fadeImage.DOFade(0f, fadeDuration).SetEase(fadeEase));
+            currentFadeSequence.AppendCallback(() => {
+                fadeImage.gameObject.SetActive(false);
+            });
+
+            Debug.Log("[FadeScreenController] Fading from black");
+        }
+
+        /// <summary>
+        /// Updates the loading text if it exists
+        /// </summary>
+        public void SetLoadingText(string text)
+        {
+            if (loadingText != null)
+                loadingText.text = text;
+        }
+
+        /// <summary>
+        /// Performs a full fade cycle (transparent to black and back)
+        /// </summary>
+        public IEnumerator FadeCycle(float holdDuration = 0.2f)
+        {
+            FadeToBlack();
+            yield return new WaitForSeconds(fadeDuration + holdDuration);
+            FadeFromBlack();
+        }
+
+        /// <summary>
+        /// Fades to black, executes an action, then fades back
+        /// </summary>
+        public IEnumerator FadeAction(System.Action action, float holdDuration = 0.2f)
+        {
+            FadeToBlack();
+            yield return new WaitForSeconds(fadeDuration);
+
+            if (action != null)
+                action();
+
+            yield return new WaitForSeconds(holdDuration);
+            FadeFromBlack();
+        }
+
+        private void OnDestroy()
+        {
+            if (currentFadeSequence != null && currentFadeSequence.IsActive())
+                currentFadeSequence.Kill();
         }
     }
 }
@@ -5104,6 +7503,1398 @@ namespace CyberPickle.Core.Services.Steam
         {
             UnityEngine.Debug.Log("SteamManager initialized");
         }
+    }
+}
+
+// --- END FILE ---
+
+// File: Shop/Equipment/Data/AmuletData.cs
+// Size: 11641 characters
+// ---
+// File: Assets/Code/Shop/Equipment/Data/AmuletData.cs
+//
+// Purpose: Defines the data structure for amulet equipment in Cyber Pickle.
+// Contains amulet-specific properties including luck bonuses, drop rate
+// modifications, and special rare effects.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Collections.Generic;
+using CyberPickle.Core.Services.Authentication.Data;
+
+namespace CyberPickle.Shop.Equipment.Data
+{
+    /// <summary>
+    /// Defines the specialty focus of an amulet
+    /// </summary>
+    public enum AmuletSpecialty
+    {
+        Fortune,      // Focuses on luck and drop rate
+        Magnetism,    // Focuses on item attraction
+        Recovery,     // Focuses on health recovery
+        Currency,     // Focuses on currency gains
+        Experience,   // Focuses on experience gains
+        Resilience,   // Focuses on damage resistance
+        Mining        // Enhances neural mining efficiency
+    }
+
+    /// <summary>
+    /// ScriptableObject that defines data for amulet equipment
+    /// </summary>
+    [CreateAssetMenu(fileName = "Amulet", menuName = "CyberPickle/Equipment/AmuletData")]
+    public class AmuletData : EquipmentData
+    {
+        [Header("Amulet Properties")]
+        [Tooltip("The specialty focus of this amulet")]
+        public AmuletSpecialty specialty = AmuletSpecialty.Fortune;
+
+        [Tooltip("Base luck bonus")]
+        public float baseLuckBonus = 0.1f;
+
+        [Tooltip("Base drop rate bonus (percentage)")]
+        [Range(0f, 100f)]
+        public float baseDropRateBonus = 10f;
+
+        [Tooltip("Base currency bonus (percentage)")]
+        [Range(0f, 100f)]
+        public float baseCurrencyBonus = 0f;
+
+        [Tooltip("Base experience bonus (percentage)")]
+        [Range(0f, 100f)]
+        public float baseExperienceBonus = 0f;
+
+        [Tooltip("Neural mining efficiency bonus (percentage)")]
+        [Range(0f, 100f)]
+        public float baseMiningBonus = 0f;
+
+        [Header("Special Ability")]
+        [Tooltip("Does this amulet have a special ability?")]
+        public bool hasSpecialAbility = false;
+
+        [Tooltip("Description of special ability")]
+        [TextArea(2, 4)]
+        public string specialAbilityDescription;
+
+        [Tooltip("Probability of rare item drops (percentage)")]
+        [Range(0f, 100f)]
+        public float rareItemDropChance = 0f;
+
+        [Header("Visual & Audio")]
+        [Tooltip("VFX prefab for when the special ability activates")]
+        public GameObject specialAbilityVFX;
+
+        [Tooltip("Color of the amulet glow")]
+        public Color glowColor = Color.yellow;
+
+        [Header("Upgrade Scaling")]
+        [Tooltip("Luck bonus increase per level (multiplier)")]
+        [Range(1f, 2f)]
+        public float luckUpgradeMultiplier = 1.2f;
+
+        [Tooltip("Other bonuses increase per level (multiplier)")]
+        [Range(1f, 1.5f)]
+        public float otherBonusesUpgradeMultiplier = 1.15f;
+
+        /// <summary>
+        /// Validates the amulet data when it's created or modified in the editor.
+        /// </summary>
+        protected override void OnValidate()
+        {
+            // Ensure correct slot type
+            slotType = EquipmentSlotType.Amulet;
+
+            base.OnValidate();
+
+            // Additional amulet-specific validation
+            ValidateAmuletFields();
+        }
+
+        /// <summary>
+        /// Validates amulet-specific fields
+        /// </summary>
+        private void ValidateAmuletFields()
+        {
+            baseLuckBonus = Mathf.Max(0f, baseLuckBonus);
+            baseDropRateBonus = Mathf.Max(0f, baseDropRateBonus);
+            baseCurrencyBonus = Mathf.Max(0f, baseCurrencyBonus);
+            baseExperienceBonus = Mathf.Max(0f, baseExperienceBonus);
+            baseMiningBonus = Mathf.Max(0f, baseMiningBonus);
+            rareItemDropChance = Mathf.Clamp(rareItemDropChance, 0f, 100f);
+
+            if (hasSpecialAbility && string.IsNullOrEmpty(specialAbilityDescription))
+            {
+                specialAbilityDescription = "Activates a special ability.";
+                Debug.LogWarning($"[AmuletData] Special ability description is empty for {displayName}");
+            }
+
+            // Set default values based on specialty
+            if (specialty == AmuletSpecialty.Fortune && baseLuckBonus <= 0)
+            {
+                baseLuckBonus = 0.1f;
+                baseDropRateBonus = 10f;
+            }
+            else if (specialty == AmuletSpecialty.Currency && baseCurrencyBonus <= 0)
+            {
+                baseCurrencyBonus = 15f;
+            }
+            else if (specialty == AmuletSpecialty.Experience && baseExperienceBonus <= 0)
+            {
+                baseExperienceBonus = 15f;
+            }
+            else if (specialty == AmuletSpecialty.Mining && baseMiningBonus <= 0)
+            {
+                baseMiningBonus = 20f;
+            }
+        }
+
+        /// <summary>
+        /// Gets the luck bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Luck bonus at that level</returns>
+        public float GetLuckBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseLuckBonus * Mathf.Pow(luckUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the drop rate bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Drop rate bonus percentage at that level</returns>
+        public float GetDropRateBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseDropRateBonus * Mathf.Pow(otherBonusesUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the currency bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Currency bonus percentage at that level</returns>
+        public float GetCurrencyBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseCurrencyBonus * Mathf.Pow(otherBonusesUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the experience bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Experience bonus percentage at that level</returns>
+        public float GetExperienceBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseExperienceBonus * Mathf.Pow(otherBonusesUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the mining bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Mining bonus percentage at that level</returns>
+        public float GetMiningBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseMiningBonus * Mathf.Pow(otherBonusesUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the rare item drop chance for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Rare item drop chance percentage at that level</returns>
+        public float GetRareItemDropChanceForLevel(int level)
+        {
+            if (rareItemDropChance <= 0)
+                return 0f;
+
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+
+            // Rare drop chance increases linearly with level
+            return rareItemDropChance + (rareItemDropChance * 0.2f * (level - 1));
+        }
+
+        /// <summary>
+        /// Gets the stats for the specified upgrade level
+        /// </summary>
+        public override StatDescriptor[] GetStatsForLevel(int upgradeLevel)
+        {
+            upgradeLevel = Mathf.Clamp(upgradeLevel, 1, maxUpgradeLevel);
+
+            List<StatDescriptor> stats = new List<StatDescriptor>();
+
+            // Add stats based on specialty
+            switch (specialty)
+            {
+                case AmuletSpecialty.Fortune:
+                    stats.Add(new StatDescriptor("Luck", GetLuckBonusForLevel(upgradeLevel)));
+                    stats.Add(new StatDescriptor("Drop Rate", GetDropRateBonusForLevel(upgradeLevel), true));
+                    if (rareItemDropChance > 0)
+                    {
+                        stats.Add(new StatDescriptor("Rare Drop Chance", GetRareItemDropChanceForLevel(upgradeLevel), true));
+                    }
+                    break;
+
+                case AmuletSpecialty.Magnetism:
+                    stats.Add(new StatDescriptor("Magnetic Field", 0.5f * upgradeLevel));
+                    stats.Add(new StatDescriptor("Item Attraction", 15f * upgradeLevel, true));
+                    break;
+
+                case AmuletSpecialty.Recovery:
+                    stats.Add(new StatDescriptor("Health Regen", 0.5f * upgradeLevel));
+                    stats.Add(new StatDescriptor("Health Pickup Effect", 20f * upgradeLevel, true));
+                    break;
+
+                case AmuletSpecialty.Currency:
+                    stats.Add(new StatDescriptor("Neural Credits Gain", GetCurrencyBonusForLevel(upgradeLevel), true));
+                    stats.Add(new StatDescriptor("CyberCoins Chance", 2f * upgradeLevel, true));
+                    break;
+
+                case AmuletSpecialty.Experience:
+                    stats.Add(new StatDescriptor("Experience Gain", GetExperienceBonusForLevel(upgradeLevel), true));
+                    break;
+
+                case AmuletSpecialty.Resilience:
+                    stats.Add(new StatDescriptor("Damage Reduction", 3f * upgradeLevel, true));
+                    stats.Add(new StatDescriptor("Recovery Speed", 5f * upgradeLevel, true));
+                    break;
+
+                case AmuletSpecialty.Mining:
+                    stats.Add(new StatDescriptor("Mining Efficiency", GetMiningBonusForLevel(upgradeLevel), true));
+                    stats.Add(new StatDescriptor("Node Upgrade Discount", 5f * upgradeLevel, true));
+                    break;
+            }
+
+            // Always add luck if not already added and it's greater than 0
+            if (specialty != AmuletSpecialty.Fortune && baseLuckBonus > 0)
+            {
+                stats.Add(new StatDescriptor("Luck", GetLuckBonusForLevel(upgradeLevel)));
+            }
+
+            // Add special ability info if applicable
+            if (hasSpecialAbility)
+            {
+                stats.Add(new StatDescriptor("Special Ability", 100f, false));
+            }
+
+            return stats.ToArray();
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Validates required references are assigned in the editor
+        /// </summary>
+        public override bool ValidateReferences()
+        {
+            bool valid = base.ValidateReferences();
+
+            if (hasSpecialAbility && specialAbilityVFX == null)
+            {
+                Debug.LogWarning($"[AmuletData] Special ability VFX is missing for {displayName}");
+            }
+
+            return valid;
+        }
+#endif
+    }
+}
+
+// --- END FILE ---
+
+// File: Shop/Equipment/Data/ArmorData.cs
+// Size: 10424 characters
+// ---
+// File: Assets/Code/Shop/Equipment/Data/ArmorData.cs
+//
+// Purpose: Defines the data structure for armor equipment in Cyber Pickle.
+// Contains armor-specific properties like defense bonuses, special effects,
+// and weight/speed impact values.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Collections.Generic;
+using CyberPickle.Core.Services.Authentication.Data;
+
+namespace CyberPickle.Shop.Equipment.Data
+{
+    /// <summary>
+    /// Defines the armor's primary attribute focus
+    /// </summary>
+    public enum ArmorFocusType
+    {
+        Balanced,     // Equal focus on all attributes
+        Defensive,    // Focus on defense and health
+        Offensive,    // Focus on damage and attack speed
+        Mobility,     // Focus on speed and magnetic field
+        Utility       // Focus on luck and area of effect
+    }
+
+    /// <summary>
+    /// ScriptableObject that defines data for armor equipment
+    /// </summary>
+    [CreateAssetMenu(fileName = "Armor", menuName = "CyberPickle/Equipment/ArmorData")]
+    public class ArmorData : EquipmentData
+    {
+        [Header("Armor Properties")]
+        [Tooltip("The focus type of this armor piece")]
+        public ArmorFocusType focusType = ArmorFocusType.Balanced;
+
+        [Tooltip("Base defense bonus")]
+        public float baseDefenseBonus = 10f;
+
+        [Tooltip("Base health bonus")]
+        public float baseHealthBonus = 20f;
+
+        [Tooltip("Speed modifier (negative values slow down the player)")]
+        public float speedModifier = 0f;
+
+        [Tooltip("Health regeneration bonus")]
+        public float healthRegenBonus = 0f;
+
+        [Header("Special Effects")]
+        [Tooltip("Does this armor have a special effect?")]
+        public bool hasSpecialEffect = false;
+
+        [Tooltip("Description of special effect")]
+        [TextArea(2, 4)]
+        public string specialEffectDescription;
+
+        [Tooltip("Chance to trigger the special effect (if applicable)")]
+        [Range(0f, 1f)]
+        public float specialEffectChance = 0.1f;
+
+        [Tooltip("Cooldown for special effect (if applicable)")]
+        public float specialEffectCooldown = 10f;
+
+        [Header("Visual & Audio")]
+        [Tooltip("Visual effect prefab when special effect activates")]
+        public GameObject specialEffectVFX;
+
+        [Tooltip("Sound effect when special effect activates")]
+        public AudioClip specialEffectSound;
+
+        [Tooltip("Override character material with this (if not null)")]
+        public Material armorMaterial;
+
+        [Header("Upgrade Scaling")]
+        [Tooltip("Defense increase per level (multiplier)")]
+        [Range(1f, 2f)]
+        public float defenseUpgradeMultiplier = 1.2f;
+
+        [Tooltip("Health increase per level (multiplier)")]
+        [Range(1f, 2f)]
+        public float healthUpgradeMultiplier = 1.15f;
+
+        [Tooltip("Special effect chance increase per level (flat addition)")]
+        [Range(0f, 0.1f)]
+        public float specialEffectChanceIncrease = 0.02f;
+
+        /// <summary>
+        /// Validates the armor data when it's created or modified in the editor.
+        /// </summary>
+        protected override void OnValidate()
+        {
+            // Ensure correct slot type
+            slotType = EquipmentSlotType.Armor;
+
+            base.OnValidate();
+
+            // Additional armor-specific validation
+            ValidateArmorFields();
+        }
+
+        /// <summary>
+        /// Validates armor-specific fields
+        /// </summary>
+        private void ValidateArmorFields()
+        {
+            baseDefenseBonus = Mathf.Max(0f, baseDefenseBonus);
+            baseHealthBonus = Mathf.Max(0f, baseHealthBonus);
+
+            // Speed modifier can be negative (slows down), but not too extreme
+            speedModifier = Mathf.Clamp(speedModifier, -0.3f, 0.3f);
+
+            healthRegenBonus = Mathf.Max(0f, healthRegenBonus);
+
+            if (hasSpecialEffect)
+            {
+                specialEffectChance = Mathf.Clamp01(specialEffectChance);
+                specialEffectCooldown = Mathf.Max(1f, specialEffectCooldown);
+
+                if (string.IsNullOrEmpty(specialEffectDescription))
+                {
+                    specialEffectDescription = "Activates a special effect.";
+                    Debug.LogWarning($"[ArmorData] Special effect description is empty for {displayName}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the defense bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Defense bonus at that level</returns>
+        public float GetDefenseBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseDefenseBonus * Mathf.Pow(defenseUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the health bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Health bonus at that level</returns>
+        public float GetHealthBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseHealthBonus * Mathf.Pow(healthUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the health regeneration bonus for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Health regen bonus at that level</returns>
+        public float GetHealthRegenBonusForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+
+            if (healthRegenBonus <= 0f)
+                return 0f;
+
+            // Health regen scales linearly with level
+            return healthRegenBonus * (1f + (0.2f * (level - 1)));
+        }
+
+        /// <summary>
+        /// Gets the special effect chance for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Special effect chance at that level</returns>
+        public float GetSpecialEffectChanceForLevel(int level)
+        {
+            if (!hasSpecialEffect)
+                return 0f;
+
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return Mathf.Clamp01(specialEffectChance + (specialEffectChanceIncrease * (level - 1)));
+        }
+
+        /// <summary>
+        /// Gets the special effect cooldown for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level</param>
+        /// <returns>Special effect cooldown at that level</returns>
+        public float GetSpecialEffectCooldownForLevel(int level)
+        {
+            if (!hasSpecialEffect)
+                return 0f;
+
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+
+            // Cooldown reduces by 10% per level (multiplicative)
+            return specialEffectCooldown * Mathf.Pow(0.9f, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the stats for the specified upgrade level
+        /// </summary>
+        public override StatDescriptor[] GetStatsForLevel(int upgradeLevel)
+        {
+            upgradeLevel = Mathf.Clamp(upgradeLevel, 1, maxUpgradeLevel);
+
+            List<StatDescriptor> stats = new List<StatDescriptor>();
+
+            // Always add the main armor stats
+            stats.Add(new StatDescriptor("Defense", GetDefenseBonusForLevel(upgradeLevel)));
+            stats.Add(new StatDescriptor("Health", GetHealthBonusForLevel(upgradeLevel)));
+
+            // Add speed modifier if not zero
+            if (speedModifier != 0f)
+            {
+                stats.Add(new StatDescriptor("Speed", speedModifier * 100f, true, speedModifier > 0f));
+            }
+
+            // Add health regen if applicable
+            if (healthRegenBonus > 0f)
+            {
+                stats.Add(new StatDescriptor("Health Regen", GetHealthRegenBonusForLevel(upgradeLevel)));
+            }
+
+            // Add special effect stats if applicable
+            if (hasSpecialEffect)
+            {
+                stats.Add(new StatDescriptor("Effect Chance", GetSpecialEffectChanceForLevel(upgradeLevel) * 100f, true));
+                stats.Add(new StatDescriptor("Effect Cooldown", GetSpecialEffectCooldownForLevel(upgradeLevel), false, false));
+            }
+
+            // Add additional stats based on focus type
+            switch (focusType)
+            {
+                case ArmorFocusType.Offensive:
+                    stats.Add(new StatDescriptor("Power", 5f * upgradeLevel, false, true));
+                    break;
+
+                case ArmorFocusType.Mobility:
+                    if (speedModifier <= 0) // Only add if not already added above
+                    {
+                        stats.Add(new StatDescriptor("Speed", 3f * upgradeLevel, false, true));
+                    }
+                    stats.Add(new StatDescriptor("Magnetic Field", 0.2f * upgradeLevel, false, true));
+                    break;
+
+                case ArmorFocusType.Utility:
+                    stats.Add(new StatDescriptor("Luck", 0.05f * upgradeLevel, false, true));
+                    stats.Add(new StatDescriptor("Area of Effect", 0.1f * upgradeLevel, false, true));
+                    break;
+            }
+
+            return stats.ToArray();
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Validates required references are assigned in the editor
+        /// </summary>
+        public override bool ValidateReferences()
+        {
+            bool valid = base.ValidateReferences();
+
+            if (hasSpecialEffect)
+            {
+                if (specialEffectVFX == null)
+                {
+                    Debug.LogWarning($"[ArmorData] Special effect VFX is missing for {displayName}");
+                }
+
+                if (specialEffectSound == null)
+                {
+                    Debug.LogWarning($"[ArmorData] Special effect sound is missing for {displayName}");
+                }
+            }
+
+            return valid;
+        }
+#endif
+    }
+}
+
+// --- END FILE ---
+
+// File: Shop/Equipment/Data/EquipmentData.cs
+// Size: 6388 characters
+// ---
+// File: Assets/Code/Shop/Equipment/Data/EquipmentData.cs
+//
+// Purpose: Defines the base data structure for all equipment types in Cyber Pickle.
+// This ScriptableObject is the parent class for weapons, power-ups, armor, and amulets.
+// Contains shared properties and functionality across all equipment types.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using CyberPickle.Core.Services.Authentication.Data;
+
+namespace CyberPickle.Shop.Equipment.Data
+{
+    /// <summary>
+    /// Base ScriptableObject class for all equipment types in the game.
+    /// Defines common properties and functions shared across different equipment.
+    /// </summary>
+    public abstract class EquipmentData : ScriptableObject
+    {
+        [Header("Basic Info")]
+        [Tooltip("Unique identifier for the equipment")]
+        public string equipmentId;
+
+        [Tooltip("Display name shown in the UI")]
+        public string displayName;
+
+        [Tooltip("Equipment description shown in shop and inventory")]
+        [TextArea(3, 5)]
+        public string description;
+
+        [Header("Equipment Type")]
+        [Tooltip("Type of equipment slot this item uses")]
+        public EquipmentSlotType slotType;
+
+        [Header("Visual References")]
+        [Tooltip("2D icon for UI elements")]
+        public Sprite equipmentIcon;
+
+        [Tooltip("3D model prefab for this equipment")]
+        public GameObject equipmentPrefab;
+
+        [Header("Economy")]
+        [Tooltip("Base cost in Neural Credits")]
+        public int neuralCreditCost;
+
+        [Tooltip("Cost in CyberCoins (if purchasable with premium currency)")]
+        public int cyberCoinCost;
+
+        [Header("Unlock Requirements")]
+        [Tooltip("If true, equipment is available from the start")]
+        public bool unlockedByDefault;
+
+        [Tooltip("Minimum player level required to unlock")]
+        public int requiredPlayerLevel;
+
+        [Tooltip("Achievement IDs required to unlock this equipment")]
+        public string[] requiredAchievements;
+
+        [Header("Upgrade Path")]
+        [Tooltip("Maximum upgrade level")]
+        [Range(1, 5)]
+        public int maxUpgradeLevel = 5;
+
+        /// <summary>
+        /// Validates the equipment data when it's created or modified in the editor.
+        /// Automatically generates an equipmentId if none is provided.
+        /// </summary>
+        protected virtual void OnValidate()
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+            {
+                equipmentId = $"{slotType.ToString().ToLower()}_{displayName?.ToLower().Replace(" ", "_") ?? "undefined"}";
+                Debug.Log($"[EquipmentData] Auto-generated equipmentId: {equipmentId}");
+            }
+
+            ValidateFields();
+        }
+
+        /// <summary>
+        /// Validates equipment fields have appropriate values
+        /// </summary>
+        protected virtual void ValidateFields()
+        {
+            neuralCreditCost = Mathf.Max(0, neuralCreditCost);
+            cyberCoinCost = Mathf.Max(0, cyberCoinCost);
+            requiredPlayerLevel = Mathf.Max(1, requiredPlayerLevel);
+        }
+
+        /// <summary>
+        /// Gets the equipment's stats for the specified upgrade level
+        /// </summary>
+        /// <param name="upgradeLevel">The upgrade level to get stats for (1-5)</param>
+        /// <returns>An array of stat descriptors for display</returns>
+        public abstract StatDescriptor[] GetStatsForLevel(int upgradeLevel);
+
+        /// <summary>
+        /// Gets the cost to upgrade this equipment to the specified level
+        /// </summary>
+        /// <param name="currentLevel">Current level of the equipment</param>
+        /// <param name="targetLevel">Target level to upgrade to</param>
+        /// <returns>The cost in Neural Credits to upgrade</returns>
+        public virtual int GetUpgradeCost(int currentLevel, int targetLevel)
+        {
+            if (currentLevel >= targetLevel || currentLevel < 1 || targetLevel > maxUpgradeLevel)
+                return 0;
+
+            // Base upgrade cost calculation
+            int baseCost = neuralCreditCost / 2;
+            float multiplier = 1.5f;
+
+            int totalCost = 0;
+            for (int level = currentLevel; level < targetLevel; level++)
+            {
+                totalCost += Mathf.RoundToInt(baseCost * Mathf.Pow(multiplier, level - 1));
+            }
+
+            return totalCost;
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Validates required references are assigned in the editor
+        /// </summary>
+        public virtual bool ValidateReferences()
+        {
+            if (equipmentIcon == null)
+            {
+                Debug.LogError($"[EquipmentData] Equipment icon is missing for {displayName}");
+                return false;
+            }
+
+            return true;
+        }
+#endif
+    }
+
+    /// <summary>
+    /// Struct to describe a single stat for display purposes
+    /// </summary>
+    [Serializable]
+    public struct StatDescriptor
+    {
+        /// <summary>
+        /// The name of the stat
+        /// </summary>
+        public string statName;
+
+        /// <summary>
+        /// The value of the stat (can be raw number or percentage)
+        /// </summary>
+        public float value;
+
+        /// <summary>
+        /// Whether this stat should be displayed as a percentage
+        /// </summary>
+        public bool isPercentage;
+
+        /// <summary>
+        /// Whether higher values are better (green) or worse (red)
+        /// </summary>
+        public bool higherIsBetter;
+
+        /// <summary>
+        /// Creates a new stat descriptor
+        /// </summary>
+        public StatDescriptor(string name, float value, bool isPercentage = false, bool higherIsBetter = true)
+        {
+            this.statName = name;
+            this.value = value;
+            this.isPercentage = isPercentage;
+            this.higherIsBetter = higherIsBetter;
+        }
+
+        /// <summary>
+        /// Gets the formatted display value as a string
+        /// </summary>
+        public string GetDisplayValue()
+        {
+            return isPercentage ? $"{value:F1}%" : $"{value:F1}";
+        }
+    }
+}
+
+// --- END FILE ---
+
+// File: Shop/Equipment/Data/PowerUpData.cs
+// Size: 11887 characters
+// ---
+// File: Assets/Code/Shop/Equipment/Data/PowerUpData.cs
+//
+// Purpose: Defines the data structure for power-ups in Cyber Pickle.
+// Contains power-up effects and their scaling with upgrade levels.
+// Supports synergies with weapons to unlock final weapon forms.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Collections.Generic;
+using CyberPickle.Core.Services.Authentication.Data;
+
+namespace CyberPickle.Shop.Equipment.Data
+{
+    /// <summary>
+    /// Defines the type of effect a power-up provides
+    /// </summary>
+    public enum PowerUpEffectType
+    {
+        StatBoost,      // Directly boosts a character stat
+        WeaponBoost,    // Enhances weapon performance
+        SpecialEffect,  // Provides a special gameplay effect
+        DefensiveAbility, // Provides a defensive ability
+        PassiveAbility  // Provides a passive ability
+    }
+
+    /// <summary>
+    /// Scriptable Object that defines data for power-up equipment
+    /// </summary>
+    [CreateAssetMenu(fileName = "PowerUp", menuName = "CyberPickle/Equipment/PowerUpData")]
+    public class PowerUpData : EquipmentData
+    {
+        [Header("Power-Up Properties")]
+        [Tooltip("The type of effect this power-up provides")]
+        public PowerUpEffectType effectType = PowerUpEffectType.StatBoost;
+
+        [Tooltip("Duration of the effect in seconds (0 = permanent)")]
+        public float baseDuration = 0f;
+
+        [Tooltip("Cooldown before the power-up can be activated again (0 = passive effect)")]
+        public float baseCooldown = 0f;
+
+        [Tooltip("Is this power-up automatically activated or manually triggered?")]
+        public bool isPassive = true;
+
+        [Header("Stat Boosts")]
+        [Tooltip("The stat this power-up affects (if applicable)")]
+        public string affectedStat = "Power";
+
+        [Tooltip("Base amount to boost the stat by")]
+        public float baseStatBoost = 10f;
+
+        [Tooltip("Is the stat boost a flat value (false) or percentage (true)?")]
+        public bool isPercentageBased = true;
+
+        [Header("Weapon Enhancement")]
+        [Tooltip("Compatible weapon types for enhanced effects")]
+        public EquipmentSlotType[] compatibleWeaponTypes;
+
+        [Tooltip("Weapon IDs that have special synergy with this power-up")]
+        public string[] synergisticWeaponIds;
+
+        [Tooltip("Weapon properties affected by this power-up")]
+        public string[] affectedWeaponProperties;
+
+        [Tooltip("Base multiplier for weapon enhancement")]
+        public float baseWeaponEnhancementMultiplier = 1.2f;
+
+        [Header("Special Effects")]
+        [Tooltip("Description of special effects for level 1")]
+        [TextArea(2, 5)]
+        public string baseEffectDescription;
+
+        [Tooltip("Description of special effects for max level")]
+        [TextArea(2, 5)]
+        public string maxLevelEffectDescription;
+
+        [Header("Visual & Audio")]
+        [Tooltip("VFX prefab for when the power-up is active")]
+        public GameObject activeEffectPrefab;
+
+        [Tooltip("Sound effect for activation")]
+        public AudioClip activationSound;
+
+        [Header("Upgrade Scaling")]
+        [Tooltip("Effect strength increase per level (multiplier)")]
+        [Range(1f, 2f)]
+        public float effectStrengthUpgradeMultiplier = 1.2f;
+
+        [Tooltip("Duration increase per level (multiplier)")]
+        [Range(1f, 1.5f)]
+        public float durationUpgradeMultiplier = 1.15f;
+
+        [Tooltip("Cooldown reduction per level (multiplier)")]
+        [Range(0.5f, 1f)]
+        public float cooldownReductionMultiplier = 0.9f;
+
+        /// <summary>
+        /// Validates the power-up data when it's created or modified in the editor.
+        /// </summary>
+        protected override void OnValidate()
+        {
+            // Ensure correct slot type
+            slotType = EquipmentSlotType.PowerUp;
+
+            base.OnValidate();
+
+            // Additional power-up specific validation
+            ValidatePowerUpFields();
+        }
+
+        /// <summary>
+        /// Validates power-up specific fields
+        /// </summary>
+        private void ValidatePowerUpFields()
+        {
+            // Ensure base values are valid
+            baseDuration = Mathf.Max(0f, baseDuration);
+            baseCooldown = Mathf.Max(0f, baseCooldown);
+            baseStatBoost = Mathf.Max(0f, baseStatBoost);
+            baseWeaponEnhancementMultiplier = Mathf.Max(1f, baseWeaponEnhancementMultiplier);
+
+            // Ensure scaling multipliers are in valid ranges
+            effectStrengthUpgradeMultiplier = Mathf.Max(1f, effectStrengthUpgradeMultiplier);
+
+            if (baseDuration > 0)
+                durationUpgradeMultiplier = Mathf.Max(1f, durationUpgradeMultiplier);
+
+            if (baseCooldown > 0)
+                cooldownReductionMultiplier = Mathf.Clamp(cooldownReductionMultiplier, 0.5f, 1f);
+        }
+
+        /// <summary>
+        /// Gets the power-up's effect strength for a specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the power-up</param>
+        /// <returns>The effect strength value at that level</returns>
+        public float GetEffectStrengthForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+
+            switch (effectType)
+            {
+                case PowerUpEffectType.StatBoost:
+                    return baseStatBoost * Mathf.Pow(effectStrengthUpgradeMultiplier, level - 1);
+
+                case PowerUpEffectType.WeaponBoost:
+                    return baseWeaponEnhancementMultiplier + (0.1f * (level - 1));
+
+                default:
+                    return Mathf.Pow(effectStrengthUpgradeMultiplier, level - 1);
+            }
+        }
+
+        /// <summary>
+        /// Gets the power-up's duration for a specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the power-up</param>
+        /// <returns>The duration in seconds at that level</returns>
+        public float GetDurationForLevel(int level)
+        {
+            if (baseDuration <= 0) return 0f; // Permanent effect
+
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseDuration * Mathf.Pow(durationUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the power-up's cooldown for a specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the power-up</param>
+        /// <returns>The cooldown in seconds at that level</returns>
+        public float GetCooldownForLevel(int level)
+        {
+            if (baseCooldown <= 0) return 0f; // No cooldown
+
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseCooldown * Mathf.Pow(cooldownReductionMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets a formatted effect description for the specified level
+        /// </summary>
+        /// <param name="level">Upgrade level of the power-up</param>
+        /// <returns>A formatted description of the effect at that level</returns>
+        public string GetEffectDescriptionForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+
+            // For level 1, return the base description
+            if (level == 1)
+                return baseEffectDescription;
+
+            // For max level, return the max level description
+            if (level == maxUpgradeLevel && !string.IsNullOrEmpty(maxLevelEffectDescription))
+                return maxLevelEffectDescription;
+
+            // For intermediate levels, generate a description based on effect type
+            string description = baseEffectDescription;
+
+            // Replace placeholders with actual values
+            description = description.Replace("{strength}", GetEffectStrengthForLevel(level).ToString("F1"));
+            description = description.Replace("{duration}", GetDurationForLevel(level).ToString("F1"));
+            description = description.Replace("{cooldown}", GetCooldownForLevel(level).ToString("F1"));
+
+            return description;
+        }
+
+        /// <summary>
+        /// Gets the stats for the specified upgrade level
+        /// </summary>
+        public override StatDescriptor[] GetStatsForLevel(int upgradeLevel)
+        {
+            upgradeLevel = Mathf.Clamp(upgradeLevel, 1, maxUpgradeLevel);
+
+            List<StatDescriptor> stats = new List<StatDescriptor>();
+
+            // Add stats based on effect type
+            switch (effectType)
+            {
+                case PowerUpEffectType.StatBoost:
+                    stats.Add(new StatDescriptor(
+                        affectedStat,
+                        GetEffectStrengthForLevel(upgradeLevel),
+                        isPercentageBased,
+                        true
+                    ));
+                    break;
+
+                case PowerUpEffectType.WeaponBoost:
+                    stats.Add(new StatDescriptor(
+                        "Weapon Boost",
+                        (GetEffectStrengthForLevel(upgradeLevel) - 1) * 100f,
+                        true,
+                        true
+                    ));
+                    break;
+
+                case PowerUpEffectType.SpecialEffect:
+                case PowerUpEffectType.DefensiveAbility:
+                case PowerUpEffectType.PassiveAbility:
+                    stats.Add(new StatDescriptor(
+                        "Effect Strength",
+                        GetEffectStrengthForLevel(upgradeLevel) * 100f,
+                        true,
+                        true
+                    ));
+                    break;
+            }
+
+            // Add duration if applicable
+            if (baseDuration > 0)
+            {
+                stats.Add(new StatDescriptor(
+                    "Duration",
+                    GetDurationForLevel(upgradeLevel),
+                    false,
+                    true
+                ));
+            }
+
+            // Add cooldown if applicable
+            if (baseCooldown > 0)
+            {
+                stats.Add(new StatDescriptor(
+                    "Cooldown",
+                    GetCooldownForLevel(upgradeLevel),
+                    false,
+                    false  // Lower is better for cooldown
+                ));
+            }
+
+            return stats.ToArray();
+        }
+
+        /// <summary>
+        /// Determines if this power-up can enhance the specified weapon
+        /// </summary>
+        /// <param name="weaponId">The ID of the weapon to check</param>
+        /// <returns>True if compatible, false otherwise</returns>
+        public bool IsCompatibleWithWeapon(string weaponId)
+        {
+            if (string.IsNullOrEmpty(weaponId))
+                return false;
+
+            // Check if weapon is in synergistic list
+            for (int i = 0; i < synergisticWeaponIds.Length; i++)
+            {
+                if (synergisticWeaponIds[i] == weaponId)
+                    return true;
+            }
+
+            return false;
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Validates required references are assigned in the editor
+        /// </summary>
+        public override bool ValidateReferences()
+        {
+            bool valid = base.ValidateReferences();
+
+            if (activationSound == null && !isPassive)
+            {
+                Debug.LogWarning($"[PowerUpData] Activation sound is missing for non-passive power-up {displayName}");
+            }
+
+            return valid;
+        }
+#endif
+    }
+}
+// --- END FILE ---
+
+// File: Shop/Equipment/Data/WeaponData.cs
+// Size: 10077 characters
+// ---
+// File: Assets/Code/Shop/Equipment/Data/WeaponData.cs
+//
+// Purpose: Defines the data structure for weapons in Cyber Pickle.
+// Contains weapon-specific properties like damage, fire rate, and special effects.
+// Supports hand weapons and body weapons with their unique characteristics.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using UnityEngine;
+using System;
+using System.Collections.Generic;
+using CyberPickle.Core.Services.Authentication.Data;
+
+namespace CyberPickle.Shop.Equipment.Data
+{
+    /// <summary>
+    /// Defines possible weapon attack types
+    /// </summary>
+    public enum WeaponAttackType
+    {
+        Projectile,
+        Beam,
+        Area,
+        Melee
+    }
+
+    /// <summary>
+    /// ScriptableObject that defines data for weapon equipment
+    /// </summary>
+    [CreateAssetMenu(fileName = "Weapon", menuName = "CyberPickle/Equipment/WeaponData")]
+    public class WeaponData : EquipmentData
+    {
+        [Header("Weapon Properties")]
+        [Tooltip("The type of weapon - hand or body")]
+        public EquipmentSlotType weaponType = EquipmentSlotType.HandWeapon;
+
+        [Tooltip("How this weapon attacks")]
+        public WeaponAttackType attackType = WeaponAttackType.Projectile;
+
+        [Tooltip("Base damage per attack/projectile")]
+        public float baseDamage = 10f;
+
+        [Tooltip("Base fire rate in shots per second")]
+        public float baseFireRate = 2f;
+
+        [Tooltip("Base projectile speed (if applicable)")]
+        public float baseProjectileSpeed = 10f;
+
+        [Tooltip("Base area of effect radius (if applicable)")]
+        public float baseAreaOfEffect = 1f;
+
+        [Tooltip("Base pierce count (0 = no pierce)")]
+        public int basePierceCount = 0;
+
+        [Tooltip("Does this weapon have a critical hit chance?")]
+        public bool canCriticalHit = false;
+
+        [Tooltip("Base critical hit chance (if applicable)")]
+        [Range(0f, 1f)]
+        public float baseCriticalChance = 0.05f;
+
+        [Tooltip("Critical hit damage multiplier")]
+        public float criticalDamageMultiplier = 2f;
+
+        [Header("Audio & VFX")]
+        [Tooltip("Prefab for projectile or attack VFX")]
+        public GameObject projectilePrefab;
+
+        [Tooltip("Sound effect for firing")]
+        public AudioClip fireSound;
+
+        [Tooltip("Sound effect for hitting")]
+        public AudioClip hitSound;
+
+        [Tooltip("VFX prefab for hit effect")]
+        public GameObject hitEffectPrefab;
+
+        [Header("Upgrade Scaling")]
+        [Tooltip("Damage increase per level (multiplier)")]
+        [Range(1f, 2f)]
+        public float damageUpgradeMultiplier = 1.2f;
+
+        [Tooltip("Fire rate increase per level (multiplier)")]
+        [Range(1f, 1.5f)]
+        public float fireRateUpgradeMultiplier = 1.1f;
+
+        [Tooltip("Other stats upgrade multiplier")]
+        [Range(1f, 1.5f)]
+        public float otherStatsUpgradeMultiplier = 1.15f;
+
+        [Header("Final Form")]
+        [Tooltip("Final weapon form when fully upgraded with associated power-up")]
+        public WeaponData finalForm;
+
+        [Tooltip("Required power-up ID to unlock final form")]
+        public string requiredPowerUpId;
+
+        /// <summary>
+        /// Validates the weapon data when it's created or modified in the editor.
+        /// </summary>
+        protected override void OnValidate()
+        {
+            // Set the slot type based on weapon type
+            slotType = weaponType;
+
+            base.OnValidate();
+
+            // Additional weapon-specific validation
+            ValidateWeaponFields();
+        }
+
+        /// <summary>
+        /// Validates weapon-specific fields
+        /// </summary>
+        private void ValidateWeaponFields()
+        {
+            baseDamage = Mathf.Max(0.1f, baseDamage);
+            baseFireRate = Mathf.Max(0.1f, baseFireRate);
+            baseProjectileSpeed = Mathf.Max(0.1f, baseProjectileSpeed);
+            baseAreaOfEffect = Mathf.Max(0.1f, baseAreaOfEffect);
+            basePierceCount = Mathf.Max(0, basePierceCount);
+
+            if (canCriticalHit)
+            {
+                baseCriticalChance = Mathf.Clamp(baseCriticalChance, 0f, 1f);
+                criticalDamageMultiplier = Mathf.Max(1f, criticalDamageMultiplier);
+            }
+        }
+
+        /// <summary>
+        /// Gets the weapon's damage for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the weapon</param>
+        /// <returns>The damage value at that level</returns>
+        public float GetDamageForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseDamage * Mathf.Pow(damageUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the weapon's fire rate for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the weapon</param>
+        /// <returns>The fire rate value at that level</returns>
+        public float GetFireRateForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseFireRate * Mathf.Pow(fireRateUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the weapon's projectile speed for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the weapon</param>
+        /// <returns>The projectile speed value at that level</returns>
+        public float GetProjectileSpeedForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseProjectileSpeed * Mathf.Pow(otherStatsUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the weapon's area of effect for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the weapon</param>
+        /// <returns>The area of effect value at that level</returns>
+        public float GetAreaOfEffectForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            return baseAreaOfEffect * Mathf.Pow(otherStatsUpgradeMultiplier, level - 1);
+        }
+
+        /// <summary>
+        /// Gets the weapon's pierce count for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the weapon</param>
+        /// <returns>The pierce count at that level</returns>
+        public int GetPierceCountForLevel(int level)
+        {
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            // Pierce increases every 2 levels
+            return basePierceCount + ((level - 1) / 2);
+        }
+
+        /// <summary>
+        /// Gets the weapon's critical hit chance for the specified upgrade level
+        /// </summary>
+        /// <param name="level">Upgrade level of the weapon</param>
+        /// <returns>The critical hit chance at that level</returns>
+        public float GetCriticalChanceForLevel(int level)
+        {
+            if (!canCriticalHit) return 0f;
+
+            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
+            // Critical chance increases by 1% per level up to a maximum of base + 0.2
+            return Mathf.Min(baseCriticalChance + (0.01f * (level - 1)), baseCriticalChance + 0.2f);
+        }
+
+        /// <summary>
+        /// Gets an array of stat descriptors for the specified upgrade level
+        /// </summary>
+        public override StatDescriptor[] GetStatsForLevel(int upgradeLevel)
+        {
+            upgradeLevel = Mathf.Clamp(upgradeLevel, 1, maxUpgradeLevel);
+
+            List<StatDescriptor> stats = new List<StatDescriptor>();
+
+            // Add base stats
+            stats.Add(new StatDescriptor("Damage", GetDamageForLevel(upgradeLevel)));
+            stats.Add(new StatDescriptor("Fire Rate", GetFireRateForLevel(upgradeLevel)));
+
+            // Add attack type specific stats
+            switch (attackType)
+            {
+                case WeaponAttackType.Projectile:
+                    stats.Add(new StatDescriptor("Projectile Speed", GetProjectileSpeedForLevel(upgradeLevel)));
+
+                    if (basePierceCount > 0 || upgradeLevel > 2)
+                    {
+                        stats.Add(new StatDescriptor("Pierce Count", GetPierceCountForLevel(upgradeLevel)));
+                    }
+                    break;
+
+                case WeaponAttackType.Area:
+                    stats.Add(new StatDescriptor("Area of Effect", GetAreaOfEffectForLevel(upgradeLevel)));
+                    break;
+
+                case WeaponAttackType.Beam:
+                    stats.Add(new StatDescriptor("Range", GetAreaOfEffectForLevel(upgradeLevel)));
+                    break;
+            }
+
+            // Add critical hit stats if applicable
+            if (canCriticalHit)
+            {
+                stats.Add(new StatDescriptor("Critical Chance", GetCriticalChanceForLevel(upgradeLevel) * 100f, true));
+                stats.Add(new StatDescriptor("Critical Damage", criticalDamageMultiplier * 100f, true));
+            }
+
+            return stats.ToArray();
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Validates required references are assigned in the editor
+        /// </summary>
+        public override bool ValidateReferences()
+        {
+            bool valid = base.ValidateReferences();
+
+            if (projectilePrefab == null && attackType == WeaponAttackType.Projectile)
+            {
+                Debug.LogError($"[WeaponData] Projectile prefab is missing for {displayName}");
+                valid = false;
+            }
+
+            if (fireSound == null)
+            {
+                Debug.LogWarning($"[WeaponData] Fire sound is missing for {displayName}");
+            }
+
+            return valid;
+        }
+#endif
+    }
+}
+
+// --- END FILE ---
+
+// File: Shop/Mining/UI/MiningUIController.cs
+// Size: 320 characters
+// ---
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class MiningUIController : MonoBehaviour
+{
+    // Start is called before the first frame update
+    void Start()
+    {
+        
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
     }
 }
 
@@ -7935,6 +11726,346 @@ namespace CyberPickle.Core.Services.Authentication
 
 // --- END FILE ---
 
+// File: Core/Services/Authentication/Data/CharacterProgressionData_Extension.cs
+// Size: 8367 characters
+// ---
+// File: Assets/Code/Core/Services/Authentication/Data/CharacterProgressionData_Extension.cs
+//
+// Purpose: Extension methods for the CharacterProgressionData class to support equipment management.
+// Adds methods for unequipping items and handling equipment slot management.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+namespace CyberPickle.Core.Services.Authentication.Data
+{
+    /// <summary>
+    /// Extension methods for CharacterProgressionData
+    /// </summary>
+    public static class CharacterProgressionDataExtensions
+    {
+        /// <summary>
+        /// Unequips an item from a character
+        /// </summary>
+        /// <param name="characterData">The character progression data</param>
+        /// <param name="equipmentId">ID of the equipment to unequip</param>
+        /// <returns>True if unequipped successfully, false otherwise</returns>
+        public static bool UnequipItem(this CharacterProgressionData characterData, string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+            {
+                Debug.LogError("[CharacterProgressionData] Cannot unequip null or empty equipment ID");
+                return false;
+            }
+
+            // Check if it's a hand weapon
+            if (characterData.EquippedHandWeapons.Contains(equipmentId))
+            {
+                // Get the private field through reflection
+                var handWeaponsField = typeof(CharacterProgressionData).GetField("equippedHandWeapons", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (handWeaponsField != null)
+                {
+                    var handWeapons = handWeaponsField.GetValue(characterData) as List<string>;
+                    if (handWeapons != null)
+                    {
+                        handWeapons.Remove(equipmentId);
+                        Debug.Log($"[CharacterProgressionData] Unequipped hand weapon: {equipmentId}");
+                        return true;
+                    }
+                }
+                Debug.LogError($"[CharacterProgressionData] Failed to access hand weapons field for unequipping {equipmentId}");
+                return false;
+            }
+
+            // Check if it's a body weapon
+            if (characterData.EquippedBodyWeapon == equipmentId)
+            {
+                var bodyWeaponField = typeof(CharacterProgressionData).GetField("equippedBodyWeapon", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (bodyWeaponField != null)
+                {
+                    bodyWeaponField.SetValue(characterData, string.Empty);
+                    Debug.Log($"[CharacterProgressionData] Unequipped body weapon: {equipmentId}");
+                    return true;
+                }
+                Debug.LogError($"[CharacterProgressionData] Failed to access body weapon field for unequipping {equipmentId}");
+                return false;
+            }
+
+            // Check if it's a power-up
+            if (characterData.EquippedPowerupIds.Contains(equipmentId))
+            {
+                var powerUpsField = typeof(CharacterProgressionData).GetField("equippedPowerupIds", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (powerUpsField != null)
+                {
+                    var powerUps = powerUpsField.GetValue(characterData) as List<string>;
+                    if (powerUps != null)
+                    {
+                        powerUps.Remove(equipmentId);
+                        Debug.Log($"[CharacterProgressionData] Unequipped power-up: {equipmentId}");
+                        return true;
+                    }
+                }
+                Debug.LogError($"[CharacterProgressionData] Failed to access power-ups field for unequipping {equipmentId}");
+                return false;
+            }
+
+            // Check if it's armor
+            if (characterData.EquippedArmor == equipmentId)
+            {
+                var armorField = typeof(CharacterProgressionData).GetField("equippedArmor", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (armorField != null)
+                {
+                    armorField.SetValue(characterData, string.Empty);
+                    Debug.Log($"[CharacterProgressionData] Unequipped armor: {equipmentId}");
+                    return true;
+                }
+                Debug.LogError($"[CharacterProgressionData] Failed to access armor field for unequipping {equipmentId}");
+                return false;
+            }
+
+            // Check if it's an amulet
+            if (characterData.EquippedAmulet == equipmentId)
+            {
+                var amuletField = typeof(CharacterProgressionData).GetField("equippedAmulet", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (amuletField != null)
+                {
+                    amuletField.SetValue(characterData, string.Empty);
+                    Debug.Log($"[CharacterProgressionData] Unequipped amulet: {equipmentId}");
+                    return true;
+                }
+                Debug.LogError($"[CharacterProgressionData] Failed to access amulet field for unequipping {equipmentId}");
+                return false;
+            }
+
+            // Item not found equipped on the character
+            Debug.LogWarning($"[CharacterProgressionData] Equipment {equipmentId} is not equipped");
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if a specific equipment is equipped
+        /// </summary>
+        /// <param name="characterData">The character progression data</param>
+        /// <param name="equipmentId">ID of the equipment to check</param>
+        /// <returns>True if equipped, false otherwise</returns>
+        public static bool IsEquipped(this CharacterProgressionData characterData, string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+                return false;
+
+            // Check hand weapons
+            if (characterData.EquippedHandWeapons.Contains(equipmentId))
+                return true;
+
+            // Check body weapon
+            if (characterData.EquippedBodyWeapon == equipmentId)
+                return true;
+
+            // Check power-ups
+            if (characterData.EquippedPowerupIds.Contains(equipmentId))
+                return true;
+
+            // Check armor
+            if (characterData.EquippedArmor == equipmentId)
+                return true;
+
+            // Check amulet
+            if (characterData.EquippedAmulet == equipmentId)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Get the slot type where an item is equipped, or null if not equipped
+        /// </summary>
+        /// <param name="characterData">The character progression data</param>
+        /// <param name="equipmentId">ID of the equipment to check</param>
+        /// <returns>The slot type, or null if not equipped</returns>
+        public static EquipmentSlotType? GetEquippedSlotType(this CharacterProgressionData characterData, string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+                return null;
+
+            // Check hand weapons
+            if (characterData.EquippedHandWeapons.Contains(equipmentId))
+                return EquipmentSlotType.HandWeapon;
+
+            // Check body weapon
+            if (characterData.EquippedBodyWeapon == equipmentId)
+                return EquipmentSlotType.BodyWeapon;
+
+            // Check power-ups
+            if (characterData.EquippedPowerupIds.Contains(equipmentId))
+                return EquipmentSlotType.PowerUp;
+
+            // Check armor
+            if (characterData.EquippedArmor == equipmentId)
+                return EquipmentSlotType.Armor;
+
+            // Check amulet
+            if (characterData.EquippedAmulet == equipmentId)
+                return EquipmentSlotType.Amulet;
+
+            return null;
+        }
+    }
+}
+
+// --- END FILE ---
+
+// File: Core/Services/Authentication/Data/EquipmentProgressionData.cs
+// Size: 4328 characters
+// ---
+// File: Assets/Code/Core/Services/Authentication/Data/EquipmentProgressionData.cs
+//
+// Purpose: Defines the data structure for equipment progression tracking.
+// Stores the upgrade level and other persistent stats for equipment items.
+// Used by ProfileData to track permanent equipment upgrades between sessions.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using System;
+using Newtonsoft.Json;
+
+namespace CyberPickle.Core.Services.Authentication.Data
+{
+    /// <summary>
+    /// Stores progression data for a single equipment item
+    /// </summary>
+    [Serializable]
+    public class EquipmentProgressionData
+    {
+        [JsonProperty("equipmentId")]
+        private string equipmentId;
+
+        [JsonProperty("currentLevel")]
+        private int currentLevel;
+
+        [JsonProperty("purchaseTimeTicks")]
+        private long purchaseTimeTicks;
+
+        [JsonProperty("lastUpgradeTimeTicks")]
+        private long lastUpgradeTimeTicks;
+
+        [JsonProperty("timesUsed")]
+        private int timesUsed;
+
+        [JsonProperty("totalKills")]
+        private int totalKills;
+
+        [JsonProperty("totalDamage")]
+        private float totalDamage;
+
+        /// <summary>
+        /// The equipment ID this progression data is for
+        /// </summary>
+        [JsonIgnore]
+        public string EquipmentId => equipmentId;
+
+        /// <summary>
+        /// The current upgrade level of the equipment
+        /// </summary>
+        [JsonIgnore]
+        public int CurrentLevel => currentLevel;
+
+        /// <summary>
+        /// When the equipment was first purchased
+        /// </summary>
+        [JsonIgnore]
+        public DateTime PurchaseTime => new DateTime(purchaseTimeTicks);
+
+        /// <summary>
+        /// When the equipment was last upgraded
+        /// </summary>
+        [JsonIgnore]
+        public DateTime LastUpgradeTime => new DateTime(lastUpgradeTimeTicks);
+
+        /// <summary>
+        /// How many times the equipment has been used
+        /// </summary>
+        [JsonIgnore]
+        public int TimesUsed => timesUsed;
+
+        /// <summary>
+        /// How many kills the equipment has gotten
+        /// </summary>
+        [JsonIgnore]
+        public int TotalKills => totalKills;
+
+        /// <summary>
+        /// Total damage dealt with this equipment
+        /// </summary>
+        [JsonIgnore]
+        public float TotalDamage => totalDamage;
+
+        /// <summary>
+        /// Creates new equipment progression data
+        /// </summary>
+        /// <param name="equipmentId">The ID of the equipment</param>
+        public EquipmentProgressionData(string equipmentId)
+        {
+            this.equipmentId = equipmentId;
+            this.currentLevel = 1;
+            this.purchaseTimeTicks = DateTime.UtcNow.Ticks;
+            this.lastUpgradeTimeTicks = this.purchaseTimeTicks;
+            this.timesUsed = 0;
+            this.totalKills = 0;
+            this.totalDamage = 0;
+        }
+
+        /// <summary>
+        /// Upgrade the equipment to the specified level
+        /// </summary>
+        /// <param name="newLevel">The new level to upgrade to</param>
+        /// <returns>True if upgraded successfully</returns>
+        public bool Upgrade(int newLevel)
+        {
+            if (newLevel <= currentLevel)
+                return false;
+
+            currentLevel = newLevel;
+            lastUpgradeTimeTicks = DateTime.UtcNow.Ticks;
+            return true;
+        }
+
+        /// <summary>
+        /// Record usage of this equipment
+        /// </summary>
+        public void RecordUse()
+        {
+            timesUsed++;
+        }
+
+        /// <summary>
+        /// Record kills made with this equipment
+        /// </summary>
+        /// <param name="kills">Number of kills to add</param>
+        public void RecordKills(int kills)
+        {
+            if (kills > 0)
+                totalKills += kills;
+        }
+
+        /// <summary>
+        /// Record damage dealt with this equipment
+        /// </summary>
+        /// <param name="damage">Amount of damage to add</param>
+        public void RecordDamage(float damage)
+        {
+            if (damage > 0)
+                totalDamage += damage;
+        }
+    }
+}
+
+// --- END FILE ---
+
 // File: Core/Services/Authentication/Data/ProfileContainer.cs
 // Size: 8664 characters
 // ---
@@ -8180,8 +12311,17 @@ namespace CyberPickle.Core.Services.Authentication.Data
 // --- END FILE ---
 
 // File: Core/Services/Authentication/Data/ProfileData.cs
-// Size: 9466 characters
+// Size: 29268 characters
 // ---
+// File: Core/Services/Authentication/Data/ProfileData.cs
+//
+// Purpose: Defines the data structures for player profiles, character progression,
+// and mining nodes. Enhanced to support shop items, global currencies, and expanded
+// equipment systems.
+//
+// Created: 2024-02-11
+// Updated: 2024-02-24
+
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -8189,6 +12329,44 @@ using UnityEngine;
 
 namespace CyberPickle.Core.Services.Authentication.Data
 {
+    /// <summary>
+    /// Defines the available equipment slot types
+    /// </summary>
+    [Serializable]
+    public enum EquipmentSlotType
+    {
+        /// <summary>Hand weapon slot (max 2)</summary>
+        HandWeapon,
+        /// <summary>Body weapon slot (max 1)</summary>
+        BodyWeapon,
+        /// <summary>Power-up slot (max 3)</summary>
+        PowerUp,
+        /// <summary>Armor slot (max 1)</summary>
+        Armor,
+        /// <summary>Amulet slot (max 1)</summary>
+        Amulet
+    }
+
+    /// <summary>
+    /// Defines the types of currency available in the game
+    /// </summary>
+    [Serializable]
+    public enum CurrencyType
+    {
+        /// <summary>
+        /// Primary currency earned through gameplay, destroying objects and defeating enemies
+        /// </summary>
+        NeuralCredits,
+
+        /// <summary>
+        /// Special cryptocurrency used for character unlocks, earned through Neural Mining
+        /// </summary>
+        CyberCoins
+    }
+
+    /// <summary>
+    /// Represents character-specific progression data including stats, experience, and equipment
+    /// </summary>
     [Serializable]
     public class CharacterProgressionData
     {
@@ -8207,13 +12385,32 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonProperty("unlockedSkills")]
         private List<string> unlockedSkills;
 
+        // Keep existing properties
         [JsonProperty("equippedWeaponId")]
         private string equippedWeaponId;
 
         [JsonProperty("equippedPowerupIds")]
         private List<string> equippedPowerupIds;
 
-        // Public Properties
+        // Add new equipment slots
+        [JsonProperty("equippedHandWeapons")]
+        private List<string> equippedHandWeapons;
+
+        [JsonProperty("equippedBodyWeapon")]
+        private string equippedBodyWeapon;
+
+        [JsonProperty("equippedArmor")]
+        private string equippedArmor;
+
+        [JsonProperty("equippedAmulet")]
+        private string equippedAmulet;
+
+        // Constants defining equipment slot limits
+        private const int MAX_HAND_WEAPONS = 2;
+        private const int MAX_BODY_WEAPONS = 1;
+        private const int MAX_POWER_UPS = 3;
+
+        // Public Properties - keep existing ones
         [JsonIgnore] public string CharacterId => characterId;
         [JsonIgnore] public int CharacterLevel => characterLevel;
         [JsonIgnore] public float Experience => experience;
@@ -8221,6 +12418,12 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonIgnore] public IReadOnlyList<string> UnlockedSkills => unlockedSkills;
         [JsonIgnore] public string EquippedWeaponId => equippedWeaponId;
         [JsonIgnore] public IReadOnlyList<string> EquippedPowerupIds => equippedPowerupIds;
+
+        // Add new properties
+        [JsonIgnore] public IReadOnlyList<string> EquippedHandWeapons => equippedHandWeapons;
+        [JsonIgnore] public string EquippedBodyWeapon => equippedBodyWeapon;
+        [JsonIgnore] public string EquippedArmor => equippedArmor;
+        [JsonIgnore] public string EquippedAmulet => equippedAmulet;
 
         public CharacterProgressionData(string characterId)
         {
@@ -8235,9 +12438,191 @@ namespace CyberPickle.Core.Services.Authentication.Data
             stats = new Dictionary<string, float>();
             unlockedSkills = new List<string>();
             equippedPowerupIds = new List<string>();
+
+            // Initialize new collections
+            equippedHandWeapons = new List<string>(MAX_HAND_WEAPONS);
+            equippedBodyWeapon = string.Empty;
+            equippedArmor = string.Empty;
+            equippedAmulet = string.Empty;
+
+            // Set default stats
+            InitializeDefaultStats();
         }
+
+        /// <summary>
+        /// Sets up default stats for a new character
+        /// </summary>
+        private void InitializeDefaultStats()
+        {
+            // Initialize with basic stats if stats dictionary is empty
+            if (stats.Count == 0)
+            {
+                stats["Health"] = 100f;
+                stats["Defense"] = 10f;
+                stats["Power"] = 10f;
+                stats["Speed"] = 5f;
+                stats["MagneticField"] = 1f;
+                stats["Dexterity"] = 10f;
+                stats["Luck"] = 1f;
+                stats["AreaOfEffect"] = 1f;
+            }
+        }
+
+        #region Experience and Leveling
+
+        /// <summary>
+        /// Adds experience points to the character
+        /// </summary>
+        /// <param name="amount">Amount of experience to add</param>
+        /// <returns>True if the character leveled up, false otherwise</returns>
+        public bool AddExperience(float amount)
+        {
+            if (amount <= 0) return false;
+
+            int oldLevel = characterLevel;
+            experience += amount;
+
+            // Calculate new level based on experience
+            // XP needed for next level = level * 1000
+            while (experience >= characterLevel * 1000)
+            {
+                experience -= characterLevel * 1000;
+                characterLevel++;
+
+                // When leveling up, increase stats automatically
+                IncreaseLevelStats();
+            }
+
+            Debug.Log($"[CharacterProgressionData] Added {amount} XP to {characterId}. Level: {characterLevel}, XP: {experience}");
+            return characterLevel > oldLevel;
+        }
+
+        /// <summary>
+        /// Increases character stats when leveling up
+        /// </summary>
+        private void IncreaseLevelStats()
+        {
+            // Apply stat increases on level up
+            if (stats.ContainsKey("Health")) stats["Health"] += 10f;
+            if (stats.ContainsKey("Defense")) stats["Defense"] += 1f;
+            if (stats.ContainsKey("Power")) stats["Power"] += 1f;
+
+            Debug.Log($"[CharacterProgressionData] {characterId} leveled up to level {characterLevel}");
+        }
+
+        #endregion
+
+        #region Equipment Management
+
+        /// <summary>
+        /// Equips an item in the specified slot
+        /// </summary>
+        /// <param name="equipmentId">The unique identifier of the equipment</param>
+        /// <param name="slotType">The slot type to equip in</param>
+        /// <returns>True if successful, false otherwise</returns>
+        public bool EquipItem(string equipmentId, EquipmentSlotType slotType)
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+            {
+                Debug.LogError("[CharacterProgressionData] Cannot equip null or empty equipment ID");
+                return false;
+            }
+
+            try
+            {
+                switch (slotType)
+                {
+                    case EquipmentSlotType.HandWeapon:
+                        return EquipHandWeapon(equipmentId);
+
+                    case EquipmentSlotType.BodyWeapon:
+                        equippedBodyWeapon = equipmentId;
+                        Debug.Log($"[CharacterProgressionData] Equipped body weapon: {equipmentId}");
+                        return true;
+
+                    case EquipmentSlotType.PowerUp:
+                        return EquipPowerUp(equipmentId);
+
+                    case EquipmentSlotType.Armor:
+                        equippedArmor = equipmentId;
+                        Debug.Log($"[CharacterProgressionData] Equipped armor: {equipmentId}");
+                        return true;
+
+                    case EquipmentSlotType.Amulet:
+                        equippedAmulet = equipmentId;
+                        Debug.Log($"[CharacterProgressionData] Equipped amulet: {equipmentId}");
+                        return true;
+
+                    default:
+                        Debug.LogError($"[CharacterProgressionData] Unknown equipment slot type: {slotType}");
+                        return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[CharacterProgressionData] Error equipping item: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Equips a hand weapon while respecting the maximum limit
+        /// </summary>
+        /// <param name="weaponId">Hand weapon ID to equip</param>
+        /// <returns>True if equipped successfully</returns>
+        private bool EquipHandWeapon(string weaponId)
+        {
+            // Check if already equipped
+            if (equippedHandWeapons.Contains(weaponId))
+            {
+                Debug.LogWarning($"[CharacterProgressionData] Hand weapon {weaponId} is already equipped");
+                return false;
+            }
+
+            // Check if at max capacity
+            if (equippedHandWeapons.Count >= MAX_HAND_WEAPONS)
+            {
+                Debug.LogWarning($"[CharacterProgressionData] Cannot equip more than {MAX_HAND_WEAPONS} hand weapons");
+                return false;
+            }
+
+            equippedHandWeapons.Add(weaponId);
+            Debug.Log($"[CharacterProgressionData] Equipped hand weapon: {weaponId}");
+            return true;
+        }
+
+        /// <summary>
+        /// Equips a power-up while respecting the maximum limit
+        /// </summary>
+        /// <param name="powerUpId">Power-up ID to equip</param>
+        /// <returns>True if equipped successfully</returns>
+        private bool EquipPowerUp(string powerUpId)
+        {
+            // Check if already equipped
+            if (equippedPowerupIds.Contains(powerUpId))
+            {
+                Debug.LogWarning($"[CharacterProgressionData] Power-up {powerUpId} is already equipped");
+                return false;
+            }
+
+            // Check if at max capacity
+            if (equippedPowerupIds.Count >= MAX_POWER_UPS)
+            {
+                Debug.LogWarning($"[CharacterProgressionData] Cannot equip more than {MAX_POWER_UPS} power-ups");
+                return false;
+            }
+
+            equippedPowerupIds.Add(powerUpId);
+            Debug.Log($"[CharacterProgressionData] Equipped power-up: {powerUpId}");
+            return true;
+        }
+
+        #endregion
     }
 
+    /// <summary>
+    /// Represents a single Neural Mining Node that passively generates CyberCoins
+    /// </summary>
     [Serializable]
     public class MiningNodeData
     {
@@ -8253,11 +12638,45 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonProperty("multiplier")]
         private float multiplier;
 
+        [JsonProperty("lastMiningTimeTicks")]
+        private long lastMiningTimeTicks;
+
+        // Maximum level a node can be upgraded to
+        private const int MAX_NODE_LEVEL = 10;
+
+        // Maximum hours that mining resources can accumulate while offline
+        private const float MAX_OFFLINE_HOURS = 24f;
+
         // Public Properties
         [JsonIgnore] public string NodeId => nodeId;
         [JsonIgnore] public int Level => level;
         [JsonIgnore] public float BaseRate => baseRate;
         [JsonIgnore] public float Multiplier => multiplier;
+        [JsonIgnore] public DateTime LastMiningTime => new DateTime(lastMiningTimeTicks);
+
+        /// <summary>
+        /// Calculate the current mining rate including level bonuses and multipliers
+        /// </summary>
+        [JsonIgnore] public float CurrentMiningRate => baseRate * (1 + (level - 1) * 0.2f) * multiplier;
+
+        /// <summary>
+        /// How many CyberCoins have accumulated since last collection
+        /// </summary>
+        [JsonIgnore]
+        public float PendingCoins
+        {
+            get
+            {
+                DateTime now = DateTime.UtcNow;
+                TimeSpan timeSinceLastMining = now - LastMiningTime;
+
+                // Calculate how many hours have passed (up to a maximum of MAX_OFFLINE_HOURS)
+                float hoursElapsed = Mathf.Min((float)timeSinceLastMining.TotalHours, MAX_OFFLINE_HOURS);
+
+                // Calculate earnings
+                return hoursElapsed * CurrentMiningRate;
+            }
+        }
 
         public MiningNodeData(string nodeId)
         {
@@ -8265,13 +12684,51 @@ namespace CyberPickle.Core.Services.Authentication.Data
             this.level = 1;
             this.baseRate = 10f;
             this.multiplier = 1f;
+            this.lastMiningTimeTicks = DateTime.UtcNow.Ticks;
+        }
+
+        /// <summary>
+        /// Upgrades the mining node to the next level if possible
+        /// </summary>
+        /// <returns>True if the upgrade was successful, false if already at max level</returns>
+        public bool Upgrade()
+        {
+            if (level >= MAX_NODE_LEVEL)
+            {
+                Debug.Log($"[MiningNodeData] Cannot upgrade node {nodeId}: already at maximum level {MAX_NODE_LEVEL}");
+                return false;
+            }
+
+            level++;
+            Debug.Log($"[MiningNodeData] Node {nodeId} upgraded to level {level}");
+            return true;
+        }
+
+        /// <summary>
+        /// Collects accumulated CyberCoins from this mining node
+        /// </summary>
+        /// <returns>The amount of CyberCoins collected</returns>
+        public float CollectMining()
+        {
+            float earnings = PendingCoins;
+
+            // Update last mining time to now
+            lastMiningTimeTicks = DateTime.UtcNow.Ticks;
+
+            Debug.Log($"[MiningNodeData] Collected {earnings} CyberCoins from node {nodeId}");
+            return earnings;
         }
     }
 
+    /// <summary>
+    /// Main profile data class containing global and character-specific information
+    /// </summary>
     [Serializable]
     public class ProfileData
     {
         #region Private Fields
+        [JsonProperty("equipmentProgressionData")]
+        private Dictionary<string, EquipmentProgressionData> equipmentProgressionData = new Dictionary<string, EquipmentProgressionData>();
 
         [JsonProperty("ProfileId")]
         private string profileId;
@@ -8327,6 +12784,9 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonProperty("GlobalMultipliers")]
         private Dictionary<string, float> globalMultipliers;
 
+        [JsonProperty("UnlockedLevels")]
+        private HashSet<string> unlockedLevels;
+
         #endregion
 
         #region Public Properties
@@ -8350,6 +12810,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonIgnore] public IReadOnlyCollection<string> UnlockedEquipment => unlockedEquipment;
         [JsonIgnore] public IReadOnlyCollection<string> Achievements => achievements;
         [JsonIgnore] public IReadOnlyDictionary<string, float> GlobalMultipliers => globalMultipliers;
+        [JsonIgnore] public IReadOnlyCollection<string> UnlockedLevels => unlockedLevels;
 
         #endregion
 
@@ -8380,6 +12841,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
             unlockedEquipment ??= new HashSet<string>();
             achievements ??= new HashSet<string>();
             globalMultipliers ??= new Dictionary<string, float>();
+            unlockedLevels ??= new HashSet<string>();
         }
 
         private void SetDefaultValues()
@@ -8398,6 +12860,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
 
         #region Public Methods
 
+        // Keep existing methods
         public void UpdateLoginTime()
         {
             lastLoginAtTicks = DateTime.UtcNow.Ticks;
@@ -8454,6 +12917,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
             unlockedEquipment.Clear();
             achievements.Clear();
             globalMultipliers.Clear();
+            unlockedLevels.Clear();
 
             hasSaveData = false;
             Debug.Log($"[ProfileData] Cleared progress for profile: {profileId}");
@@ -8465,7 +12929,436 @@ namespace CyberPickle.Core.Services.Authentication.Data
             Debug.Log($"[ProfileData] Profile {profileId} active state set to: {active}");
         }
 
+        // Add new methods
+
+        #region Currency Methods
+
+        /// <summary>
+        /// Adds currency to the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to add (must be positive)</param>
+        /// <param name="type">Type of currency to add</param>
+        /// <returns>True if the currency was added successfully</returns>
+        public bool AddCurrency(float amount, CurrencyType type)
+        {
+            if (amount <= 0) return false;
+
+            switch (type)
+            {
+                case CurrencyType.NeuralCredits:
+                    neuralCredits += amount;
+                    Debug.Log($"[ProfileData] Added {amount} Neural Credits. New balance: {neuralCredits}");
+                    return true;
+
+                case CurrencyType.CyberCoins:
+                    cyberCoins += amount;
+                    Debug.Log($"[ProfileData] Added {amount} CyberCoins. New balance: {cyberCoins}");
+                    return true;
+
+                default:
+                    Debug.LogError($"[ProfileData] Unknown currency type: {type}");
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to spend currency from the player's balance
+        /// </summary>
+        /// <param name="amount">Amount to spend</param>
+        /// <param name="type">Type of currency to spend</param>
+        /// <returns>True if sufficient funds were available and spent, false otherwise</returns>
+        public bool SpendCurrency(float amount, CurrencyType type)
+        {
+            if (amount <= 0) return false;
+
+            switch (type)
+            {
+                case CurrencyType.NeuralCredits:
+                    if (neuralCredits >= amount)
+                    {
+                        neuralCredits -= amount;
+                        Debug.Log($"[ProfileData] Spent {amount} Neural Credits. Remaining balance: {neuralCredits}");
+                        return true;
+                    }
+                    Debug.Log($"[ProfileData] Insufficient Neural Credits. Required: {amount}, Available: {neuralCredits}");
+                    return false;
+
+                case CurrencyType.CyberCoins:
+                    if (cyberCoins >= amount)
+                    {
+                        cyberCoins -= amount;
+                        Debug.Log($"[ProfileData] Spent {amount} CyberCoins. Remaining balance: {cyberCoins}");
+                        return true;
+                    }
+                    Debug.Log($"[ProfileData] Insufficient CyberCoins. Required: {amount}, Available: {cyberCoins}");
+                    return false;
+
+                default:
+                    Debug.LogError($"[ProfileData] Unknown currency type: {type}");
+                    return false;
+            }
+        }
+
         #endregion
+
+        #region Equipment Methods
+
+        /// <summary>
+        /// Unlocks a piece of equipment for use by any character
+        /// </summary>
+        /// <param name="equipmentId">The unique identifier of the equipment</param>
+        /// <returns>True if newly unlocked, false if already unlocked</returns>
+        public bool UnlockEquipment(string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId)) return false;
+
+            InitializeCollectionsIfNeeded();
+
+            if (unlockedEquipment.Contains(equipmentId))
+            {
+                Debug.LogWarning($"[ProfileData] Equipment {equipmentId} is already unlocked");
+                return false;
+            }
+
+            unlockedEquipment.Add(equipmentId);
+            Debug.Log($"[ProfileData] Unlocked equipment: {equipmentId}");
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if a piece of equipment is unlocked
+        /// </summary>
+        /// <param name="equipmentId">The equipment ID to check</param>
+        /// <returns>True if unlocked, false otherwise</returns>
+        public bool IsEquipmentUnlocked(string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId)) return false;
+
+            InitializeCollectionsIfNeeded();
+            return unlockedEquipment.Contains(equipmentId);
+        }
+
+        #endregion
+
+        #region Level Methods
+
+        /// <summary>
+        /// Unlocks a level for play
+        /// </summary>
+        /// <param name="levelId">The unique identifier of the level</param>
+        /// <returns>True if newly unlocked, false if already unlocked</returns>
+        public bool UnlockLevel(string levelId)
+        {
+            if (string.IsNullOrEmpty(levelId)) return false;
+
+            InitializeCollectionsIfNeeded();
+
+            if (unlockedLevels.Contains(levelId))
+            {
+                Debug.LogWarning($"[ProfileData] Level {levelId} is already unlocked");
+                return false;
+            }
+
+            unlockedLevels.Add(levelId);
+            Debug.Log($"[ProfileData] Unlocked level: {levelId}");
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if a level is unlocked
+        /// </summary>
+        /// <param name="levelId">The level ID to check</param>
+        /// <returns>True if unlocked, false otherwise</returns>
+        public bool IsLevelUnlocked(string levelId)
+        {
+            if (string.IsNullOrEmpty(levelId)) return false;
+
+            InitializeCollectionsIfNeeded();
+            return unlockedLevels.Contains(levelId);
+        }
+
+        #endregion
+
+        #region Mining Methods
+
+        /// <summary>
+        /// Adds a new mining node to the player's collection
+        /// </summary>
+        /// <param name="nodeId">The unique identifier for the node</param>
+        /// <param name="level">Starting level for the node (default: 1)</param>
+        public void AddMiningNode(string nodeId, int level = 1)
+        {
+            if (string.IsNullOrEmpty(nodeId)) return;
+
+            InitializeCollectionsIfNeeded();
+
+            if (!miningNodes.ContainsKey(nodeId))
+            {
+                miningNodes[nodeId] = new MiningNodeData(nodeId)
+                {
+                    // If needed, set additional properties here
+                };
+                Debug.Log($"[ProfileData] Added mining node: {nodeId} at level {level}");
+            }
+        }
+
+        /// <summary>
+        /// Collects all pending CyberCoins from all mining nodes
+        /// </summary>
+        /// <returns>The total amount of CyberCoins collected</returns>
+        public float CollectAllMining()
+        {
+            InitializeCollectionsIfNeeded();
+
+            float totalCollected = 0f;
+            foreach (var node in miningNodes.Values)
+            {
+                totalCollected += node.CollectMining();
+            }
+
+            // Add the collected coins to the player's balance
+            cyberCoins += totalCollected;
+
+            Debug.Log($"[ProfileData] Collected a total of {totalCollected} CyberCoins from all mining nodes");
+            return totalCollected;
+        }
+
+        #endregion
+
+        #endregion
+    }
+}
+// --- END FILE ---
+
+// File: Core/Services/Authentication/Data/ProfileDataEquipmentExtension.cs
+// Size: 10294 characters
+// ---
+// File: Assets/Code/Core/Services/Authentication/Data/ProfileDataEquipmentExtension.cs
+//
+// Purpose: Extends the ProfileData class with equipment progression tracking.
+// Adds methods to get, set, and update equipment progression data.
+//
+// Created: 2025-02-25
+// Updated: 2025-02-25
+
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using UnityEngine;
+using Newtonsoft.Json;
+
+namespace CyberPickle.Core.Services.Authentication.Data
+{
+    /// <summary>
+    /// Extension class for ProfileData to add equipment progression tracking
+    /// </summary>
+    public static class ProfileDataEquipmentExtension
+    {
+        // Private field name in ProfileData that will store our equipment progression data
+        private const string EquipmentProgressionFieldName = "equipmentProgressionData";
+
+        /// <summary>
+        /// Initializes equipment progression tracking for a profile if not already initialized
+        /// </summary>
+        /// <param name="profile">The profile to initialize</param>
+        public static void InitializeEquipmentProgression(this ProfileData profile)
+        {
+            // Get or create the equipment progression dictionary using reflection
+            var equipmentProgressionField = GetEquipmentProgressionField(profile);
+            if (equipmentProgressionField == null)
+                return;
+
+            var equipmentProgression = equipmentProgressionField.GetValue(profile) as Dictionary<string, EquipmentProgressionData>;
+
+            if (equipmentProgression == null)
+            {
+                equipmentProgression = new Dictionary<string, EquipmentProgressionData>();
+                equipmentProgressionField.SetValue(profile, equipmentProgression);
+                Debug.Log($"[ProfileData] Initialized equipment progression tracking for profile {profile.ProfileId}");
+            }
+        }
+
+        /// <summary>
+        /// Gets equipment progression data for a specific equipment item
+        /// </summary>
+        /// <param name="profile">The profile to get data from</param>
+        /// <param name="equipmentId">The ID of the equipment</param>
+        /// <returns>Equipment progression data or null if not found</returns>
+        public static EquipmentProgressionData GetEquipmentProgression(this ProfileData profile, string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+                return null;
+
+            var equipmentProgressionField = GetEquipmentProgressionField(profile);
+            if (equipmentProgressionField == null)
+                return null;
+
+            var equipmentProgression = equipmentProgressionField.GetValue(profile) as Dictionary<string, EquipmentProgressionData>;
+            if (equipmentProgression == null)
+            {
+                profile.InitializeEquipmentProgression();
+                equipmentProgression = equipmentProgressionField.GetValue(profile) as Dictionary<string, EquipmentProgressionData>;
+
+                if (equipmentProgression == null)
+                    return null;
+            }
+
+            // Try to get existing progression data
+            if (equipmentProgression.TryGetValue(equipmentId, out var progressionData))
+                return progressionData;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Gets or creates equipment progression data for a specific equipment item
+        /// </summary>
+        /// <param name="profile">The profile to get data from</param>
+        /// <param name="equipmentId">The ID of the equipment</param>
+        /// <returns>Equipment progression data</returns>
+        public static EquipmentProgressionData GetOrCreateEquipmentProgression(this ProfileData profile, string equipmentId)
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+                return null;
+
+            // Try to get existing progression data
+            var progressionData = profile.GetEquipmentProgression(equipmentId);
+            if (progressionData != null)
+                return progressionData;
+
+            // Create new progression data
+            var equipmentProgressionField = GetEquipmentProgressionField(profile);
+            if (equipmentProgressionField == null)
+                return null;
+
+            var equipmentProgression = equipmentProgressionField.GetValue(profile) as Dictionary<string, EquipmentProgressionData>;
+            if (equipmentProgression == null)
+            {
+                profile.InitializeEquipmentProgression();
+                equipmentProgression = equipmentProgressionField.GetValue(profile) as Dictionary<string, EquipmentProgressionData>;
+
+                if (equipmentProgression == null)
+                    return null;
+            }
+
+            // Create new progression data
+            progressionData = new EquipmentProgressionData(equipmentId);
+            equipmentProgression[equipmentId] = progressionData;
+
+            Debug.Log($"[ProfileData] Created equipment progression data for {equipmentId} in profile {profile.ProfileId}");
+
+            return progressionData;
+        }
+
+        /// <summary>
+        /// Gets the current level of a specific equipment item
+        /// </summary>
+        /// <param name="profile">The profile to get data from</param>
+        /// <param name="equipmentId">The ID of the equipment</param>
+        /// <returns>The current level or 0 if not found</returns>
+        public static int GetEquipmentLevel(this ProfileData profile, string equipmentId)
+        {
+            var progressionData = profile.GetEquipmentProgression(equipmentId);
+            return progressionData?.CurrentLevel ?? 0;
+        }
+
+        /// <summary>
+        /// Upgrades a specific equipment item to a new level
+        /// </summary>
+        /// <param name="profile">The profile to upgrade in</param>
+        /// <param name="equipmentId">The ID of the equipment</param>
+        /// <param name="newLevel">The new level</param>
+        /// <returns>True if upgraded successfully</returns>
+        public static bool UpgradeEquipment(this ProfileData profile, string equipmentId, int newLevel)
+        {
+            if (string.IsNullOrEmpty(equipmentId) || newLevel <= 1)
+                return false;
+
+            var progressionData = profile.GetOrCreateEquipmentProgression(equipmentId);
+            if (progressionData == null)
+                return false;
+
+            return progressionData.Upgrade(newLevel);
+        }
+
+        /// <summary>
+        /// Records usage statistics for a specific equipment item
+        /// </summary>
+        /// <param name="profile">The profile to record in</param>
+        /// <param name="equipmentId">The ID of the equipment</param>
+        /// <param name="kills">Number of kills to record</param>
+        /// <param name="damage">Amount of damage to record</param>
+        public static void RecordEquipmentUsage(this ProfileData profile, string equipmentId, int kills = 0, float damage = 0)
+        {
+            if (string.IsNullOrEmpty(equipmentId))
+                return;
+
+            var progressionData = profile.GetOrCreateEquipmentProgression(equipmentId);
+            if (progressionData == null)
+                return;
+
+            progressionData.RecordUse();
+
+            if (kills > 0)
+                progressionData.RecordKills(kills);
+
+            if (damage > 0)
+                progressionData.RecordDamage(damage);
+        }
+
+        /// <summary>
+        /// Gets all equipment progression data for a profile
+        /// </summary>
+        /// <param name="profile">The profile to get data from</param>
+        /// <returns>Dictionary of equipment progression data</returns>
+        public static Dictionary<string, EquipmentProgressionData> GetAllEquipmentProgression(this ProfileData profile)
+        {
+            var equipmentProgressionField = GetEquipmentProgressionField(profile);
+            if (equipmentProgressionField == null)
+                return new Dictionary<string, EquipmentProgressionData>();
+
+            var equipmentProgression = equipmentProgressionField.GetValue(profile) as Dictionary<string, EquipmentProgressionData>;
+            if (equipmentProgression == null)
+            {
+                profile.InitializeEquipmentProgression();
+                equipmentProgression = equipmentProgressionField.GetValue(profile) as Dictionary<string, EquipmentProgressionData>;
+
+                if (equipmentProgression == null)
+                    return new Dictionary<string, EquipmentProgressionData>();
+            }
+
+            return equipmentProgression;
+        }
+
+        /// <summary>
+        /// Gets the field info for the equipment progression field in ProfileData
+        /// </summary>
+        /// <param name="profile">The profile to get field info for</param>
+        /// <returns>Field info or null if not found</returns>
+        private static FieldInfo GetEquipmentProgressionField(ProfileData profile)
+        {
+            // First check if the field already exists
+            var field = typeof(ProfileData).GetField(EquipmentProgressionFieldName,
+                BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (field != null)
+                return field;
+
+            // If not, use reflection to get a private field that might hold a dictionary (fallback)
+            var fields = typeof(ProfileData).GetFields(BindingFlags.NonPublic | BindingFlags.Instance);
+            foreach (var f in fields)
+            {
+                if (f.FieldType == typeof(Dictionary<string, EquipmentProgressionData>))
+                    return f;
+            }
+
+            // If we still haven't found it, we'll need to add the field using reflection
+            // However, adding fields at runtime is not possible in C#
+            // So we'll log a warning and return null
+            Debug.LogWarning($"[ProfileData] Equipment progression field not found for profile {profile.ProfileId}. Make sure to add a private field named {EquipmentProgressionFieldName} to ProfileData.");
+
+            return null;
+        }
     }
 }
 // --- END FILE ---
