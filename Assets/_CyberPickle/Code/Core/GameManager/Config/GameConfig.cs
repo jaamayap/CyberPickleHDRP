@@ -7,8 +7,8 @@ namespace CyberPickle.Core.Config
     {
         [Header("Scene Names")]
         public string mainMenuSceneName = "MainMenu";
-        public string characterSelectSceneName = "CharacterSelect";
-        public string equipmentSelectSceneName = "EquipmentSelect";
+        //public string characterSelectSceneName = "CharacterSelect";
+        public string equipmentSelectSceneName = "EquipmentHub";
         public string levelSelectSceneName = "LevelSelect";
         public string gameSceneName = "Game";
         public string postGameSceneName = "PostGame";

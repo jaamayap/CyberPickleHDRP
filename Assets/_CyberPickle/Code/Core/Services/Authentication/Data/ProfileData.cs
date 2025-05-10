@@ -472,6 +472,9 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonProperty("UnlockedLevels")]
         private HashSet<string> unlockedLevels;
 
+        [JsonProperty("LastSelectedCharacterId")]
+        private string lastSelectedCharacterId;
+
         #endregion
 
         #region Public Properties
@@ -496,6 +499,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonIgnore] public IReadOnlyCollection<string> Achievements => achievements;
         [JsonIgnore] public IReadOnlyDictionary<string, float> GlobalMultipliers => globalMultipliers;
         [JsonIgnore] public IReadOnlyCollection<string> UnlockedLevels => unlockedLevels;
+        [JsonIgnore] public string LastSelectedCharacterId => lastSelectedCharacterId;
 
         #endregion
 
@@ -508,6 +512,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
             this.displayName = displayName;
             this.createdAtTicks = DateTime.UtcNow.Ticks;
             this.lastLoginAtTicks = DateTime.UtcNow.Ticks;
+            this.lastSelectedCharacterId = string.Empty;
 
             InitializeCollectionsIfNeeded();
             SetDefaultValues();
@@ -614,6 +619,8 @@ namespace CyberPickle.Core.Services.Authentication.Data
             Debug.Log($"[ProfileData] Profile {profileId} active state set to: {active}");
         }
 
+
+
         // Add new methods
 
         #region Currency Methods
@@ -682,6 +689,12 @@ namespace CyberPickle.Core.Services.Authentication.Data
                     Debug.LogError($"[ProfileData] Unknown currency type: {type}");
                     return false;
             }
+        }
+
+        public void SetLastSelectedCharacter(string characterId) // <<< ADDED
+        {
+            this.lastSelectedCharacterId = characterId;
+            Debug.Log($"[ProfileData] Profile {profileId} - Last selected character set to: {characterId}");
         }
 
         #endregion

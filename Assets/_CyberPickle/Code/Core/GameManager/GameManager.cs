@@ -45,8 +45,14 @@ namespace CyberPickle.Core
             // Register for events that might affect game state
             GameEvents.OnPlayerDied.AddListener(HandlePlayerDeath);
             GameEvents.OnLevelCompleted.AddListener(HandleLevelCompleted);
+            GameEvents.OnGameStateChanged.AddListener(OnExternalGameStateChangeRequest);
         }
 
+        private void OnExternalGameStateChangeRequest(GameState newState)
+        {
+            Debug.Log($"[GameManager] Received external GameStateChanged event: {newState}. Current state: {currentState}");
+            ChangeState(newState);
+        }
         private void LoadGameConfig()
         {
             try
@@ -82,11 +88,29 @@ namespace CyberPickle.Core
 
         private IEnumerator StartNewGameSequence()
         {
-            ChangeState(GameState.Loading);
+            // 1. Set a loading state (optional, depends if you need a visual transition)
+            // ChangeState(GameState.Loading);
+            // yield return null; // Wait a frame if needed for UI
 
-            // Load character select scene
-            yield return LoadSceneAsync(gameConfig.characterSelectSceneName);
+            // 2. Ensure we are in the MainMenu scene.
+            //    If StartNewGame is ONLY ever called *from* the MainMenu, this check might be redundant.
+            //    But it's safer if StartNewGame could theoretically be called from elsewhere.
+            if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+            {
+                Debug.Log($"[GameManager] StartNewGame called outside MainMenu. Loading MainMenu scene first.");
+                yield return StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+            }
+            else
+            {
+                Debug.Log($"[GameManager] StartNewGame called within MainMenu scene.");
+            }
+
+
+            // 3. Change the state to CharacterSelect.
+            //    MainMenuController and CharacterSelectionManager will handle showing the UI.
             ChangeState(GameState.CharacterSelect);
+
+            // No scene loading needed *for* CharacterSelect itself anymore.
         }
 
         public void StartLevel(string levelId)
@@ -99,7 +123,7 @@ namespace CyberPickle.Core
             ChangeState(GameState.Loading);
 
             // Load game scene
-            yield return LoadSceneAsync(gameConfig.gameSceneName);
+            yield return LoadSceneCoroutine(gameConfig.gameSceneName);
 
             // Initialize level
             yield return new WaitForSeconds(gameConfig.gameStartDelay);
@@ -141,7 +165,7 @@ namespace CyberPickle.Core
             GameEvents.OnGameOver.Invoke();
 
             // Load post-game scene
-            yield return LoadSceneAsync(gameConfig.postGameSceneName);
+            yield return LoadSceneCoroutine(gameConfig.postGameSceneName);
             ChangeState(GameState.PostGame);
         }
 
@@ -151,26 +175,91 @@ namespace CyberPickle.Core
 
         private void ChangeState(GameState newState)
         {
-            if (currentState == newState) return;
+            // Allow re-entering scene-loading states if the current scene is different or it's a forced reload
+            bool isSceneLoadState = newState == GameState.CharacterSelect ||
+                                    newState == GameState.EquipmentSelect ||
+                                    newState == GameState.LevelSelect ||
+                                    newState == GameState.MainMenu; // MainMenu can also be a scene load
 
+            if (currentState == newState && !isSceneLoadState && newState != GameState.Loading)
+            {
+                Debug.LogWarning($"[GameManager] Attempting to change to the same non-scene-loading state: {newState}. Current: {currentState}. Skipping.");
+                // return; // This might be too restrictive. Let's allow it for now and see.
+            }
+
+            Debug.Log($"[GameManager] Changing state from {currentState} to {newState}");
             previousState = currentState;
             currentState = newState;
 
-            Debug.Log($"Game State Changed: {previousState} -> {currentState}");
+            // Important: Invoke the event AFTER setting the new state,
+            // so listeners querying CurrentState get the new one.
+            // However, HandleStateChange might load a scene, which is async.
+            // The event should ideally be invoked by the system that *requests* the change.
+            // Here, GameManager is *reacting* to a state change (either internal or external).
+            // GameEvents.OnGameStateChanged.Invoke(currentState); // This was moved to OnExternalGameStateChangeRequest or similar initiators.
+            // The GameManager primarily *acts* on state changes.
 
-            HandleStateChange();
+            HandleStateChangeInternal();
         }
 
-        private void HandleStateChange()
+        private void HandleStateChangeInternal() // Renamed to avoid confusion with event handlers
         {
+            Debug.Log($"[GameManager] Handling internal state change actions for: {currentState}");
             switch (currentState)
             {
                 case GameState.MainMenu:
                     Time.timeScale = 1f;
+                    if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+                    {
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+                    }
+                    // MainMenuController will handle showing appropriate panels.
+                    break;
+
+                case GameState.ProfileSelection:
+                    Time.timeScale = 1f;
+                    // This state implies we are already in the MainMenu scene.
+                    // MainMenuController handles showing the profile selection panel.
+                    if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+                    {
+                        Debug.LogWarning($"[GameManager] GameState.ProfileSelection requested but not in MainMenu scene. Loading MainMenu scene.");
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+                    }
+                    break;
+
+                case GameState.CharacterSelect:
+                    Time.timeScale = 1f;
+                    // Character Selection is now an area within the MainMenu scene.
+                    // Ensure MainMenu scene is loaded. MainMenuController will handle UI.
+                    if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+                    {
+                        Debug.LogWarning($"[GameManager] GameState.CharacterSelect requested but not in MainMenu scene. Loading MainMenu scene.");
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+                    }
+                    // The MainMenuController is responsible for activating the CharacterSelection UI area.
+                    // CharacterSelectionManager will be activated by its own GameStateChanged listener.
+                    Debug.Log($"[GameManager] State set to CharacterSelect. MainMenuController should now activate the UI area.");
+                    break;
+
+                case GameState.EquipmentSelect: // <<< FIXED CASE
+                                                // Check if we're already in the equipment scene
+                    if (SceneManager.GetActiveScene().name != gameConfig.equipmentSelectSceneName)
+                    {
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.equipmentSelectSceneName));
+                    }
+                    else
+                    {
+                        Debug.Log($"[GameManager] Already in Equipment Hub scene. No need to reload.");
+                    }
+                    break;
+
+                case GameState.LevelSelect:
+                    StartCoroutine(LoadSceneCoroutine(gameConfig.levelSelectSceneName));
                     break;
 
                 case GameState.Playing:
                     Time.timeScale = 1f;
+                    // Scene for 'Playing' is loaded via StartLevelSequence -> LoadSceneCoroutine(gameConfig.gameSceneName)
                     break;
 
                 case GameState.Paused:
@@ -178,7 +267,16 @@ namespace CyberPickle.Core
                     break;
 
                 case GameState.GameOver:
-                    Time.timeScale = 0f;
+                    Time.timeScale = 1f; // Or 0f, depends on if you have animations in game over state
+                                         // Scene for 'PostGame' is loaded via GameOverSequence -> LoadSceneCoroutine(gameConfig.postGameSceneName)
+                    break;
+
+                case GameState.PostGame:
+                    // Scene for 'PostGame' is loaded via LevelCompleteSequence or GameOverSequence
+                    break;
+
+                case GameState.Loading:
+                    // This is a transient state. Actual scene loading is in LoadSceneCoroutine.
                     break;
             }
         }
@@ -212,7 +310,7 @@ namespace CyberPickle.Core
             yield return new WaitForSeconds(2f);
 
             // Load post-game scene
-            yield return LoadSceneAsync(gameConfig.postGameSceneName);
+            yield return LoadSceneCoroutine(gameConfig.postGameSceneName);
             ChangeState(GameState.PostGame);
         }
 
@@ -226,15 +324,43 @@ namespace CyberPickle.Core
             Debug.Log("Saving game progress...");
         }
 
-        private IEnumerator LoadSceneAsync(string sceneName)
+        private IEnumerator LoadSceneCoroutine(string sceneName)
         {
+            Debug.Log($"[GameManager] Starting to load scene: {sceneName} for state {currentState}");
+
+            // Remember target state instead of previous state
+            GameState targetState = currentState;
+
+            // Set loading state
+            if (currentState != GameState.Loading)
+                ChangeState(GameState.Loading);
+
             AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName);
+            asyncLoad.allowSceneActivation = false;
+
+            while (asyncLoad.progress < 0.9f)
+            {
+                // Update loading progress UI if any
+                Debug.Log($"[GameManager] Loading {sceneName}: {asyncLoad.progress * 100f}%");
+                yield return null;
+            }
+
+            Debug.Log($"[GameManager] Scene {sceneName} almost loaded. Activating...");
+            asyncLoad.allowSceneActivation = true;
 
             while (!asyncLoad.isDone)
             {
-                float progress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
-                // Could dispatch loading progress event here
                 yield return null;
+            }
+
+            Debug.Log($"[GameManager] Scene {sceneName} fully loaded and active.");
+
+            // After loading is complete, ensure we're in the correct target state
+            // NOT the previous state before loading started
+            if (CurrentState == GameState.Loading)
+            {
+                Debug.Log($"[GameManager] Restoring target state: {targetState} after loading {sceneName}");
+                ChangeState(targetState);
             }
         }
 
@@ -254,8 +380,8 @@ namespace CyberPickle.Core
 
         protected override void OnManagerAwake()
         {
-            Debug.Log("<color=yellow>[GameManager] Initializing...</color>");
-            Initialize();
+            base.OnManagerAwake(); // Base Manager calls Initialize() if IInitializable
+            Debug.Log("<color=yellow>[GameManager] GameManager OnManagerAwake completed.</color>");
         }
 
         private void OnApplicationPause(bool pauseStatus)
@@ -267,6 +393,9 @@ namespace CyberPickle.Core
         }
         protected override void OnManagerDestroyed()
         {
+            // Call base method first to handle its cleanup
+            base.OnManagerDestroyed();
+
             if (!IsActiveInstance) return;
 
             try
@@ -275,12 +404,14 @@ namespace CyberPickle.Core
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error saving progress during shutdown: {e.Message}");
+                Debug.LogError($"[GameManager] Error saving progress during shutdown: {e.Message}");
             }
 
             // Cleanup event listeners
             GameEvents.OnPlayerDied.RemoveListener(HandlePlayerDeath);
             GameEvents.OnLevelCompleted.RemoveListener(HandleLevelCompleted);
+            GameEvents.OnGameStateChanged.RemoveListener(OnExternalGameStateChangeRequest);
+            Debug.Log("[GameManager] Cleaned up GameManager listeners.");
         }
     }
 }

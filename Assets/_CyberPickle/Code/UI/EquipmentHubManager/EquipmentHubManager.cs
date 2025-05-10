@@ -18,6 +18,7 @@ using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Characters.Data;
 using CyberPickle.UI.Transitions;
 using UnityEngine.SceneManagement;
+using CyberPickle.Characters;
 
 namespace CyberPickle.UI.EquipmentHub
 {
@@ -59,28 +60,17 @@ namespace CyberPickle.UI.EquipmentHub
         public void Initialize()
         {
             if (isInitialized) return;
+            Debug.Log("[EquipmentHubManager] Initializing...");
 
-            Debug.Log("[EquipmentHubManager] Initializing");
+            // Don't trigger any game state changes here
+            // Just initialize the scene components
 
-            // Get manager dependencies
-            profileManager = ProfileManager.Instance;
-            if (profileManager == null)
-            {
-                Debug.LogError("[EquipmentHubManager] Profile Manager not found!");
-                return;
-            }
-
-            // Set initial section visibility
             SetInitialVisibility();
-
-            // Setup navigation buttons
             SetupNavigationButtons();
-
-            // Load character model
-            StartCoroutine(LoadCharacterModel());
+            StartCoroutine(LoadCharacterFromProfile());
 
             isInitialized = true;
-            Debug.Log("[EquipmentHubManager] Initialized successfully");
+            Debug.Log("[EquipmentHubManager] Initialized successfully.");
         }
 
         /// <summary>
@@ -98,7 +88,10 @@ namespace CyberPickle.UI.EquipmentHub
 
             // Fade in the scene if fade controller exists
             if (fadeController != null)
+            {
+                // Assuming FadeScreenController is DontDestroyOnLoad or already in scene
                 fadeController.FadeFromBlack();
+            }
         }
 
         /// <summary>
@@ -122,61 +115,111 @@ namespace CyberPickle.UI.EquipmentHub
                 backButton.onClick.AddListener(ReturnToCharacterSelect);
         }
 
-        /// <summary>
-        /// Loads the selected character model
-        /// </summary>
-        private IEnumerator LoadCharacterModel()
+
+        private IEnumerator LoadCharacterFromProfile()
         {
-            // Get the character ID from profile (for now we'll use a placeholder)
-            // Later this should come from the profile's selected character
-            currentCharacterId = "default_character";
+            // Wait a frame to ensure ProfileManager.ActiveProfile is settled
+            yield return null;
 
-            // When we have profile integration, use this:
-            // var profile = profileManager.ActiveProfile;
-            // if (profile != null)
-            //    currentCharacterId = profile.LastSelectedCharacterId;
+            if (profileManager.ActiveProfile == null)
+            {
+                Debug.LogError("[EquipmentHubManager] ActiveProfile is null. Cannot load character.");
+                // Potentially redirect back to character selection
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
 
-            // Load character data - update path as needed for your project
-            currentCharacterData = Resources.Load<CharacterData>($"Characters/{currentCharacterId}");
+            currentCharacterId = profileManager.ActiveProfile.LastSelectedCharacterId;
+            if (string.IsNullOrEmpty(currentCharacterId))
+            {
+                Debug.LogError("[EquipmentHubManager] LastSelectedCharacterId is not set in profile. Cannot load character.");
+                // Redirect back to character selection
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
+
+            Debug.Log($"[EquipmentHubManager] Loading character model for ID: {currentCharacterId}");
+
+            // Get character data from CharacterManager instead of Resources.Load
+            var characterManager = CharacterManager.Instance;
+            if (characterManager == null)
+            {
+                Debug.LogError("[EquipmentHubManager] CharacterManager not found!");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
+
+            currentCharacterData = characterManager.GetCharacterDataById(currentCharacterId);
 
             if (currentCharacterData == null)
             {
-                Debug.LogError($"[EquipmentHubManager] Character data not found for ID: {currentCharacterId}");
+                Debug.LogError($"[EquipmentHubManager] CharacterData not found for ID: '{currentCharacterId}'. Returning to character selection.");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
                 yield break;
             }
 
-            // Make sure we have a spawn point
+            if (currentCharacterData.characterPrefab == null)
+            {
+                Debug.LogError($"[EquipmentHubManager] CharacterData for '{currentCharacterData.displayName}' has no characterPrefab assigned!");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
+
             if (characterSpawnPoint == null)
             {
-                Debug.LogError("[EquipmentHubManager] Character spawn point is null!");
+                Debug.LogError("[EquipmentHubManager] Character spawn point is not assigned in the inspector!");
                 yield break;
             }
 
-            // Instantiate the character model
-            spawnedCharacter = Instantiate(currentCharacterData.characterPrefab, characterSpawnPoint);
-            spawnedCharacter.transform.localPosition = Vector3.zero;
-            spawnedCharacter.transform.localRotation = Quaternion.Euler(0, 180, 0); // Face forward
-
-            // Setup character animations
-            var animator = spawnedCharacter.GetComponent<Animator>();
-            if (animator != null)
+            // Destroy any previously spawned character
+            if (spawnedCharacter != null)
             {
-                animator.SetTrigger("Idle");
+                Destroy(spawnedCharacter);
             }
 
-            Debug.Log($"[EquipmentHubManager] Character model loaded: {currentCharacterData.displayName}");
+            // Create error handling for character instantiation
+            try
+            {
+                spawnedCharacter = Instantiate(currentCharacterData.characterPrefab, characterSpawnPoint);
+                spawnedCharacter.transform.localPosition = Vector3.zero;
+                spawnedCharacter.transform.localRotation = Quaternion.Euler(0, 180, 0); // Face camera
 
-            // Initialize sections that need the character reference
-            InitializeEquipmentSection();
+                Animator animator = spawnedCharacter.GetComponent<Animator>();
+                if (animator != null && !string.IsNullOrEmpty(currentCharacterData.idleAnimationTrigger))
+                {
+                    animator.SetTrigger(currentCharacterData.idleAnimationTrigger);
+                }
+                else if (animator == null)
+                {
+                    Debug.LogWarning($"[EquipmentHubManager] Character '{currentCharacterData.displayName}' prefab is missing an Animator component.");
+                }
+                else
+                {
+                    Debug.LogWarning($"[EquipmentHubManager] CharacterData for '{currentCharacterData.displayName}' has no idleAnimationTrigger defined.");
+                }
+
+                Debug.Log($"[EquipmentHubManager] Character model '{currentCharacterData.displayName}' loaded and instantiated.");
+
+                // Initialize equipment section now that character is loaded
+                InitializeEquipmentSection();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[EquipmentHubManager] Failed to instantiate character: {ex.Message}\n{ex.StackTrace}");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+            }
         }
+
+
+
 
         /// <summary>
         /// Initializes the equipment section with character data
         /// </summary>
         private void InitializeEquipmentSection()
         {
-            // Initialize equipment UI with character data
-            // This would be expanded with your equipment UI logic
+            // Placeholder for equipment UI initialization based on currentCharacterData and profile
+            Debug.Log($"[EquipmentHubManager] Initializing equipment section for {currentCharacterData?.displayName ?? "Unknown Character"}");
         }
 
         /// <summary>
@@ -185,37 +228,27 @@ namespace CyberPickle.UI.EquipmentHub
         /// <param name="sectionName">The name of the section to activate</param>
         public void SwitchToSection(string sectionName)
         {
-            // Hide all sections first
             if (equipmentSection != null) equipmentSection.SetActive(false);
             if (shopSection != null) shopSection.SetActive(false);
             if (miningSection != null) miningSection.SetActive(false);
 
-            // Show the requested section
             switch (sectionName)
             {
                 case "Equipment":
-                    if (equipmentSection != null)
-                    {
-                        equipmentSection.SetActive(true);
-                        Debug.Log("[EquipmentHubManager] Switched to Equipment section");
-                    }
+                    if (equipmentSection != null) equipmentSection.SetActive(true);
+                    Debug.Log("[EquipmentHubManager] Switched to Equipment section");
                     break;
                 case "Shop":
-                    if (shopSection != null)
-                    {
-                        shopSection.SetActive(true);
-                        Debug.Log("[EquipmentHubManager] Switched to Shop section");
-                    }
+                    if (shopSection != null) shopSection.SetActive(true);
+                    Debug.Log("[EquipmentHubManager] Switched to Shop section");
                     break;
                 case "Mining":
-                    if (miningSection != null)
-                    {
-                        miningSection.SetActive(true);
-                        Debug.Log("[EquipmentHubManager] Switched to Mining section");
-                    }
+                    if (miningSection != null) miningSection.SetActive(true);
+                    Debug.Log("[EquipmentHubManager] Switched to Mining section");
                     break;
                 default:
                     Debug.LogWarning($"[EquipmentHubManager] Unknown section: {sectionName}");
+                    if (equipmentSection != null) equipmentSection.SetActive(true); // Default to equipment
                     break;
             }
         }
@@ -225,7 +258,17 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         public void StartGame()
         {
-            StartCoroutine(TransitionToLevelSelect());
+            Debug.Log("[EquipmentHubManager] StartGame clicked. Transitioning to LevelSelect.");
+
+            // Ensure character is properly loaded before transitioning
+            if (currentCharacterData == null || spawnedCharacter == null)
+            {
+                Debug.LogError("[EquipmentHubManager] Character not loaded properly. Returning to character selection.");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                return;
+            }
+
+            StartCoroutine(TransitionToSceneInternal(GameState.LevelSelect, "LevelSelect"));
         }
 
         /// <summary>
@@ -233,26 +276,24 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         public void ReturnToCharacterSelect()
         {
-            StartCoroutine(TransitionToCharacterSelect());
+            Debug.Log("[EquipmentHubManager] ReturnToCharacterSelect clicked.");
+            StartCoroutine(TransitionToSceneInternal(GameState.CharacterSelect, "CharacterSelect")); // GameConfig has "CharacterSelect"
         }
 
         /// <summary>
         /// Transitions to the level selection scene
         /// </summary>
-        private IEnumerator TransitionToLevelSelect()
+        private IEnumerator TransitionToSceneInternal(GameState targetState, string sceneNameKeyInConfig)
         {
-            // Fade out
             if (fadeController != null)
             {
                 fadeController.FadeToBlack();
                 yield return new WaitForSeconds(fadeController.FadeDuration);
             }
 
-            // Change game state
-            GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
-
-            // Load level select scene
-            SceneManager.LoadScene("LevelSelect");
+            GameEvents.OnGameStateChanged.Invoke(targetState);
+            // GameManager will handle loading the scene based on the GameState and GameConfig.
+            // No need to call SceneManager.LoadScene here directly.
         }
 
         /// <summary>
@@ -279,24 +320,15 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         protected override void OnManagerDestroyed()
         {
-            // Clean up button listeners
-            if (equipmentButton != null)
-                equipmentButton.onClick.RemoveAllListeners();
+            base.OnManagerDestroyed(); // Important for base class cleanup
 
-            if (shopButton != null)
-                shopButton.onClick.RemoveAllListeners();
+            if (equipmentButton != null) equipmentButton.onClick.RemoveAllListeners();
+            if (shopButton != null) shopButton.onClick.RemoveAllListeners();
+            if (miningButton != null) miningButton.onClick.RemoveAllListeners();
+            if (startGameButton != null) startGameButton.onClick.RemoveAllListeners();
+            if (backButton != null) backButton.onClick.RemoveAllListeners();
 
-            if (miningButton != null)
-                miningButton.onClick.RemoveAllListeners();
-
-            if (startGameButton != null)
-                startGameButton.onClick.RemoveAllListeners();
-
-            if (backButton != null)
-                backButton.onClick.RemoveAllListeners();
-
-            // Call base method
-            base.OnManagerDestroyed();
+            Debug.Log("[EquipmentHubManager] Cleaned up listeners.");
         }
     }
 }

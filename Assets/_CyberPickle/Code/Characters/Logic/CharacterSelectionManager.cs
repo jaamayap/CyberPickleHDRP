@@ -12,6 +12,7 @@ using CyberPickle.Characters.Data;
 using CyberPickle.Characters.UI;     // For CharacterUIManager
 using DG.Tweening;
 using System.Collections;
+using CyberPickle.Core.Config;
 
 namespace CyberPickle.Characters.Logic
 {
@@ -53,13 +54,26 @@ namespace CyberPickle.Characters.Logic
         private string currentlyHoveredCharacterId;
         private bool isTransitioning;
         private bool cameraFocused;
-
+        private GameConfig gameConfig;
         #region Manager Overrides
 
         protected override void OnManagerAwake()
         {
             base.OnManagerAwake();
             if (!ValidateManagers()) return;
+            var configRegistry = ConfigRegistry.Instance;
+            if (configRegistry != null)
+            {
+                gameConfig = configRegistry.GetConfig<GameConfig>();
+                if (gameConfig == null)
+                {
+                    Debug.LogError("[CharacterSelectionManager] GameConfig not found in ConfigRegistry!");
+                }
+            }
+            else
+            {
+                Debug.LogError("[CharacterSelectionManager] ConfigRegistry instance not found!");
+            }
             displayManager.Initialize();
             InitializeEvents();
         }
@@ -154,6 +168,18 @@ namespace CyberPickle.Characters.Logic
 
             isTransitioning = true;
             CleanupCharacterSelection();
+
+            // Load characters to character manager
+            var characterManager = CharacterManager.Instance;
+            if (characterManager != null && availableCharacters != null && availableCharacters.Length > 0)
+            {
+                characterManager.SetAvailableCharacters(availableCharacters);
+                Debug.Log($"[CharacterSelectionManager] Loaded {availableCharacters.Length} characters into CharacterManager");
+            }
+            else
+            {
+                Debug.LogWarning("[CharacterSelectionManager] Could not load characters into CharacterManager");
+            }
 
             // Actually spawn each character
             for (int i = 0; i < availableCharacters.Length; i++)
@@ -278,7 +304,7 @@ namespace CyberPickle.Characters.Logic
                 // Fallback to tracking the root transform's position if no SkinnedMeshRenderer is found
                 while (true)
                 {
-                    if (!characterRootTransform.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed
+                    if (characterRootTransform == null || !characterRootTransform.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed
 
                     Vector3 targetPos = characterRootTransform.position + Vector3.up * 1.5f; // offset above character's feet
                     Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
@@ -291,14 +317,14 @@ namespace CyberPickle.Characters.Logic
                 // Track the center of the SkinnedMeshRenderer's bounds
                 while (true)
                 {
-                    if (!smr.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed or SMR becomes inactive
+                    // Add a null check for smr itself first
+                    if (smr == null || !smr.gameObject.activeInHierarchy) yield break; // Stop if SMR or its GameObject is destroyed/inactive
 
-                    Vector3 targetPos = smr.bounds.center; // This gives the world space center of the renderer's bounding box
-                                                           // You might want a slight upward offset from the bounds.center if it's too low
-                                                           // targetPos += Vector3.up * 0.2f; // Example offset, adjust as needed
-
+                    Vector3 targetPos = smr.bounds.center;
                     Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
-                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f); // Increased Slerp speed slightly for responsiveness
+                    // Also check if spotLight becomes null during operation
+                    if (spotLight == null) yield break;
+                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f);
                     yield return null;
                 }
             }
@@ -440,22 +466,64 @@ namespace CyberPickle.Characters.Logic
         /// </summary>
         private async void HandleCharacterConfirmed()
         {
-            if (string.IsNullOrEmpty(currentlySelectedCharacterId)) return;
+            if (string.IsNullOrEmpty(currentlySelectedCharacterId))
+            {
+                Debug.LogWarning("[CharacterSelectionManager] No character selected to confirm.");
+                return;
+            }
+            if (isTransitioning)
+            {
+                Debug.LogWarning("[CharacterSelectionManager] Character confirmation already in progress.");
+                return;
+            }
 
-            // Mark selection in profile if needed
+            isTransitioning = true; // Prevent multiple calls
+
+            Debug.Log($"[CharacterSelectionManager] Confirming character: {currentlySelectedCharacterId}");
+
             var profile = profileManager?.ActiveProfile;
             if (profile != null)
             {
-                // For example: "profile.LastSelectedCharacterId = currentlySelectedCharacterId;"
-                await profileManager.UpdateProfileAsync(profile);
+                profile.SetLastSelectedCharacter(currentlySelectedCharacterId);
+                var updateResult = await profileManager.UpdateProfileAsync(profile);
+                if (!updateResult.Success)
+                {
+                    Debug.LogError($"[CharacterSelectionManager] Failed to save last selected character: {updateResult.Message}");
+                    isTransitioning = false; // Reset flag on error
+                    return;
+                }
+                Debug.Log($"[CharacterSelectionManager] Last selected character '{currentlySelectedCharacterId}' saved to profile '{profile.ProfileId}'.");
+            }
+            else
+            {
+                Debug.LogError("[CharacterSelectionManager] Active profile is null. Cannot save last selected character.");
+                isTransitioning = false; // Reset flag on error
+                return;
             }
 
-            // Hide UI, go to next state
+            // Hide UI elements from character selection
             uiManager.ShowConfirmationPanel(false);
-            uiManager.HideAllPanels();
+            uiManager.HideAllPanels(); // Hides details panel etc.
 
-            // Switch game state to level select
-            GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
+            // Reset camera if it was focused on a character
+            if (cameraFocused)
+            {
+                Debug.Log("[CharacterSelectionManager] Resetting camera to character selection view before scene change.");
+                // Use a default FOV or one stored in CameraManager
+                await cameraManager.ResetToCharacterSelectionView(focusTransitionDuration, defaultFieldOfView);
+                cameraFocused = false;
+            }
+
+            // Optional: Small delay for UI/camera animations to visually complete
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+
+            // Reset the transitioning flag before scene change
+            isTransitioning = false;
+
+            // Change game state to EquipmentSelect.
+            // GameManager will listen for this and load the appropriate scene.
+            Debug.Log("[CharacterSelectionManager] Invoking GameState.EquipmentSelect event.");
+            GameEvents.OnGameStateChanged.Invoke(GameState.EquipmentSelect);
         }
 
         #endregion

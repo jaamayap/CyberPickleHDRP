@@ -19,22 +19,80 @@ namespace CyberPickle.Achievements
 // --- END FILE ---
 
 // File: Characters/CharacterManager.cs
-// Size: 331 characters
+// Size: 2424 characters
 // ---
+using System.Collections.Generic;
+using System.Linq;
+using CyberPickle.Characters.Data;
 using CyberPickle.Core.Management;
+using UnityEngine;
 using CyberPickle.Core.Interfaces;
 
 namespace CyberPickle.Characters
 {
     public class CharacterManager : Manager<CharacterManager>, IInitializable
     {
+        // This can be populated either in inspector or via code
+        [SerializeField] private CharacterData[] availableCharacters;
+
+        private Dictionary<string, CharacterData> characterDataLookup = new Dictionary<string, CharacterData>();
+        private bool isInitialized = false;
+
         public void Initialize()
         {
-            UnityEngine.Debug.Log("CharacterManager initialized");
+            if (isInitialized) return;
+
+            // Build lookup table
+            RebuildCharacterLookup();
+            isInitialized = true;
+
+            Debug.Log($"[CharacterManager] Initialized with {characterDataLookup.Count} characters");
+        }
+
+        // This method allows CharacterSelectionManager to populate the manager
+        public void SetAvailableCharacters(CharacterData[] characters)
+        {
+            if (characters == null || characters.Length == 0)
+            {
+                Debug.LogWarning("[CharacterManager] Attempted to set null or empty character array");
+                return;
+            }
+
+            availableCharacters = characters;
+            RebuildCharacterLookup();
+
+            Debug.Log($"[CharacterManager] Updated character list with {characterDataLookup.Count} characters");
+        }
+
+        private void RebuildCharacterLookup()
+        {
+            characterDataLookup.Clear();
+
+            if (availableCharacters != null)
+            {
+                foreach (var character in availableCharacters)
+                {
+                    if (character != null)
+                    {
+                        characterDataLookup[character.characterId] = character;
+                    }
+                }
+            }
+        }
+
+        public CharacterData GetCharacterDataById(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId))
+                return null;
+
+            if (characterDataLookup.TryGetValue(characterId, out var characterData))
+                return characterData;
+
+            Debug.LogError($"[CharacterManager] Character with ID '{characterId}' not found!");
+            return null;
         }
     }
 }
-
 // --- END FILE ---
 
 // File: Progression/ProgressionManager.cs
@@ -1147,7 +1205,7 @@ namespace CyberPickle.Characters.Logic
 // --- END FILE ---
 
 // File: Characters/Logic/CharacterSelectionManager.cs
-// Size: 21019 characters
+// Size: 24326 characters
 // ---
 using UnityEngine;
 using System;
@@ -1163,6 +1221,7 @@ using CyberPickle.Characters.Data;
 using CyberPickle.Characters.UI;     // For CharacterUIManager
 using DG.Tweening;
 using System.Collections;
+using CyberPickle.Core.Config;
 
 namespace CyberPickle.Characters.Logic
 {
@@ -1204,13 +1263,26 @@ namespace CyberPickle.Characters.Logic
         private string currentlyHoveredCharacterId;
         private bool isTransitioning;
         private bool cameraFocused;
-
+        private GameConfig gameConfig;
         #region Manager Overrides
 
         protected override void OnManagerAwake()
         {
             base.OnManagerAwake();
             if (!ValidateManagers()) return;
+            var configRegistry = ConfigRegistry.Instance;
+            if (configRegistry != null)
+            {
+                gameConfig = configRegistry.GetConfig<GameConfig>();
+                if (gameConfig == null)
+                {
+                    Debug.LogError("[CharacterSelectionManager] GameConfig not found in ConfigRegistry!");
+                }
+            }
+            else
+            {
+                Debug.LogError("[CharacterSelectionManager] ConfigRegistry instance not found!");
+            }
             displayManager.Initialize();
             InitializeEvents();
         }
@@ -1305,6 +1377,18 @@ namespace CyberPickle.Characters.Logic
 
             isTransitioning = true;
             CleanupCharacterSelection();
+
+            // Load characters to character manager
+            var characterManager = CharacterManager.Instance;
+            if (characterManager != null && availableCharacters != null && availableCharacters.Length > 0)
+            {
+                characterManager.SetAvailableCharacters(availableCharacters);
+                Debug.Log($"[CharacterSelectionManager] Loaded {availableCharacters.Length} characters into CharacterManager");
+            }
+            else
+            {
+                Debug.LogWarning("[CharacterSelectionManager] Could not load characters into CharacterManager");
+            }
 
             // Actually spawn each character
             for (int i = 0; i < availableCharacters.Length; i++)
@@ -1429,7 +1513,7 @@ namespace CyberPickle.Characters.Logic
                 // Fallback to tracking the root transform's position if no SkinnedMeshRenderer is found
                 while (true)
                 {
-                    if (!characterRootTransform.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed
+                    if (characterRootTransform == null || !characterRootTransform.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed
 
                     Vector3 targetPos = characterRootTransform.position + Vector3.up * 1.5f; // offset above character's feet
                     Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
@@ -1442,14 +1526,14 @@ namespace CyberPickle.Characters.Logic
                 // Track the center of the SkinnedMeshRenderer's bounds
                 while (true)
                 {
-                    if (!smr.gameObject.activeInHierarchy) yield break; // Stop if character is destroyed or SMR becomes inactive
+                    // Add a null check for smr itself first
+                    if (smr == null || !smr.gameObject.activeInHierarchy) yield break; // Stop if SMR or its GameObject is destroyed/inactive
 
-                    Vector3 targetPos = smr.bounds.center; // This gives the world space center of the renderer's bounding box
-                                                           // You might want a slight upward offset from the bounds.center if it's too low
-                                                           // targetPos += Vector3.up * 0.2f; // Example offset, adjust as needed
-
+                    Vector3 targetPos = smr.bounds.center;
                     Quaternion targetRotation = Quaternion.LookRotation(targetPos - spotLight.transform.position);
-                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f); // Increased Slerp speed slightly for responsiveness
+                    // Also check if spotLight becomes null during operation
+                    if (spotLight == null) yield break;
+                    spotLight.transform.rotation = Quaternion.Slerp(spotLight.transform.rotation, targetRotation, Time.deltaTime * 5f);
                     yield return null;
                 }
             }
@@ -1591,22 +1675,64 @@ namespace CyberPickle.Characters.Logic
         /// </summary>
         private async void HandleCharacterConfirmed()
         {
-            if (string.IsNullOrEmpty(currentlySelectedCharacterId)) return;
+            if (string.IsNullOrEmpty(currentlySelectedCharacterId))
+            {
+                Debug.LogWarning("[CharacterSelectionManager] No character selected to confirm.");
+                return;
+            }
+            if (isTransitioning)
+            {
+                Debug.LogWarning("[CharacterSelectionManager] Character confirmation already in progress.");
+                return;
+            }
 
-            // Mark selection in profile if needed
+            isTransitioning = true; // Prevent multiple calls
+
+            Debug.Log($"[CharacterSelectionManager] Confirming character: {currentlySelectedCharacterId}");
+
             var profile = profileManager?.ActiveProfile;
             if (profile != null)
             {
-                // For example: "profile.LastSelectedCharacterId = currentlySelectedCharacterId;"
-                await profileManager.UpdateProfileAsync(profile);
+                profile.SetLastSelectedCharacter(currentlySelectedCharacterId);
+                var updateResult = await profileManager.UpdateProfileAsync(profile);
+                if (!updateResult.Success)
+                {
+                    Debug.LogError($"[CharacterSelectionManager] Failed to save last selected character: {updateResult.Message}");
+                    isTransitioning = false; // Reset flag on error
+                    return;
+                }
+                Debug.Log($"[CharacterSelectionManager] Last selected character '{currentlySelectedCharacterId}' saved to profile '{profile.ProfileId}'.");
+            }
+            else
+            {
+                Debug.LogError("[CharacterSelectionManager] Active profile is null. Cannot save last selected character.");
+                isTransitioning = false; // Reset flag on error
+                return;
             }
 
-            // Hide UI, go to next state
+            // Hide UI elements from character selection
             uiManager.ShowConfirmationPanel(false);
-            uiManager.HideAllPanels();
+            uiManager.HideAllPanels(); // Hides details panel etc.
 
-            // Switch game state to level select
-            GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
+            // Reset camera if it was focused on a character
+            if (cameraFocused)
+            {
+                Debug.Log("[CharacterSelectionManager] Resetting camera to character selection view before scene change.");
+                // Use a default FOV or one stored in CameraManager
+                await cameraManager.ResetToCharacterSelectionView(focusTransitionDuration, defaultFieldOfView);
+                cameraFocused = false;
+            }
+
+            // Optional: Small delay for UI/camera animations to visually complete
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+
+            // Change game state to EquipmentSelect.
+            // GameManager will listen for this and load the appropriate scene.
+            Debug.Log("[CharacterSelectionManager] Invoking GameState.EquipmentSelect event.");
+            GameEvents.OnGameStateChanged.Invoke(GameState.EquipmentSelect);
+
+            // isTransitioning will effectively be reset when this scene is left.
+            // If staying in the same scene and just changing UI, reset it explicitly.
         }
 
         #endregion
@@ -3254,7 +3380,7 @@ namespace CyberPickle.Core.Config
 // --- END FILE ---
 
 // File: Core/GameManager/GameManager.cs
-// Size: 8137 characters
+// Size: 15617 characters
 // ---
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -3303,8 +3429,14 @@ namespace CyberPickle.Core
             // Register for events that might affect game state
             GameEvents.OnPlayerDied.AddListener(HandlePlayerDeath);
             GameEvents.OnLevelCompleted.AddListener(HandleLevelCompleted);
+            GameEvents.OnGameStateChanged.AddListener(OnExternalGameStateChangeRequest);
         }
 
+        private void OnExternalGameStateChangeRequest(GameState newState)
+        {
+            Debug.Log($"[GameManager] Received external GameStateChanged event: {newState}. Current state: {currentState}");
+            ChangeState(newState);
+        }
         private void LoadGameConfig()
         {
             try
@@ -3340,11 +3472,29 @@ namespace CyberPickle.Core
 
         private IEnumerator StartNewGameSequence()
         {
-            ChangeState(GameState.Loading);
+            // 1. Set a loading state (optional, depends if you need a visual transition)
+            // ChangeState(GameState.Loading);
+            // yield return null; // Wait a frame if needed for UI
 
-            // Load character select scene
-            yield return LoadSceneAsync(gameConfig.characterSelectSceneName);
+            // 2. Ensure we are in the MainMenu scene.
+            //    If StartNewGame is ONLY ever called *from* the MainMenu, this check might be redundant.
+            //    But it's safer if StartNewGame could theoretically be called from elsewhere.
+            if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+            {
+                Debug.Log($"[GameManager] StartNewGame called outside MainMenu. Loading MainMenu scene first.");
+                yield return StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+            }
+            else
+            {
+                Debug.Log($"[GameManager] StartNewGame called within MainMenu scene.");
+            }
+
+
+            // 3. Change the state to CharacterSelect.
+            //    MainMenuController and CharacterSelectionManager will handle showing the UI.
             ChangeState(GameState.CharacterSelect);
+
+            // No scene loading needed *for* CharacterSelect itself anymore.
         }
 
         public void StartLevel(string levelId)
@@ -3357,7 +3507,7 @@ namespace CyberPickle.Core
             ChangeState(GameState.Loading);
 
             // Load game scene
-            yield return LoadSceneAsync(gameConfig.gameSceneName);
+            yield return LoadSceneCoroutine(gameConfig.gameSceneName);
 
             // Initialize level
             yield return new WaitForSeconds(gameConfig.gameStartDelay);
@@ -3399,7 +3549,7 @@ namespace CyberPickle.Core
             GameEvents.OnGameOver.Invoke();
 
             // Load post-game scene
-            yield return LoadSceneAsync(gameConfig.postGameSceneName);
+            yield return LoadSceneCoroutine(gameConfig.postGameSceneName);
             ChangeState(GameState.PostGame);
         }
 
@@ -3409,26 +3559,83 @@ namespace CyberPickle.Core
 
         private void ChangeState(GameState newState)
         {
-            if (currentState == newState) return;
+            // Allow re-entering scene-loading states if the current scene is different or it's a forced reload
+            bool isSceneLoadState = newState == GameState.CharacterSelect ||
+                                    newState == GameState.EquipmentSelect ||
+                                    newState == GameState.LevelSelect ||
+                                    newState == GameState.MainMenu; // MainMenu can also be a scene load
 
+            if (currentState == newState && !isSceneLoadState && newState != GameState.Loading)
+            {
+                Debug.LogWarning($"[GameManager] Attempting to change to the same non-scene-loading state: {newState}. Current: {currentState}. Skipping.");
+                // return; // This might be too restrictive. Let's allow it for now and see.
+            }
+
+            Debug.Log($"[GameManager] Changing state from {currentState} to {newState}");
             previousState = currentState;
             currentState = newState;
 
-            Debug.Log($"Game State Changed: {previousState} -> {currentState}");
+            // Important: Invoke the event AFTER setting the new state,
+            // so listeners querying CurrentState get the new one.
+            // However, HandleStateChange might load a scene, which is async.
+            // The event should ideally be invoked by the system that *requests* the change.
+            // Here, GameManager is *reacting* to a state change (either internal or external).
+            // GameEvents.OnGameStateChanged.Invoke(currentState); // This was moved to OnExternalGameStateChangeRequest or similar initiators.
+            // The GameManager primarily *acts* on state changes.
 
-            HandleStateChange();
+            HandleStateChangeInternal();
         }
 
-        private void HandleStateChange()
+        private void HandleStateChangeInternal() // Renamed to avoid confusion with event handlers
         {
+            Debug.Log($"[GameManager] Handling internal state change actions for: {currentState}");
             switch (currentState)
             {
                 case GameState.MainMenu:
                     Time.timeScale = 1f;
+                    if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+                    {
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+                    }
+                    // MainMenuController will handle showing appropriate panels.
+                    break;
+
+                case GameState.ProfileSelection:
+                    Time.timeScale = 1f;
+                    // This state implies we are already in the MainMenu scene.
+                    // MainMenuController handles showing the profile selection panel.
+                    if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+                    {
+                        Debug.LogWarning($"[GameManager] GameState.ProfileSelection requested but not in MainMenu scene. Loading MainMenu scene.");
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+                    }
+                    break;
+
+                case GameState.CharacterSelect:
+                    Time.timeScale = 1f;
+                    // Character Selection is now an area within the MainMenu scene.
+                    // Ensure MainMenu scene is loaded. MainMenuController will handle UI.
+                    if (SceneManager.GetActiveScene().name != gameConfig.mainMenuSceneName)
+                    {
+                        Debug.LogWarning($"[GameManager] GameState.CharacterSelect requested but not in MainMenu scene. Loading MainMenu scene.");
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.mainMenuSceneName));
+                    }
+                    // The MainMenuController is responsible for activating the CharacterSelection UI area.
+                    // CharacterSelectionManager will be activated by its own GameStateChanged listener.
+                    Debug.Log($"[GameManager] State set to CharacterSelect. MainMenuController should now activate the UI area.");
+                    break;
+
+                case GameState.EquipmentSelect: // <<< ADDED CASE
+                    StartCoroutine(LoadSceneCoroutine(gameConfig.equipmentSelectSceneName));
+                    break;
+
+                case GameState.LevelSelect:
+                    StartCoroutine(LoadSceneCoroutine(gameConfig.levelSelectSceneName));
                     break;
 
                 case GameState.Playing:
                     Time.timeScale = 1f;
+                    // Scene for 'Playing' is loaded via StartLevelSequence -> LoadSceneCoroutine(gameConfig.gameSceneName)
                     break;
 
                 case GameState.Paused:
@@ -3436,7 +3643,16 @@ namespace CyberPickle.Core
                     break;
 
                 case GameState.GameOver:
-                    Time.timeScale = 0f;
+                    Time.timeScale = 1f; // Or 0f, depends on if you have animations in game over state
+                    // Scene for 'PostGame' is loaded via GameOverSequence -> LoadSceneCoroutine(gameConfig.postGameSceneName)
+                    break;
+
+                case GameState.PostGame:
+                    // Scene for 'PostGame' is loaded via LevelCompleteSequence or GameOverSequence
+                    break;
+
+                case GameState.Loading:
+                    // This is a transient state. Actual scene loading is in LoadSceneCoroutine.
                     break;
             }
         }
@@ -3470,7 +3686,7 @@ namespace CyberPickle.Core
             yield return new WaitForSeconds(2f);
 
             // Load post-game scene
-            yield return LoadSceneAsync(gameConfig.postGameSceneName);
+            yield return LoadSceneCoroutine(gameConfig.postGameSceneName);
             ChangeState(GameState.PostGame);
         }
 
@@ -3484,15 +3700,43 @@ namespace CyberPickle.Core
             Debug.Log("Saving game progress...");
         }
 
-        private IEnumerator LoadSceneAsync(string sceneName)
+        private IEnumerator LoadSceneCoroutine(string sceneName)
         {
+            Debug.Log($"[GameManager] Starting to load scene: {sceneName} for state {currentState}");
+
+            // Remember target state instead of previous state
+            GameState targetState = currentState;
+
+            // Set loading state
+            if (currentState != GameState.Loading)
+                ChangeState(GameState.Loading);
+
             AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName);
+            asyncLoad.allowSceneActivation = false;
+
+            while (asyncLoad.progress < 0.9f)
+            {
+                // Update loading progress UI if any
+                Debug.Log($"[GameManager] Loading {sceneName}: {asyncLoad.progress * 100f}%");
+                yield return null;
+            }
+
+            Debug.Log($"[GameManager] Scene {sceneName} almost loaded. Activating...");
+            asyncLoad.allowSceneActivation = true;
 
             while (!asyncLoad.isDone)
             {
-                float progress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
-                // Could dispatch loading progress event here
                 yield return null;
+            }
+
+            Debug.Log($"[GameManager] Scene {sceneName} fully loaded and active.");
+
+            // After loading is complete, ensure we're in the correct target state
+            // NOT the previous state before loading started
+            if (CurrentState == GameState.Loading)
+            {
+                Debug.Log($"[GameManager] Restoring target state: {targetState} after loading {sceneName}");
+                ChangeState(targetState);
             }
         }
 
@@ -3512,8 +3756,8 @@ namespace CyberPickle.Core
 
         protected override void OnManagerAwake()
         {
-            Debug.Log("<color=yellow>[GameManager] Initializing...</color>");
-            Initialize();
+            base.OnManagerAwake(); // Base Manager calls Initialize() if IInitializable
+            Debug.Log("<color=yellow>[GameManager] GameManager OnManagerAwake completed.</color>");
         }
 
         private void OnApplicationPause(bool pauseStatus)
@@ -3525,6 +3769,9 @@ namespace CyberPickle.Core
         }
         protected override void OnManagerDestroyed()
         {
+            // Call base method first to handle its cleanup
+            base.OnManagerDestroyed();
+
             if (!IsActiveInstance) return;
 
             try
@@ -3533,12 +3780,14 @@ namespace CyberPickle.Core
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error saving progress during shutdown: {e.Message}");
+                Debug.LogError($"[GameManager] Error saving progress during shutdown: {e.Message}");
             }
 
             // Cleanup event listeners
             GameEvents.OnPlayerDied.RemoveListener(HandlePlayerDeath);
             GameEvents.OnLevelCompleted.RemoveListener(HandleLevelCompleted);
+            GameEvents.OnGameStateChanged.RemoveListener(OnExternalGameStateChangeRequest);
+            Debug.Log("[GameManager] Cleaned up GameManager listeners.");
         }
     }
 }
@@ -3883,7 +4132,7 @@ namespace CyberPickle.Core.SaveSystem
 // --- END FILE ---
 
 // File: Core/Transitions/TransitionManager.cs
-// Size: 6850 characters
+// Size: 7104 characters
 // ---
 using UnityEngine;
 using System.Collections;
@@ -4069,6 +4318,9 @@ namespace CyberPickle.Core.Transitions
 
             while (elapsedTime < duration)
             {
+                // Add a null check for bonfireLight inside the loop
+                if (bonfireLight == null) yield break;
+
                 elapsedTime += Time.deltaTime;
                 float normalizedTime = elapsedTime / duration;
                 float curveValue = transitionCurve.Evaluate(normalizedTime);
@@ -4077,7 +4329,11 @@ namespace CyberPickle.Core.Transitions
                 yield return null;
             }
 
-            bonfireLight.intensity = targetIntensity;
+            // Final check before setting intensity
+            if (bonfireLight != null)
+            {
+                bonfireLight.intensity = targetIntensity;
+            }
         }
 
 
@@ -5787,7 +6043,7 @@ namespace CyberPickle.UI.Effects
 // --- END FILE ---
 
 // File: UI/EquipmentHubManager/EquipmentHubManager.cs
-// Size: 11249 characters
+// Size: 14733 characters
 // ---
 // File: Assets/Code/UI/EquipmentHub/EquipmentHubManager.cs
 //
@@ -5809,6 +6065,7 @@ using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Characters.Data;
 using CyberPickle.UI.Transitions;
 using UnityEngine.SceneManagement;
+using CyberPickle.Characters;
 
 namespace CyberPickle.UI.EquipmentHub
 {
@@ -5850,10 +6107,9 @@ namespace CyberPickle.UI.EquipmentHub
         public void Initialize()
         {
             if (isInitialized) return;
+            Debug.Log("[EquipmentHubManager] Initializing...");
 
-            Debug.Log("[EquipmentHubManager] Initializing");
-
-            // Get manager dependencies
+            // Get all required manager dependencies
             profileManager = ProfileManager.Instance;
             if (profileManager == null)
             {
@@ -5861,17 +6117,22 @@ namespace CyberPickle.UI.EquipmentHub
                 return;
             }
 
-            // Set initial section visibility
-            SetInitialVisibility();
+            // Verify CharacterManager is available with character data
+            var characterManager = CharacterManager.Instance;
+            if (characterManager == null)
+            {
+                Debug.LogError("[EquipmentHubManager] Character Manager not found!");
+                return;
+            }
 
-            // Setup navigation buttons
+            SetInitialVisibility();
             SetupNavigationButtons();
 
-            // Load character model
-            StartCoroutine(LoadCharacterModel());
+            // Load character model using the ID from the active profile
+            StartCoroutine(LoadCharacterFromProfile());
 
             isInitialized = true;
-            Debug.Log("[EquipmentHubManager] Initialized successfully");
+            Debug.Log("[EquipmentHubManager] Initialized successfully.");
         }
 
         /// <summary>
@@ -5889,7 +6150,10 @@ namespace CyberPickle.UI.EquipmentHub
 
             // Fade in the scene if fade controller exists
             if (fadeController != null)
+            {
+                // Assuming FadeScreenController is DontDestroyOnLoad or already in scene
                 fadeController.FadeFromBlack();
+            }
         }
 
         /// <summary>
@@ -5913,61 +6177,111 @@ namespace CyberPickle.UI.EquipmentHub
                 backButton.onClick.AddListener(ReturnToCharacterSelect);
         }
 
-        /// <summary>
-        /// Loads the selected character model
-        /// </summary>
-        private IEnumerator LoadCharacterModel()
+
+        private IEnumerator LoadCharacterFromProfile()
         {
-            // Get the character ID from profile (for now we'll use a placeholder)
-            // Later this should come from the profile's selected character
-            currentCharacterId = "default_character";
+            // Wait a frame to ensure ProfileManager.ActiveProfile is settled
+            yield return null;
 
-            // When we have profile integration, use this:
-            // var profile = profileManager.ActiveProfile;
-            // if (profile != null)
-            //    currentCharacterId = profile.LastSelectedCharacterId;
+            if (profileManager.ActiveProfile == null)
+            {
+                Debug.LogError("[EquipmentHubManager] ActiveProfile is null. Cannot load character.");
+                // Potentially redirect back to character selection
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
 
-            // Load character data - update path as needed for your project
-            currentCharacterData = Resources.Load<CharacterData>($"Characters/{currentCharacterId}");
+            currentCharacterId = profileManager.ActiveProfile.LastSelectedCharacterId;
+            if (string.IsNullOrEmpty(currentCharacterId))
+            {
+                Debug.LogError("[EquipmentHubManager] LastSelectedCharacterId is not set in profile. Cannot load character.");
+                // Redirect back to character selection
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
+
+            Debug.Log($"[EquipmentHubManager] Loading character model for ID: {currentCharacterId}");
+
+            // Get character data from CharacterManager instead of Resources.Load
+            var characterManager = CharacterManager.Instance;
+            if (characterManager == null)
+            {
+                Debug.LogError("[EquipmentHubManager] CharacterManager not found!");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
+
+            currentCharacterData = characterManager.GetCharacterDataById(currentCharacterId);
 
             if (currentCharacterData == null)
             {
-                Debug.LogError($"[EquipmentHubManager] Character data not found for ID: {currentCharacterId}");
+                Debug.LogError($"[EquipmentHubManager] CharacterData not found for ID: '{currentCharacterId}'. Returning to character selection.");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
                 yield break;
             }
 
-            // Make sure we have a spawn point
+            if (currentCharacterData.characterPrefab == null)
+            {
+                Debug.LogError($"[EquipmentHubManager] CharacterData for '{currentCharacterData.displayName}' has no characterPrefab assigned!");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                yield break;
+            }
+
             if (characterSpawnPoint == null)
             {
-                Debug.LogError("[EquipmentHubManager] Character spawn point is null!");
+                Debug.LogError("[EquipmentHubManager] Character spawn point is not assigned in the inspector!");
                 yield break;
             }
 
-            // Instantiate the character model
-            spawnedCharacter = Instantiate(currentCharacterData.characterPrefab, characterSpawnPoint);
-            spawnedCharacter.transform.localPosition = Vector3.zero;
-            spawnedCharacter.transform.localRotation = Quaternion.Euler(0, 180, 0); // Face forward
-
-            // Setup character animations
-            var animator = spawnedCharacter.GetComponent<Animator>();
-            if (animator != null)
+            // Destroy any previously spawned character
+            if (spawnedCharacter != null)
             {
-                animator.SetTrigger("Idle");
+                Destroy(spawnedCharacter);
             }
 
-            Debug.Log($"[EquipmentHubManager] Character model loaded: {currentCharacterData.displayName}");
+            // Create error handling for character instantiation
+            try
+            {
+                spawnedCharacter = Instantiate(currentCharacterData.characterPrefab, characterSpawnPoint);
+                spawnedCharacter.transform.localPosition = Vector3.zero;
+                spawnedCharacter.transform.localRotation = Quaternion.Euler(0, 180, 0); // Face camera
 
-            // Initialize sections that need the character reference
-            InitializeEquipmentSection();
+                Animator animator = spawnedCharacter.GetComponent<Animator>();
+                if (animator != null && !string.IsNullOrEmpty(currentCharacterData.idleAnimationTrigger))
+                {
+                    animator.SetTrigger(currentCharacterData.idleAnimationTrigger);
+                }
+                else if (animator == null)
+                {
+                    Debug.LogWarning($"[EquipmentHubManager] Character '{currentCharacterData.displayName}' prefab is missing an Animator component.");
+                }
+                else
+                {
+                    Debug.LogWarning($"[EquipmentHubManager] CharacterData for '{currentCharacterData.displayName}' has no idleAnimationTrigger defined.");
+                }
+
+                Debug.Log($"[EquipmentHubManager] Character model '{currentCharacterData.displayName}' loaded and instantiated.");
+
+                // Initialize equipment section now that character is loaded
+                InitializeEquipmentSection();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[EquipmentHubManager] Failed to instantiate character: {ex.Message}\n{ex.StackTrace}");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+            }
         }
+
+
+
 
         /// <summary>
         /// Initializes the equipment section with character data
         /// </summary>
         private void InitializeEquipmentSection()
         {
-            // Initialize equipment UI with character data
-            // This would be expanded with your equipment UI logic
+            // Placeholder for equipment UI initialization based on currentCharacterData and profile
+            Debug.Log($"[EquipmentHubManager] Initializing equipment section for {currentCharacterData?.displayName ?? "Unknown Character"}");
         }
 
         /// <summary>
@@ -5976,37 +6290,27 @@ namespace CyberPickle.UI.EquipmentHub
         /// <param name="sectionName">The name of the section to activate</param>
         public void SwitchToSection(string sectionName)
         {
-            // Hide all sections first
             if (equipmentSection != null) equipmentSection.SetActive(false);
             if (shopSection != null) shopSection.SetActive(false);
             if (miningSection != null) miningSection.SetActive(false);
 
-            // Show the requested section
             switch (sectionName)
             {
                 case "Equipment":
-                    if (equipmentSection != null)
-                    {
-                        equipmentSection.SetActive(true);
-                        Debug.Log("[EquipmentHubManager] Switched to Equipment section");
-                    }
+                    if (equipmentSection != null) equipmentSection.SetActive(true);
+                    Debug.Log("[EquipmentHubManager] Switched to Equipment section");
                     break;
                 case "Shop":
-                    if (shopSection != null)
-                    {
-                        shopSection.SetActive(true);
-                        Debug.Log("[EquipmentHubManager] Switched to Shop section");
-                    }
+                    if (shopSection != null) shopSection.SetActive(true);
+                    Debug.Log("[EquipmentHubManager] Switched to Shop section");
                     break;
                 case "Mining":
-                    if (miningSection != null)
-                    {
-                        miningSection.SetActive(true);
-                        Debug.Log("[EquipmentHubManager] Switched to Mining section");
-                    }
+                    if (miningSection != null) miningSection.SetActive(true);
+                    Debug.Log("[EquipmentHubManager] Switched to Mining section");
                     break;
                 default:
                     Debug.LogWarning($"[EquipmentHubManager] Unknown section: {sectionName}");
+                    if (equipmentSection != null) equipmentSection.SetActive(true); // Default to equipment
                     break;
             }
         }
@@ -6016,7 +6320,17 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         public void StartGame()
         {
-            StartCoroutine(TransitionToLevelSelect());
+            Debug.Log("[EquipmentHubManager] StartGame clicked. Transitioning to LevelSelect.");
+
+            // Ensure character is properly loaded before transitioning
+            if (currentCharacterData == null || spawnedCharacter == null)
+            {
+                Debug.LogError("[EquipmentHubManager] Character not loaded properly. Returning to character selection.");
+                GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
+                return;
+            }
+
+            StartCoroutine(TransitionToSceneInternal(GameState.LevelSelect, "LevelSelect"));
         }
 
         /// <summary>
@@ -6024,26 +6338,24 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         public void ReturnToCharacterSelect()
         {
-            StartCoroutine(TransitionToCharacterSelect());
+            Debug.Log("[EquipmentHubManager] ReturnToCharacterSelect clicked.");
+            StartCoroutine(TransitionToSceneInternal(GameState.CharacterSelect, "CharacterSelect")); // GameConfig has "CharacterSelect"
         }
 
         /// <summary>
         /// Transitions to the level selection scene
         /// </summary>
-        private IEnumerator TransitionToLevelSelect()
+        private IEnumerator TransitionToSceneInternal(GameState targetState, string sceneNameKeyInConfig)
         {
-            // Fade out
             if (fadeController != null)
             {
                 fadeController.FadeToBlack();
                 yield return new WaitForSeconds(fadeController.FadeDuration);
             }
 
-            // Change game state
-            GameEvents.OnGameStateChanged.Invoke(GameState.LevelSelect);
-
-            // Load level select scene
-            SceneManager.LoadScene("LevelSelect");
+            GameEvents.OnGameStateChanged.Invoke(targetState);
+            // GameManager will handle loading the scene based on the GameState and GameConfig.
+            // No need to call SceneManager.LoadScene here directly.
         }
 
         /// <summary>
@@ -6070,24 +6382,15 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         protected override void OnManagerDestroyed()
         {
-            // Clean up button listeners
-            if (equipmentButton != null)
-                equipmentButton.onClick.RemoveAllListeners();
+            base.OnManagerDestroyed(); // Important for base class cleanup
 
-            if (shopButton != null)
-                shopButton.onClick.RemoveAllListeners();
+            if (equipmentButton != null) equipmentButton.onClick.RemoveAllListeners();
+            if (shopButton != null) shopButton.onClick.RemoveAllListeners();
+            if (miningButton != null) miningButton.onClick.RemoveAllListeners();
+            if (startGameButton != null) startGameButton.onClick.RemoveAllListeners();
+            if (backButton != null) backButton.onClick.RemoveAllListeners();
 
-            if (miningButton != null)
-                miningButton.onClick.RemoveAllListeners();
-
-            if (startGameButton != null)
-                startGameButton.onClick.RemoveAllListeners();
-
-            if (backButton != null)
-                backButton.onClick.RemoveAllListeners();
-
-            // Call base method
-            base.OnManagerDestroyed();
+            Debug.Log("[EquipmentHubManager] Cleaned up listeners.");
         }
     }
 }
@@ -6591,7 +6894,7 @@ namespace CyberPickle.Core.Boot.UI
 // --- END FILE ---
 
 // File: Core/GameManager/Config/GameConfig.cs
-// Size: 947 characters
+// Size: 946 characters
 // ---
 using UnityEngine;
 
@@ -6602,8 +6905,8 @@ namespace CyberPickle.Core.Config
     {
         [Header("Scene Names")]
         public string mainMenuSceneName = "MainMenu";
-        public string characterSelectSceneName = "CharacterSelect";
-        public string equipmentSelectSceneName = "EquipmentSelect";
+        //public string characterSelectSceneName = "CharacterSelect";
+        public string equipmentSelectSceneName = "EquipmentHub";
         public string levelSelectSceneName = "LevelSelect";
         public string gameSceneName = "Game";
         public string postGameSceneName = "PostGame";
@@ -12311,7 +12614,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
 // --- END FILE ---
 
 // File: Core/Services/Authentication/Data/ProfileData.cs
-// Size: 29268 characters
+// Size: 29790 characters
 // ---
 // File: Core/Services/Authentication/Data/ProfileData.cs
 //
@@ -12787,6 +13090,9 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonProperty("UnlockedLevels")]
         private HashSet<string> unlockedLevels;
 
+        [JsonProperty("LastSelectedCharacterId")]
+        private string lastSelectedCharacterId;
+
         #endregion
 
         #region Public Properties
@@ -12811,6 +13117,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonIgnore] public IReadOnlyCollection<string> Achievements => achievements;
         [JsonIgnore] public IReadOnlyDictionary<string, float> GlobalMultipliers => globalMultipliers;
         [JsonIgnore] public IReadOnlyCollection<string> UnlockedLevels => unlockedLevels;
+        [JsonIgnore] public string LastSelectedCharacterId => lastSelectedCharacterId;
 
         #endregion
 
@@ -12823,6 +13130,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
             this.displayName = displayName;
             this.createdAtTicks = DateTime.UtcNow.Ticks;
             this.lastLoginAtTicks = DateTime.UtcNow.Ticks;
+            this.lastSelectedCharacterId = string.Empty;
 
             InitializeCollectionsIfNeeded();
             SetDefaultValues();
@@ -12929,6 +13237,8 @@ namespace CyberPickle.Core.Services.Authentication.Data
             Debug.Log($"[ProfileData] Profile {profileId} active state set to: {active}");
         }
 
+
+
         // Add new methods
 
         #region Currency Methods
@@ -12997,6 +13307,12 @@ namespace CyberPickle.Core.Services.Authentication.Data
                     Debug.LogError($"[ProfileData] Unknown currency type: {type}");
                     return false;
             }
+        }
+
+        public void SetLastSelectedCharacter(string characterId) // <<< ADDED
+        {
+            this.lastSelectedCharacterId = characterId;
+            Debug.Log($"[ProfileData] Profile {profileId} - Last selected character set to: {characterId}");
         }
 
         #endregion
