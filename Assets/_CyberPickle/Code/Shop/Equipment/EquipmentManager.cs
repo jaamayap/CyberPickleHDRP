@@ -59,9 +59,6 @@ namespace CyberPickle.Shop.Equipment
         {
             if (isInitialized) return;
 
-            Debug.Log("[EquipmentManager] Initializing...");
-
-            // Get profile manager reference
             profileManager = ProfileManager.Instance;
             if (profileManager == null)
             {
@@ -69,14 +66,15 @@ namespace CyberPickle.Shop.Equipment
                 return;
             }
 
-            // Setup data lookups
+            // Make sure equipment arrays are assigned in the Inspector
+            if (availableWeapons == null || availableWeapons.Length == 0)
+            {
+                Debug.LogWarning("[EquipmentManager] No weapons assigned! Please assign weapon data in the Inspector.");
+            }
+
             BuildEquipmentLookups();
-
-            // Subscribe to profile events
             profileManager.SubscribeToProfileSwitched(OnProfileSwitched);
-
             isInitialized = true;
-            Debug.Log("[EquipmentManager] Initialized successfully");
         }
 
         /// <summary>
@@ -87,41 +85,47 @@ namespace CyberPickle.Shop.Equipment
             equipmentDataLookup.Clear();
             equipmentBySlotType.Clear();
 
-            // Initialize slot type lists
             foreach (EquipmentSlotType slotType in Enum.GetValues(typeof(EquipmentSlotType)))
             {
                 equipmentBySlotType[slotType] = new List<EquipmentData>();
             }
 
-            // Add all weapons
-            foreach (var weapon in availableWeapons)
+            // Add null checks for arrays
+            if (availableWeapons != null)
             {
-                if (weapon == null) continue;
-                AddToLookups(weapon);
+                foreach (var weapon in availableWeapons)
+                {
+                    if (weapon == null) continue;
+                    AddToLookups(weapon);
+                }
             }
 
-            // Add all power-ups
-            foreach (var powerUp in availablePowerUps)
+            if (availablePowerUps != null)
             {
-                if (powerUp == null) continue;
-                AddToLookups(powerUp);
+                foreach (var powerUp in availablePowerUps)
+                {
+                    if (powerUp == null) continue;
+                    AddToLookups(powerUp);
+                }
             }
 
-            // Add all armors
-            foreach (var armor in availableArmors)
+            if (availableArmors != null)
             {
-                if (armor == null) continue;
-                AddToLookups(armor);
+                foreach (var armor in availableArmors)
+                {
+                    if (armor == null) continue;
+                    AddToLookups(armor);
+                }
             }
 
-            // Add all amulets
-            foreach (var amulet in availableAmulets)
+            if (availableAmulets != null)
             {
-                if (amulet == null) continue;
-                AddToLookups(amulet);
+                foreach (var amulet in availableAmulets)
+                {
+                    if (amulet == null) continue;
+                    AddToLookups(amulet);
+                }
             }
-
-            Debug.Log($"[EquipmentManager] Built equipment lookups with {equipmentDataLookup.Count} items");
         }
 
         /// <summary>

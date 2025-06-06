@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 301d435364f2ca844ba05e6d744a6668, type: 3}
   m_Name: Character 4
   m_EditorClassIdentifier: 
-  characterId: c
+  characterId: character4
   displayName: Character 4
   description: asdf
   lore: asdasdff
@@ -29,7 +29,7 @@ MonoBehaviour:
   luck: 1
   areaOfEffect: 1
   unlockedByDefault: 0
-  requiredPlayerLevel: 0
+  requiredPlayerLevel: 10
   requiredAchievements: []
   idleAnimationTrigger: Idle
   hoverAnimationTrigger: Dance

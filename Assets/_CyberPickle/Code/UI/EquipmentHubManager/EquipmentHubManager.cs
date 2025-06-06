@@ -7,18 +7,19 @@
 // Created: 2025-02-26
 // Updated: 2025-02-26
 
-using UnityEngine;
-using System.Collections;
-using CyberPickle.Core.Management;
-using CyberPickle.Core.Interfaces;
+using CyberPickle.Characters;
+using CyberPickle.Characters.Data;
 using CyberPickle.Core.Events;
-using CyberPickle.Core.States;
+using CyberPickle.Core.Interfaces;
+using CyberPickle.Core.Management;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Authentication.Data;
-using CyberPickle.Characters.Data;
+using CyberPickle.Core.States;
+using CyberPickle.Core.UI;
 using CyberPickle.UI.Transitions;
+using System.Collections;
+using UnityEngine;
 using UnityEngine.SceneManagement;
-using CyberPickle.Characters;
 
 namespace CyberPickle.UI.EquipmentHub
 {
@@ -45,6 +46,12 @@ namespace CyberPickle.UI.EquipmentHub
         [SerializeField] private UnityEngine.UI.Button startGameButton;
         [SerializeField] private UnityEngine.UI.Button backButton;
 
+        [Header("Inventory References")]
+        [SerializeField] private InventoryUIController inventoryController;
+
+        [Header("Loadout Display")]
+        [SerializeField] private LoadoutDisplayController loadoutDisplay;
+
         // Manager dependencies
         private ProfileManager profileManager;
 
@@ -61,13 +68,32 @@ namespace CyberPickle.UI.EquipmentHub
         {
             if (isInitialized) return;
             Debug.Log("[EquipmentHubManager] Initializing...");
+            EventSystemEnsurer.EnsureEventSystem();
+            // Assign the ProfileManager instance
+            profileManager = ProfileManager.Instance;
 
-            // Don't trigger any game state changes here
-            // Just initialize the scene components
+            // It's good practice to check if the instance was successfully retrieved
+            if (profileManager == null)
+            {
+                Debug.LogError("[EquipmentHubManager] ProfileManager.Instance is null! Cannot proceed with character loading.");
+                // Optionally, handle this error more gracefully, e.g., by returning or switching state
+                isInitialized = true; // Mark as initialized to prevent re-entry, but it's in a bad state.
+                return;
+            }
 
             SetInitialVisibility();
             SetupNavigationButtons();
             StartCoroutine(LoadCharacterFromProfile());
+            var navigationController = GetComponentInChildren<NavigationController>();
+            if (navigationController != null)
+            {
+                navigationController.Initialize(this);
+            }
+
+            if (inventoryController != null)
+            {
+                inventoryController.Initialize();
+            }
 
             isInitialized = true;
             Debug.Log("[EquipmentHubManager] Initialized successfully.");
@@ -114,8 +140,36 @@ namespace CyberPickle.UI.EquipmentHub
             if (backButton != null)
                 backButton.onClick.AddListener(ReturnToCharacterSelect);
         }
+        public void ShowSection(HubSection section)
+        {
+            // Hide all sections first
+            if (equipmentSection != null) equipmentSection.SetActive(false);
+            if (shopSection != null) shopSection.SetActive(false);
+            if (miningSection != null) miningSection.SetActive(false);
 
+            // For now, Skills section doesn't exist, so we'll show a placeholder
 
+            // Show the requested section
+            switch (section)
+            {
+                case HubSection.Loadout:
+                    if (equipmentSection != null) equipmentSection.SetActive(true);
+                    break;
+
+                case HubSection.Shop:
+                    if (shopSection != null) shopSection.SetActive(true);
+                    break;
+
+                case HubSection.Skills:
+                    // TODO: Show skills placeholder
+                    Debug.Log("[EquipmentHub] Skills section coming soon!");
+                    break;
+
+                case HubSection.Mining:
+                    if (miningSection != null) miningSection.SetActive(true);
+                    break;
+            }
+        }
         private IEnumerator LoadCharacterFromProfile()
         {
             // Wait a frame to ensure ProfileManager.ActiveProfile is settled
@@ -218,8 +272,15 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         private void InitializeEquipmentSection()
         {
-            // Placeholder for equipment UI initialization based on currentCharacterData and profile
-            Debug.Log($"[EquipmentHubManager] Initializing equipment section for {currentCharacterData?.displayName ?? "Unknown Character"}");
+            // Initialize the loadout display with the current character
+            if (loadoutDisplay != null && !string.IsNullOrEmpty(currentCharacterId))
+            {
+                loadoutDisplay.Initialize(currentCharacterId);
+            }
+            else
+            {
+                Debug.LogWarning("[EquipmentHubManager] LoadoutDisplay not assigned or no character ID!");
+            }
         }
 
         /// <summary>

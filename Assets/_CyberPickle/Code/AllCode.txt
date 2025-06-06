@@ -571,6 +571,38 @@ namespace CyberPickle.Shop
 }
 // --- END FILE ---
 
+// File: UI/EventSystemEnsurer.cs
+// Size: 748 characters
+// ---
+// Create new file: EventSystemEnsurer.cs
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace CyberPickle.Core.UI
+{
+    public class EventSystemEnsurer : MonoBehaviour
+    {
+        private void Awake()
+        {
+            EnsureEventSystem();
+        }
+
+        public static void EnsureEventSystem()
+        {
+            if (FindObjectOfType<EventSystem>() == null)
+            {
+                GameObject eventSystemGO = new GameObject("EventSystem");
+                eventSystemGO.AddComponent<EventSystem>();
+                eventSystemGO.AddComponent<StandaloneInputModule>();
+
+                Debug.Log("[EventSystemEnsurer] Created EventSystem");
+            }
+        }
+    }
+}
+// --- END FILE ---
+
 // File: Characters/Data/CharacterData.cs
 // Size: 5601 characters
 // ---
@@ -1205,7 +1237,7 @@ namespace CyberPickle.Characters.Logic
 // --- END FILE ---
 
 // File: Characters/Logic/CharacterSelectionManager.cs
-// Size: 24326 characters
+// Size: 24258 characters
 // ---
 using UnityEngine;
 using System;
@@ -1726,13 +1758,13 @@ namespace CyberPickle.Characters.Logic
             // Optional: Small delay for UI/camera animations to visually complete
             await Task.Delay(TimeSpan.FromMilliseconds(200));
 
+            // Reset the transitioning flag before scene change
+            isTransitioning = false;
+
             // Change game state to EquipmentSelect.
             // GameManager will listen for this and load the appropriate scene.
             Debug.Log("[CharacterSelectionManager] Invoking GameState.EquipmentSelect event.");
             GameEvents.OnGameStateChanged.Invoke(GameState.EquipmentSelect);
-
-            // isTransitioning will effectively be reset when this scene is left.
-            // If staying in the same scene and just changing UI, reset it explicitly.
         }
 
         #endregion
@@ -3380,7 +3412,7 @@ namespace CyberPickle.Core.Config
 // --- END FILE ---
 
 // File: Core/GameManager/GameManager.cs
-// Size: 15617 characters
+// Size: 16063 characters
 // ---
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -3625,8 +3657,16 @@ namespace CyberPickle.Core
                     Debug.Log($"[GameManager] State set to CharacterSelect. MainMenuController should now activate the UI area.");
                     break;
 
-                case GameState.EquipmentSelect: // <<< ADDED CASE
-                    StartCoroutine(LoadSceneCoroutine(gameConfig.equipmentSelectSceneName));
+                case GameState.EquipmentSelect: // <<< FIXED CASE
+                                                // Check if we're already in the equipment scene
+                    if (SceneManager.GetActiveScene().name != gameConfig.equipmentSelectSceneName)
+                    {
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.equipmentSelectSceneName));
+                    }
+                    else
+                    {
+                        Debug.Log($"[GameManager] Already in Equipment Hub scene. No need to reload.");
+                    }
                     break;
 
                 case GameState.LevelSelect:
@@ -3644,7 +3684,7 @@ namespace CyberPickle.Core
 
                 case GameState.GameOver:
                     Time.timeScale = 1f; // Or 0f, depends on if you have animations in game over state
-                    // Scene for 'PostGame' is loaded via GameOverSequence -> LoadSceneCoroutine(gameConfig.postGameSceneName)
+                                         // Scene for 'PostGame' is loaded via GameOverSequence -> LoadSceneCoroutine(gameConfig.postGameSceneName)
                     break;
 
                 case GameState.PostGame:
@@ -4890,7 +4930,7 @@ namespace CyberPickle.Shop.Currency
 // --- END FILE ---
 
 // File: Shop/Equipment/EquipmentManager.cs
-// Size: 18645 characters
+// Size: 18776 characters
 // ---
 // File: Assets/Code/Shop/Equipment/EquipmentManager.cs
 //
@@ -4981,41 +5021,47 @@ namespace CyberPickle.Shop.Equipment
             equipmentDataLookup.Clear();
             equipmentBySlotType.Clear();
 
-            // Initialize slot type lists
             foreach (EquipmentSlotType slotType in Enum.GetValues(typeof(EquipmentSlotType)))
             {
                 equipmentBySlotType[slotType] = new List<EquipmentData>();
             }
 
-            // Add all weapons
-            foreach (var weapon in availableWeapons)
+            // Add null checks for arrays
+            if (availableWeapons != null)
             {
-                if (weapon == null) continue;
-                AddToLookups(weapon);
+                foreach (var weapon in availableWeapons)
+                {
+                    if (weapon == null) continue;
+                    AddToLookups(weapon);
+                }
             }
 
-            // Add all power-ups
-            foreach (var powerUp in availablePowerUps)
+            if (availablePowerUps != null)
             {
-                if (powerUp == null) continue;
-                AddToLookups(powerUp);
+                foreach (var powerUp in availablePowerUps)
+                {
+                    if (powerUp == null) continue;
+                    AddToLookups(powerUp);
+                }
             }
 
-            // Add all armors
-            foreach (var armor in availableArmors)
+            if (availableArmors != null)
             {
-                if (armor == null) continue;
-                AddToLookups(armor);
+                foreach (var armor in availableArmors)
+                {
+                    if (armor == null) continue;
+                    AddToLookups(armor);
+                }
             }
 
-            // Add all amulets
-            foreach (var amulet in availableAmulets)
+            if (availableAmulets != null)
             {
-                if (amulet == null) continue;
-                AddToLookups(amulet);
+                foreach (var amulet in availableAmulets)
+                {
+                    if (amulet == null) continue;
+                    AddToLookups(amulet);
+                }
             }
-
-            Debug.Log($"[EquipmentManager] Built equipment lookups with {equipmentDataLookup.Count} items");
         }
 
         /// <summary>
@@ -6043,7 +6089,7 @@ namespace CyberPickle.UI.Effects
 // --- END FILE ---
 
 // File: UI/EquipmentHubManager/EquipmentHubManager.cs
-// Size: 14733 characters
+// Size: 16399 characters
 // ---
 // File: Assets/Code/UI/EquipmentHub/EquipmentHubManager.cs
 //
@@ -6054,18 +6100,19 @@ namespace CyberPickle.UI.Effects
 // Created: 2025-02-26
 // Updated: 2025-02-26
 
-using UnityEngine;
-using System.Collections;
-using CyberPickle.Core.Management;
-using CyberPickle.Core.Interfaces;
+using CyberPickle.Characters;
+using CyberPickle.Characters.Data;
 using CyberPickle.Core.Events;
-using CyberPickle.Core.States;
+using CyberPickle.Core.Interfaces;
+using CyberPickle.Core.Management;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Authentication.Data;
-using CyberPickle.Characters.Data;
+using CyberPickle.Core.States;
+using CyberPickle.Core.UI;
 using CyberPickle.UI.Transitions;
+using System.Collections;
+using UnityEngine;
 using UnityEngine.SceneManagement;
-using CyberPickle.Characters;
 
 namespace CyberPickle.UI.EquipmentHub
 {
@@ -6092,6 +6139,9 @@ namespace CyberPickle.UI.EquipmentHub
         [SerializeField] private UnityEngine.UI.Button startGameButton;
         [SerializeField] private UnityEngine.UI.Button backButton;
 
+        [Header("Inventory References")]
+        [SerializeField] private InventoryUIController inventoryController;
+
         // Manager dependencies
         private ProfileManager profileManager;
 
@@ -6108,28 +6158,32 @@ namespace CyberPickle.UI.EquipmentHub
         {
             if (isInitialized) return;
             Debug.Log("[EquipmentHubManager] Initializing...");
-
-            // Get all required manager dependencies
+            EventSystemEnsurer.EnsureEventSystem();
+            // Assign the ProfileManager instance
             profileManager = ProfileManager.Instance;
+
+            // It's good practice to check if the instance was successfully retrieved
             if (profileManager == null)
             {
-                Debug.LogError("[EquipmentHubManager] Profile Manager not found!");
-                return;
-            }
-
-            // Verify CharacterManager is available with character data
-            var characterManager = CharacterManager.Instance;
-            if (characterManager == null)
-            {
-                Debug.LogError("[EquipmentHubManager] Character Manager not found!");
+                Debug.LogError("[EquipmentHubManager] ProfileManager.Instance is null! Cannot proceed with character loading.");
+                // Optionally, handle this error more gracefully, e.g., by returning or switching state
+                isInitialized = true; // Mark as initialized to prevent re-entry, but it's in a bad state.
                 return;
             }
 
             SetInitialVisibility();
             SetupNavigationButtons();
-
-            // Load character model using the ID from the active profile
             StartCoroutine(LoadCharacterFromProfile());
+            var navigationController = GetComponentInChildren<NavigationController>();
+            if (navigationController != null)
+            {
+                navigationController.Initialize(this);
+            }
+
+            if (inventoryController != null)
+            {
+                inventoryController.Initialize();
+            }
 
             isInitialized = true;
             Debug.Log("[EquipmentHubManager] Initialized successfully.");
@@ -6176,8 +6230,36 @@ namespace CyberPickle.UI.EquipmentHub
             if (backButton != null)
                 backButton.onClick.AddListener(ReturnToCharacterSelect);
         }
+        public void ShowSection(HubSection section)
+        {
+            // Hide all sections first
+            if (equipmentSection != null) equipmentSection.SetActive(false);
+            if (shopSection != null) shopSection.SetActive(false);
+            if (miningSection != null) miningSection.SetActive(false);
 
+            // For now, Skills section doesn't exist, so we'll show a placeholder
 
+            // Show the requested section
+            switch (section)
+            {
+                case HubSection.Loadout:
+                    if (equipmentSection != null) equipmentSection.SetActive(true);
+                    break;
+
+                case HubSection.Shop:
+                    if (shopSection != null) shopSection.SetActive(true);
+                    break;
+
+                case HubSection.Skills:
+                    // TODO: Show skills placeholder
+                    Debug.Log("[EquipmentHub] Skills section coming soon!");
+                    break;
+
+                case HubSection.Mining:
+                    if (miningSection != null) miningSection.SetActive(true);
+                    break;
+            }
+        }
         private IEnumerator LoadCharacterFromProfile()
         {
             // Wait a frame to ensure ProfileManager.ActiveProfile is settled
@@ -10037,6 +10119,952 @@ namespace CyberPickle.UI.Effects.Config
 }
 // --- END FILE ---
 
+// File: UI/Screens/EquipmentHub/CurrencyDisplayController.cs
+// Size: 20222 characters
+// ---
+using CyberPickle.Core.Events;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Shop.Currency;
+using DG.Tweening;
+using System.Collections;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    /// <summary>
+    /// Controls the currency display UI in the Equipment Hub scene.
+    /// Manages visual updates, animations, and formatting for both Neural Credits and CyberCoins.
+    /// </summary>
+    public class CurrencyDisplayController : MonoBehaviour
+    {
+        #region Serialized Fields
+
+        [Header("Currency Display")]
+        [SerializeField] private GameObject currencyPanel;
+        [SerializeField] private CanvasGroup currencyCanvasGroup;
+
+        [Header("Neural Credits")]
+        [SerializeField] private TextMeshProUGUI neuralCreditsValueText;
+        [SerializeField] private TextMeshProUGUI neuralCreditsLabelText;
+        [SerializeField] private Image neuralCreditsIcon;
+        [SerializeField] private GameObject neuralCreditsGlowEffect;
+
+        [Header("CyberCoins")]
+        [SerializeField] private TextMeshProUGUI cyberCoinsValueText;
+        [SerializeField] private TextMeshProUGUI cyberCoinsLabelText;
+        [SerializeField] private Image cyberCoinsIcon;
+        [SerializeField] private GameObject cyberCoinsGlowEffect;
+
+        [Header("Animation Settings")]
+        [SerializeField] private float valueChangeAnimationDuration = 0.5f;
+        [SerializeField] private float glowEffectDuration = 0.3f;
+        [SerializeField] private AnimationCurve valueChangeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+        [SerializeField] private float pulseScale = 1.1f;
+
+        [Header("Formatting")]
+        [SerializeField] private string currencyFormat = "N0"; // Format with thousand separators
+        [SerializeField] private Color positiveChangeColor = new Color(0.2f, 1f, 0.2f, 1f);
+        [SerializeField] private Color negativeChangeColor = new Color(1f, 0.2f, 0.2f, 1f);
+
+        [Header("Change Indicators")]
+        [SerializeField] private GameObject neuralCreditsChangeIndicator;
+        [SerializeField] private GameObject cyberCoinsChangeIndicator;
+        [SerializeField] private TextMeshProUGUI neuralCreditsChangeText;
+        [SerializeField] private TextMeshProUGUI cyberCoinsChangeText;
+
+        #endregion
+
+        #region Private Fields
+
+        private CurrencyManager currencyManager;
+        private float displayedNeuralCredits;
+        private float displayedCyberCoins;
+        private Coroutine neuralCreditsAnimationCoroutine;
+        private Coroutine cyberCoinsAnimationCoroutine;
+        private Vector3 originalNeuralCreditsIconScale;
+        private Vector3 originalCyberCoinsIconScale;
+
+        #endregion
+
+        #region Unity Lifecycle
+
+        private void Awake()
+        {
+            currencyManager = CurrencyManager.Instance;
+            ValidateReferences();
+            CacheOriginalScales();
+            InitializeDisplay();
+        }
+
+        private void OnEnable()
+        {
+            SubscribeToEvents();
+            RefreshDisplay();
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeFromEvents();
+            StopAllAnimations();
+        }
+
+        #endregion
+
+        #region Initialization
+
+        /// <summary>
+        /// Validates all required UI references are assigned
+        /// </summary>
+        private void ValidateReferences()
+        {
+            if (currencyCanvasGroup == null && currencyPanel != null)
+            {
+                currencyCanvasGroup = currencyPanel.GetComponent<CanvasGroup>();
+                if (currencyCanvasGroup == null)
+                {
+                    currencyCanvasGroup = currencyPanel.AddComponent<CanvasGroup>();
+                }
+            }
+
+            if (neuralCreditsValueText == null)
+                Debug.LogError("[CurrencyDisplayController] Neural Credits value text is not assigned!");
+
+            if (cyberCoinsValueText == null)
+                Debug.LogError("[CurrencyDisplayController] CyberCoins value text is not assigned!");
+        }
+
+        /// <summary>
+        /// Caches the original scales of icons for animation purposes
+        /// </summary>
+        private void CacheOriginalScales()
+        {
+            if (neuralCreditsIcon != null)
+                originalNeuralCreditsIconScale = neuralCreditsIcon.transform.localScale;
+
+            if (cyberCoinsIcon != null)
+                originalCyberCoinsIconScale = cyberCoinsIcon.transform.localScale;
+        }
+
+        /// <summary>
+        /// Sets up the initial display state
+        /// </summary>
+        private void InitializeDisplay()
+        {
+            if (neuralCreditsLabelText != null)
+                neuralCreditsLabelText.text = "Neural Credits";
+
+            if (cyberCoinsLabelText != null)
+                cyberCoinsLabelText.text = "CyberCoins";
+
+            HideChangeIndicators();
+            DisableGlowEffects();
+        }
+
+        #endregion
+
+        #region Event Management
+
+        /// <summary>
+        /// Subscribes to currency change events
+        /// </summary>
+        private void SubscribeToEvents()
+        {
+            if (currencyManager != null)
+            {
+                currencyManager.OnCurrencyChanged += HandleCurrencyChanged;
+                currencyManager.OnCurrencyAdded += HandleCurrencyAdded;
+                currencyManager.OnCurrencySpent += HandleCurrencySpent;
+                currencyManager.OnInsufficientFunds += HandleInsufficientFunds;
+            }
+        }
+
+        /// <summary>
+        /// Unsubscribes from currency change events
+        /// </summary>
+        private void UnsubscribeFromEvents()
+        {
+            if (currencyManager != null)
+            {
+                currencyManager.OnCurrencyChanged -= HandleCurrencyChanged;
+                currencyManager.OnCurrencyAdded -= HandleCurrencyAdded;
+                currencyManager.OnCurrencySpent -= HandleCurrencySpent;
+                currencyManager.OnInsufficientFunds -= HandleInsufficientFunds;
+            }
+        }
+
+        #endregion
+
+        #region Event Handlers
+
+        /// <summary>
+        /// Handles currency value changes with animated transitions
+        /// </summary>
+        private void HandleCurrencyChanged(CurrencyType type, float oldValue, float newValue)
+        {
+            switch (type)
+            {
+                case CurrencyType.NeuralCredits:
+                    AnimateNeuralCreditsChange(oldValue, newValue);
+                    break;
+                case CurrencyType.CyberCoins:
+                    AnimateCyberCoinsChange(oldValue, newValue);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Handles currency addition with positive feedback
+        /// </summary>
+        private void HandleCurrencyAdded(CurrencyType type, float amount)
+        {
+            ShowChangeIndicator(type, amount, true);
+            PulseIcon(type);
+            FlashGlowEffect(type);
+        }
+
+        /// <summary>
+        /// Handles currency spending with visual feedback
+        /// </summary>
+        private void HandleCurrencySpent(CurrencyType type, float amount)
+        {
+            ShowChangeIndicator(type, -amount, false);
+        }
+
+        /// <summary>
+        /// Handles insufficient funds feedback
+        /// </summary>
+        private void HandleInsufficientFunds(CurrencyType type)
+        {
+            StartCoroutine(ShakeAnimation(type));
+        }
+
+        #endregion
+
+        #region Display Updates
+
+        /// <summary>
+        /// Refreshes the display with current currency values
+        /// </summary>
+        public void RefreshDisplay()
+        {
+            if (currencyManager == null) return;
+
+            displayedNeuralCredits = currencyManager.NeuralCredits;
+            displayedCyberCoins = currencyManager.CyberCoins;
+
+            UpdateNeuralCreditsDisplay(displayedNeuralCredits);
+            UpdateCyberCoinsDisplay(displayedCyberCoins);
+        }
+
+        /// <summary>
+        /// Updates the Neural Credits display text
+        /// </summary>
+        private void UpdateNeuralCreditsDisplay(float value)
+        {
+            if (neuralCreditsValueText != null)
+            {
+                neuralCreditsValueText.text = value.ToString(currencyFormat);
+            }
+        }
+
+        /// <summary>
+        /// Updates the CyberCoins display text
+        /// </summary>
+        private void UpdateCyberCoinsDisplay(float value)
+        {
+            if (cyberCoinsValueText != null)
+            {
+                cyberCoinsValueText.text = value.ToString(currencyFormat);
+            }
+        }
+
+        #endregion
+
+        #region Animations
+
+        /// <summary>
+        /// Animates Neural Credits value change
+        /// </summary>
+        private void AnimateNeuralCreditsChange(float fromValue, float toValue)
+        {
+            if (neuralCreditsAnimationCoroutine != null)
+                StopCoroutine(neuralCreditsAnimationCoroutine);
+
+            neuralCreditsAnimationCoroutine = StartCoroutine(AnimateValueChange(
+                fromValue,
+                toValue,
+                UpdateNeuralCreditsDisplay,
+                () => displayedNeuralCredits = toValue
+            ));
+        }
+
+        /// <summary>
+        /// Animates CyberCoins value change
+        /// </summary>
+        private void AnimateCyberCoinsChange(float fromValue, float toValue)
+        {
+            if (cyberCoinsAnimationCoroutine != null)
+                StopCoroutine(cyberCoinsAnimationCoroutine);
+
+            cyberCoinsAnimationCoroutine = StartCoroutine(AnimateValueChange(
+                fromValue,
+                toValue,
+                UpdateCyberCoinsDisplay,
+                () => displayedCyberCoins = toValue
+            ));
+        }
+
+        /// <summary>
+        /// Generic value animation coroutine
+        /// </summary>
+        private IEnumerator AnimateValueChange(float fromValue, float toValue, System.Action<float> updateAction, System.Action onComplete)
+        {
+            float elapsedTime = 0f;
+
+            while (elapsedTime < valueChangeAnimationDuration)
+            {
+                elapsedTime += Time.deltaTime;
+                float progress = elapsedTime / valueChangeAnimationDuration;
+                float curveValue = valueChangeCurve.Evaluate(progress);
+                float currentValue = Mathf.Lerp(fromValue, toValue, curveValue);
+
+                updateAction?.Invoke(currentValue);
+
+                yield return null;
+            }
+
+            updateAction?.Invoke(toValue);
+            onComplete?.Invoke();
+        }
+
+        /// <summary>
+        /// Shows change indicator with amount
+        /// </summary>
+        private void ShowChangeIndicator(CurrencyType type, float amount, bool isPositive)
+        {
+            GameObject indicator = null;
+            TextMeshProUGUI changeText = null;
+
+            switch (type)
+            {
+                case CurrencyType.NeuralCredits:
+                    indicator = neuralCreditsChangeIndicator;
+                    changeText = neuralCreditsChangeText;
+                    break;
+                case CurrencyType.CyberCoins:
+                    indicator = cyberCoinsChangeIndicator;
+                    changeText = cyberCoinsChangeText;
+                    break;
+            }
+
+            if (indicator != null && changeText != null)
+            {
+                changeText.text = $"{(amount >= 0 ? "+" : "")}{amount:N0}";
+                changeText.color = isPositive ? positiveChangeColor : negativeChangeColor;
+
+                indicator.SetActive(true);
+
+                // Animate the indicator
+                indicator.transform.localScale = Vector3.zero;
+                indicator.transform.DOScale(Vector3.one, 0.3f).SetEase(Ease.OutBack);
+                indicator.transform.DOLocalMoveY(indicator.transform.localPosition.y + 30f, 1f)
+                    .SetEase(Ease.OutQuad)
+                    .OnComplete(() => {
+                        indicator.SetActive(false);
+                        indicator.transform.localPosition = Vector3.zero;
+                    });
+
+                // Fade out
+                var canvasGroup = indicator.GetComponent<CanvasGroup>();
+                if (canvasGroup == null)
+                    canvasGroup = indicator.AddComponent<CanvasGroup>();
+
+                canvasGroup.alpha = 1f;
+                canvasGroup.DOFade(0f, 1f).SetEase(Ease.InQuad);
+            }
+        }
+
+        /// <summary>
+        /// Pulses the currency icon
+        /// </summary>
+        private void PulseIcon(CurrencyType type)
+        {
+            Transform iconTransform = null;
+            Vector3 originalScale = Vector3.one;
+
+            switch (type)
+            {
+                case CurrencyType.NeuralCredits:
+                    if (neuralCreditsIcon != null)
+                    {
+                        iconTransform = neuralCreditsIcon.transform;
+                        originalScale = originalNeuralCreditsIconScale;
+                    }
+                    break;
+                case CurrencyType.CyberCoins:
+                    if (cyberCoinsIcon != null)
+                    {
+                        iconTransform = cyberCoinsIcon.transform;
+                        originalScale = originalCyberCoinsIconScale;
+                    }
+                    break;
+            }
+
+            if (iconTransform != null)
+            {
+                iconTransform.DOScale(originalScale * pulseScale, 0.1f)
+                    .SetEase(Ease.OutQuad)
+                    .OnComplete(() => {
+                        iconTransform.DOScale(originalScale, 0.1f).SetEase(Ease.InQuad);
+                    });
+            }
+        }
+
+        /// <summary>
+        /// Flashes the glow effect
+        /// </summary>
+        private void FlashGlowEffect(CurrencyType type)
+        {
+            GameObject glowEffect = null;
+
+            switch (type)
+            {
+                case CurrencyType.NeuralCredits:
+                    glowEffect = neuralCreditsGlowEffect;
+                    break;
+                case CurrencyType.CyberCoins:
+                    glowEffect = cyberCoinsGlowEffect;
+                    break;
+            }
+
+            if (glowEffect != null)
+            {
+                glowEffect.SetActive(true);
+
+                var canvasGroup = glowEffect.GetComponent<CanvasGroup>();
+                if (canvasGroup == null)
+                    canvasGroup = glowEffect.AddComponent<CanvasGroup>();
+
+                canvasGroup.alpha = 0f;
+                canvasGroup.DOFade(1f, glowEffectDuration * 0.5f)
+                    .SetEase(Ease.OutQuad)
+                    .OnComplete(() => {
+                        canvasGroup.DOFade(0f, glowEffectDuration * 0.5f)
+                            .SetEase(Ease.InQuad)
+                            .OnComplete(() => glowEffect.SetActive(false));
+                    });
+            }
+        }
+
+        /// <summary>
+        /// Shakes the currency display on insufficient funds
+        /// </summary>
+        private IEnumerator ShakeAnimation(CurrencyType type)
+        {
+            Transform targetTransform = null;
+
+            switch (type)
+            {
+                case CurrencyType.NeuralCredits:
+                    targetTransform = neuralCreditsValueText?.transform.parent;
+                    break;
+                case CurrencyType.CyberCoins:
+                    targetTransform = cyberCoinsValueText?.transform.parent;
+                    break;
+            }
+
+            if (targetTransform != null)
+            {
+                Vector3 originalPosition = targetTransform.localPosition;
+                float shakeDuration = 0.5f;
+                float shakeStrength = 10f;
+
+                targetTransform.DOShakePosition(shakeDuration, shakeStrength, 10, 90, false, true)
+                    .OnComplete(() => targetTransform.localPosition = originalPosition);
+            }
+
+            yield return null;
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        /// <summary>
+        /// Hides all change indicators
+        /// </summary>
+        private void HideChangeIndicators()
+        {
+            if (neuralCreditsChangeIndicator != null)
+                neuralCreditsChangeIndicator.SetActive(false);
+
+            if (cyberCoinsChangeIndicator != null)
+                cyberCoinsChangeIndicator.SetActive(false);
+        }
+
+        /// <summary>
+        /// Disables all glow effects
+        /// </summary>
+        private void DisableGlowEffects()
+        {
+            if (neuralCreditsGlowEffect != null)
+                neuralCreditsGlowEffect.SetActive(false);
+
+            if (cyberCoinsGlowEffect != null)
+                cyberCoinsGlowEffect.SetActive(false);
+        }
+
+        /// <summary>
+        /// Stops all running animations
+        /// </summary>
+        private void StopAllAnimations()
+        {
+            if (neuralCreditsAnimationCoroutine != null)
+            {
+                StopCoroutine(neuralCreditsAnimationCoroutine);
+                neuralCreditsAnimationCoroutine = null;
+            }
+
+            if (cyberCoinsAnimationCoroutine != null)
+            {
+                StopCoroutine(cyberCoinsAnimationCoroutine);
+                cyberCoinsAnimationCoroutine = null;
+            }
+
+            DOTween.Kill(this);
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        /// <summary>
+        /// Shows or hides the currency display with animation
+        /// </summary>
+        public void SetVisible(bool visible, float duration = 0.3f)
+        {
+            if (currencyCanvasGroup == null) return;
+
+            currencyCanvasGroup.DOFade(visible ? 1f : 0f, duration)
+                .OnComplete(() => {
+                    currencyCanvasGroup.interactable = visible;
+                    currencyCanvasGroup.blocksRaycasts = visible;
+
+                    if (!visible)
+                    {
+                        currencyPanel.SetActive(false);
+                    }
+                });
+
+            if (visible && !currencyPanel.activeSelf)
+            {
+                currencyPanel.SetActive(true);
+            }
+        }
+
+        /// <summary>
+        /// Highlights a specific currency type temporarily
+        /// </summary>
+        public void HighlightCurrency(CurrencyType type, float duration = 2f)
+        {
+            StartCoroutine(HighlightCurrencyRoutine(type, duration));
+        }
+
+        private IEnumerator HighlightCurrencyRoutine(CurrencyType type, float duration)
+        {
+            // Flash the glow effect
+            FlashGlowEffect(type);
+
+            // Scale up the value text
+            TextMeshProUGUI targetText = type == CurrencyType.NeuralCredits ?
+                neuralCreditsValueText : cyberCoinsValueText;
+
+            if (targetText != null)
+            {
+                Vector3 originalScale = targetText.transform.localScale;
+                targetText.transform.DOScale(originalScale * 1.2f, 0.3f)
+                    .SetEase(Ease.OutQuad)
+                    .OnComplete(() => {
+                        targetText.transform.DOScale(originalScale, 0.3f)
+                            .SetEase(Ease.InQuad)
+                            .SetDelay(duration - 0.6f);
+                    });
+            }
+
+            yield return new WaitForSeconds(duration);
+        }
+
+        #endregion
+
+        #region Cleanup
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromEvents();
+            StopAllAnimations();
+        }
+
+        #endregion
+    }
+}
+// --- END FILE ---
+
+// File: UI/Screens/EquipmentHub/NavigationController.cs
+// Size: 12691 characters
+// ---
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using System.Collections.Generic;
+using DG.Tweening;
+using System;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    public enum HubSection
+    {
+        Loadout,
+        Shop,
+        Skills,
+        Mining
+    }
+
+    public class NavigationController : MonoBehaviour
+    {
+        [Header("Navigation Buttons")]
+        [SerializeField] private Button loadoutButton;
+        [SerializeField] private Button shopButton;
+        [SerializeField] private Button skillsButton;
+        [SerializeField] private Button miningButton;
+
+        [Header("Visual Settings")]
+        [SerializeField] private Color activeButtonColor = new Color(0.2f, 1f, 0.8f, 1f);
+        [SerializeField] private Color inactiveButtonColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+        [SerializeField] private float buttonTransitionDuration = 0.3f;
+        [SerializeField] private float buttonHoverScale = 1.05f;
+
+        [Header("Button Icons (Optional)")]
+        [SerializeField] private Image loadoutIcon;
+        [SerializeField] private Image shopIcon;
+        [SerializeField] private Image skillsIcon;
+        [SerializeField] private Image miningIcon;
+
+        [Header("Button Labels")]
+        [SerializeField] private TextMeshProUGUI loadoutLabel;
+        [SerializeField] private TextMeshProUGUI shopLabel;
+        [SerializeField] private TextMeshProUGUI skillsLabel;
+        [SerializeField] private TextMeshProUGUI miningLabel;
+
+        [Header("Effects")]
+        [SerializeField] private GameObject selectionIndicator;
+        [SerializeField] private float indicatorMoveSpeed = 0.2f;
+
+        private EquipmentHubManager hubManager;
+        private Dictionary<HubSection, Button> sectionButtons;
+        private Dictionary<HubSection, Image> sectionIcons;
+        private Dictionary<HubSection, TextMeshProUGUI> sectionLabels;
+        private HubSection currentSection = HubSection.Loadout;
+        private bool isInitialized = false;
+
+        public event Action<HubSection> OnSectionChanged;
+
+        #region Initialization
+
+        public void Initialize(EquipmentHubManager hubManager)
+        {
+            if (isInitialized) return;
+
+            this.hubManager = hubManager;
+            SetupButtonMappings();
+            SetupButtonListeners();
+            SetInitialButtonStates();
+
+            isInitialized = true;
+        }
+
+        private void SetupButtonMappings()
+        {
+            // Map sections to buttons
+            sectionButtons = new Dictionary<HubSection, Button>
+            {
+                { HubSection.Loadout, loadoutButton },
+                { HubSection.Shop, shopButton },
+                { HubSection.Skills, skillsButton },
+                { HubSection.Mining, miningButton }
+            };
+
+            // Map sections to icons (if assigned)
+            sectionIcons = new Dictionary<HubSection, Image>();
+            if (loadoutIcon != null) sectionIcons[HubSection.Loadout] = loadoutIcon;
+            if (shopIcon != null) sectionIcons[HubSection.Shop] = shopIcon;
+            if (skillsIcon != null) sectionIcons[HubSection.Skills] = skillsIcon;
+            if (miningIcon != null) sectionIcons[HubSection.Mining] = miningIcon;
+
+            // Map sections to labels
+            sectionLabels = new Dictionary<HubSection, TextMeshProUGUI>();
+            if (loadoutLabel != null) sectionLabels[HubSection.Loadout] = loadoutLabel;
+            if (shopLabel != null) sectionLabels[HubSection.Shop] = shopLabel;
+            if (skillsLabel != null) sectionLabels[HubSection.Skills] = skillsLabel;
+            if (miningLabel != null) sectionLabels[HubSection.Mining] = miningLabel;
+        }
+
+        private void SetupButtonListeners()
+        {
+            if (loadoutButton != null)
+                loadoutButton.onClick.AddListener(() => OnLoadoutClicked());
+
+            if (shopButton != null)
+                shopButton.onClick.AddListener(() => OnShopClicked());
+
+            if (skillsButton != null)
+                skillsButton.onClick.AddListener(() => OnSkillsClicked());
+
+            if (miningButton != null)
+                miningButton.onClick.AddListener(() => OnMiningClicked());
+
+            // Setup hover effects
+            foreach (var kvp in sectionButtons)
+            {
+                if (kvp.Value != null)
+                {
+                    AddHoverEffects(kvp.Value);
+                }
+            }
+        }
+
+        private void SetInitialButtonStates()
+        {
+            // Set all buttons to inactive state initially
+            foreach (var section in sectionButtons.Keys)
+            {
+                UpdateButtonVisualState(section, false, true);
+            }
+
+            // Set the default section as active
+            SetActiveButton(HubSection.Loadout);
+        }
+
+        #endregion
+
+        #region Button Click Handlers
+
+        public void OnLoadoutClicked()
+        {
+            if (currentSection == HubSection.Loadout) return;
+            NavigateToSection(HubSection.Loadout);
+        }
+
+        public void OnShopClicked()
+        {
+            if (currentSection == HubSection.Shop) return;
+            NavigateToSection(HubSection.Shop);
+        }
+
+        public void OnSkillsClicked()
+        {
+            if (currentSection == HubSection.Skills) return;
+            NavigateToSection(HubSection.Skills);
+        }
+
+        public void OnMiningClicked()
+        {
+            if (currentSection == HubSection.Mining) return;
+            NavigateToSection(HubSection.Mining);
+        }
+
+        #endregion
+
+        #region Navigation Logic
+
+        private void NavigateToSection(HubSection newSection)
+        {
+            if (hubManager == null)
+            {
+                Debug.LogError("[NavigationController] HubManager is not set!");
+                return;
+            }
+
+            // Animate button transition
+            AnimateButtonTransition(sectionButtons[currentSection], sectionButtons[newSection]);
+
+            // Update visual states
+            UpdateButtonVisualState(currentSection, false);
+            UpdateButtonVisualState(newSection, true);
+
+            // Move selection indicator if available
+            if (selectionIndicator != null)
+            {
+                MoveSelectionIndicator(sectionButtons[newSection]);
+            }
+
+            // Update current section
+            var previousSection = currentSection;
+            currentSection = newSection;
+
+            // Notify hub manager to switch sections
+            hubManager.ShowSection(newSection);
+
+            // Fire event
+            OnSectionChanged?.Invoke(newSection);
+        }
+
+        public void SetActiveButton(HubSection section)
+        {
+            if (!sectionButtons.ContainsKey(section)) return;
+
+            // Update all button states
+            foreach (var kvp in sectionButtons)
+            {
+                UpdateButtonVisualState(kvp.Key, kvp.Key == section);
+            }
+
+            // Update selection indicator
+            if (selectionIndicator != null && sectionButtons[section] != null)
+            {
+                selectionIndicator.transform.position = sectionButtons[section].transform.position;
+            }
+
+            currentSection = section;
+        }
+
+        #endregion
+
+        #region Visual Effects
+
+        private void UpdateButtonVisualState(HubSection section, bool isActive, bool instant = false)
+        {
+            if (!sectionButtons.TryGetValue(section, out Button button) || button == null) return;
+
+            float duration = instant ? 0f : buttonTransitionDuration;
+            Color targetColor = isActive ? activeButtonColor : inactiveButtonColor;
+
+            // Update button background color
+            var buttonImage = button.GetComponent<Image>();
+            if (buttonImage != null)
+            {
+                buttonImage.DOColor(targetColor, duration);
+            }
+
+            // Update icon color if available
+            if (sectionIcons.TryGetValue(section, out Image icon) && icon != null)
+            {
+                icon.DOColor(isActive ? Color.white : new Color(0.7f, 0.7f, 0.7f, 1f), duration);
+            }
+
+            // Update label color if available
+            if (sectionLabels.TryGetValue(section, out TextMeshProUGUI label) && label != null)
+            {
+                label.DOColor(isActive ? Color.white : new Color(0.7f, 0.7f, 0.7f, 1f), duration);
+            }
+
+            // Scale effect for active button
+            if (isActive)
+            {
+                button.transform.DOScale(1.05f, duration * 0.5f)
+                    .OnComplete(() => button.transform.DOScale(1f, duration * 0.5f));
+            }
+        }
+
+        public void AnimateButtonTransition(Button fromButton, Button toButton)
+        {
+            if (fromButton == null || toButton == null) return;
+
+            // Add pulse effect to the new active button
+            toButton.transform.DOPunchScale(Vector3.one * 0.1f, buttonTransitionDuration, 1, 0.5f);
+
+            // Optional: Add a glow or highlight effect
+            var toButtonImage = toButton.GetComponent<Image>();
+            if (toButtonImage != null)
+            {
+                // Flash effect
+                toButtonImage.DOColor(Color.white, buttonTransitionDuration * 0.3f)
+                    .OnComplete(() => toButtonImage.DOColor(activeButtonColor, buttonTransitionDuration * 0.7f));
+            }
+        }
+
+        private void MoveSelectionIndicator(Button targetButton)
+        {
+            if (selectionIndicator == null || targetButton == null) return;
+
+            selectionIndicator.transform.DOMove(targetButton.transform.position, indicatorMoveSpeed)
+                .SetEase(Ease.OutQuad);
+        }
+
+        private void AddHoverEffects(Button button)
+        {
+            if (button == null) return;
+
+            var eventTriggers = button.gameObject.GetComponent<UnityEngine.EventSystems.EventTrigger>();
+            if (eventTriggers == null)
+            {
+                eventTriggers = button.gameObject.AddComponent<UnityEngine.EventSystems.EventTrigger>();
+            }
+
+            // Add hover enter event
+            var hoverEnter = new UnityEngine.EventSystems.EventTrigger.Entry();
+            hoverEnter.eventID = UnityEngine.EventSystems.EventTriggerType.PointerEnter;
+            hoverEnter.callback.AddListener((data) => OnButtonHoverEnter(button));
+            eventTriggers.triggers.Add(hoverEnter);
+
+            // Add hover exit event
+            var hoverExit = new UnityEngine.EventSystems.EventTrigger.Entry();
+            hoverExit.eventID = UnityEngine.EventSystems.EventTriggerType.PointerExit;
+            hoverExit.callback.AddListener((data) => OnButtonHoverExit(button));
+            eventTriggers.triggers.Add(hoverExit);
+        }
+
+        private void OnButtonHoverEnter(Button button)
+        {
+            // Don't scale if it's the active button
+            HubSection? hoveredSection = GetSectionForButton(button);
+            if (hoveredSection.HasValue && hoveredSection.Value != currentSection)
+            {
+                button.transform.DOScale(buttonHoverScale, 0.2f).SetEase(Ease.OutQuad);
+            }
+
+            // Play hover sound if available
+            //var audioController = GetComponentInParent<AudioFeedbackController>();
+            //audioController?.PlayHoverSound();
+        }
+
+        private void OnButtonHoverExit(Button button)
+        {
+            button.transform.DOScale(1f, 0.2f).SetEase(Ease.OutQuad);
+        }
+
+        private HubSection? GetSectionForButton(Button button)
+        {
+            foreach (var kvp in sectionButtons)
+            {
+                if (kvp.Value == button)
+                    return kvp.Key;
+            }
+            return null;
+        }
+
+        #endregion
+
+        #region Cleanup
+
+        private void OnDestroy()
+        {
+            // Remove all listeners
+            if (loadoutButton != null) loadoutButton.onClick.RemoveAllListeners();
+            if (shopButton != null) shopButton.onClick.RemoveAllListeners();
+            if (skillsButton != null) skillsButton.onClick.RemoveAllListeners();
+            if (miningButton != null) miningButton.onClick.RemoveAllListeners();
+
+            // Kill any active tweens
+            DOTween.Kill(this);
+        }
+
+        #endregion
+    }
+}
+// --- END FILE ---
+
 // File: UI/Screens/MainMenu/CreateProfileCardController.cs
 // Size: 13469 characters
 // ---
@@ -13813,6 +14841,1653 @@ namespace CyberPickle.Core.Services.Authentication.Flow
     }
 }
 
+// --- END FILE ---
+
+// File: UI/Screens/EquipmentHub/Loadout/EquipmentSlotController.cs
+// Size: 13959 characters
+// ---
+using CyberPickle.Core.Events;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Shop.Equipment.Data;
+using DG.Tweening;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    /// <summary>
+    /// Controls individual equipment slot UI elements in the Equipment Hub.
+    /// Handles drag-drop, visual states, and equipment display.
+    /// </summary>
+    public class EquipmentSlotController : MonoBehaviour,
+        IPointerEnterHandler,
+        IPointerExitHandler,
+        IPointerClickHandler,
+        IBeginDragHandler,
+        IDragHandler,
+        IEndDragHandler,
+        IDropHandler
+    {
+        #region Serialized Fields
+
+        [Header("Slot Configuration")]
+        [SerializeField] private EquipmentSlotType slotType;
+        [SerializeField] private int slotIndex = 0; // For multiple slots of same type
+
+        [Header("UI References")]
+        [SerializeField] private Image slotBackground;
+        [SerializeField] private Image slotFrame;
+        [SerializeField] private Image equipmentIcon;
+        [SerializeField] private GameObject emptySlotOverlay;
+        [SerializeField] private TextMeshProUGUI slotTypeText;
+        [SerializeField] private GameObject equippedGlow;
+        [SerializeField] private GameObject levelBadge;
+        [SerializeField] private TextMeshProUGUI levelText;
+
+        [Header("Visual Settings")]
+        [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
+        [SerializeField] private Color occupiedSlotColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+        [SerializeField] private Color validDropColor = new Color(0.2f, 1f, 0.2f, 0.5f);
+        [SerializeField] private Color invalidDropColor = new Color(1f, 0.2f, 0.2f, 0.5f);
+        [SerializeField] private float hoverScale = 1.1f;
+        [SerializeField] private float clickScale = 0.95f;
+
+        [Header("Drag Settings")]
+        [SerializeField] private float dragAlpha = 0.6f;
+        [SerializeField] private Canvas dragCanvas; // Assign your main canvas
+
+        #endregion
+
+        #region Private Fields
+
+        private EquipmentData currentEquipment;
+        private RectTransform rectTransform;
+        private CanvasGroup canvasGroup;
+        private Vector3 originalScale;
+        private bool isDragging;
+        private GameObject draggedIcon;
+        private bool isValidDropTarget;
+
+        #endregion
+
+        #region Properties
+
+        public EquipmentSlotType SlotType => slotType;
+        public bool IsOccupied => currentEquipment != null;
+        public EquipmentData CurrentEquipment => currentEquipment;
+        public int SlotIndex => slotIndex;
+
+        #endregion
+
+        #region Unity Lifecycle
+
+        private void Awake()
+        {
+            rectTransform = GetComponent<RectTransform>();
+            canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            }
+
+            originalScale = transform.localScale;
+            InitializeSlot();
+        }
+
+        #endregion
+
+        #region Initialization
+
+        /// <summary>
+        /// Initializes the slot with default visual state
+        /// </summary>
+        private void InitializeSlot()
+        {
+            // Set slot type text
+            if (slotTypeText != null)
+            {
+                slotTypeText.text = GetSlotTypeDisplayName();
+            }
+
+            // Set empty state
+            SetEmpty();
+
+            // Find canvas if not assigned
+            if (dragCanvas == null)
+            {
+                dragCanvas = GetComponentInParent<Canvas>();
+            }
+        }
+
+        /// <summary>
+        /// Gets display-friendly name for slot type
+        /// </summary>
+        private string GetSlotTypeDisplayName()
+        {
+            switch (slotType)
+            {
+                case EquipmentSlotType.HandWeapon:
+                    return $"Hand Weapon {slotIndex + 1}";
+                case EquipmentSlotType.BodyWeapon:
+                    return "Body Weapon";
+                case EquipmentSlotType.PowerUp:
+                    return $"Power-Up {slotIndex + 1}";
+                case EquipmentSlotType.Armor:
+                    return "Armor";
+                case EquipmentSlotType.Amulet:
+                    return "Amulet";
+                default:
+                    return slotType.ToString();
+            }
+        }
+
+        #endregion
+
+        #region Equipment Management
+
+        /// <summary>
+        /// Sets equipment in this slot
+        /// </summary>
+        public void SetEquipment(EquipmentData equipment, int level = 1)
+        {
+            if (equipment == null)
+            {
+                SetEmpty();
+                return;
+            }
+
+            currentEquipment = equipment;
+
+            // Update visuals
+            if (equipmentIcon != null)
+            {
+                equipmentIcon.sprite = equipment.equipmentIcon;
+                equipmentIcon.enabled = true;
+            }
+
+            if (emptySlotOverlay != null)
+            {
+                emptySlotOverlay.SetActive(false);
+            }
+
+            if (slotBackground != null)
+            {
+                slotBackground.color = occupiedSlotColor;
+            }
+
+            // Update level badge
+            if (levelBadge != null && levelText != null)
+            {
+                levelBadge.SetActive(level > 1);
+                levelText.text = level.ToString();
+            }
+
+            // Show equipped glow
+            if (equippedGlow != null)
+            {
+                equippedGlow.SetActive(true);
+                AnimateEquipGlow();
+            }
+        }
+
+        /// <summary>
+        /// Clears the slot
+        /// </summary>
+        public void SetEmpty()
+        {
+            currentEquipment = null;
+
+            if (equipmentIcon != null)
+            {
+                equipmentIcon.enabled = false;
+            }
+
+            if (emptySlotOverlay != null)
+            {
+                emptySlotOverlay.SetActive(true);
+            }
+
+            if (slotBackground != null)
+            {
+                slotBackground.color = emptySlotColor;
+            }
+
+            if (levelBadge != null)
+            {
+                levelBadge.SetActive(false);
+            }
+
+            if (equippedGlow != null)
+            {
+                equippedGlow.SetActive(false);
+            }
+        }
+
+        #endregion
+
+        #region Pointer Events
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (isDragging) return;
+
+            // Scale up
+            transform.DOScale(originalScale * hoverScale, 0.2f).SetEase(Ease.OutQuad);
+
+            // Show tooltip if equipped
+            if (IsOccupied && currentEquipment != null)
+            {
+                // TODO: Show equipment tooltip
+                Debug.Log($"Hovering over: {currentEquipment.displayName}");
+            }
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (isDragging) return;
+
+            // Scale back
+            transform.DOScale(originalScale, 0.2f).SetEase(Ease.OutQuad);
+
+            // Hide tooltip
+            // TODO: Hide equipment tooltip
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Right && IsOccupied)
+            {
+                // Right-click to unequip
+                UnequipItem();
+            }
+            else if (eventData.button == PointerEventData.InputButton.Left)
+            {
+                // Animate click
+                transform.DOScale(originalScale * clickScale, 0.1f)
+                    .SetEase(Ease.OutQuad)
+                    .OnComplete(() => {
+                        transform.DOScale(originalScale * hoverScale, 0.1f).SetEase(Ease.OutQuad);
+                    });
+            }
+        }
+
+        #endregion
+
+        #region Drag and Drop
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (!IsOccupied || currentEquipment == null) return;
+
+            isDragging = true;
+
+            // Create drag icon
+            CreateDragIcon();
+
+            // Make slot semi-transparent
+            canvasGroup.alpha = dragAlpha;
+
+            // Disable raycast during drag
+            canvasGroup.blocksRaycasts = false;
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (!isDragging || draggedIcon == null) return;
+
+            // Update drag icon position
+            draggedIcon.transform.position = eventData.position;
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            if (!isDragging) return;
+
+            isDragging = false;
+
+            // Restore opacity
+            canvasGroup.alpha = 1f;
+            canvasGroup.blocksRaycasts = true;
+
+            // Destroy drag icon
+            if (draggedIcon != null)
+            {
+                Destroy(draggedIcon);
+                draggedIcon = null;
+            }
+
+            // Check if dropped on valid target
+            GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
+            if (dropTarget != null)
+            {
+                var targetSlot = dropTarget.GetComponentInParent<EquipmentSlotController>();
+                if (targetSlot != null && targetSlot != this)
+                {
+                    TrySwapEquipment(targetSlot);
+                }
+            }
+        }
+
+        public void OnDrop(PointerEventData eventData)
+        {
+            // This is called on the slot being dropped onto
+            var sourceSlot = eventData.pointerDrag?.GetComponent<EquipmentSlotController>();
+            if (sourceSlot != null && sourceSlot != this)
+            {
+                // Visual feedback
+                HighlightDropFeedback(CanAcceptEquipment(sourceSlot.CurrentEquipment));
+            }
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        /// <summary>
+        /// Creates a draggable icon
+        /// </summary>
+        private void CreateDragIcon()
+        {
+            if (dragCanvas == null || equipmentIcon == null) return;
+
+            draggedIcon = new GameObject("DragIcon");
+            draggedIcon.transform.SetParent(dragCanvas.transform, false);
+
+            var dragImage = draggedIcon.AddComponent<Image>();
+            dragImage.sprite = equipmentIcon.sprite;
+            dragImage.raycastTarget = false;
+
+            var dragRect = draggedIcon.GetComponent<RectTransform>();
+            dragRect.sizeDelta = equipmentIcon.rectTransform.sizeDelta;
+
+            // Add canvas group for transparency
+            var dragCanvasGroup = draggedIcon.AddComponent<CanvasGroup>();
+            dragCanvasGroup.alpha = 0.8f;
+        }
+
+        /// <summary>
+        /// Checks if this slot can accept the given equipment
+        /// </summary>
+        private bool CanAcceptEquipment(EquipmentData equipment)
+        {
+            if (equipment == null) return true; // Can always accept empty
+            return equipment.slotType == slotType;
+        }
+
+        /// <summary>
+        /// Attempts to swap equipment with another slot
+        /// </summary>
+        private void TrySwapEquipment(EquipmentSlotController targetSlot)
+        {
+            if (!CanAcceptEquipment(targetSlot.CurrentEquipment) ||
+                !targetSlot.CanAcceptEquipment(this.CurrentEquipment))
+            {
+                // Invalid swap
+                ShakeAnimation();
+                return;
+            }
+
+            // Perform swap
+            var tempEquipment = targetSlot.CurrentEquipment;
+            targetSlot.SetEquipment(this.CurrentEquipment);
+            this.SetEquipment(tempEquipment);
+
+            // Notify equipment manager
+            // TODO: Update equipment in profile
+        }
+
+        /// <summary>
+        /// Unequips the current item
+        /// </summary>
+        private void UnequipItem()
+        {
+            if (!IsOccupied) return;
+
+            // TODO: Call equipment manager to unequip
+            SetEmpty();
+
+            // Animation
+            transform.DOPunchScale(Vector3.one * 0.1f, 0.3f, 5);
+        }
+
+        /// <summary>
+        /// Shows drop feedback
+        /// </summary>
+        private void HighlightDropFeedback(bool isValid)
+        {
+            if (slotFrame != null)
+            {
+                Color targetColor = isValid ? validDropColor : invalidDropColor;
+                slotFrame.DOColor(targetColor, 0.2f)
+                    .OnComplete(() => {
+                        slotFrame.DOColor(Color.white, 0.3f);
+                    });
+            }
+        }
+
+        /// <summary>
+        /// Animates the equipped glow effect
+        /// </summary>
+        private void AnimateEquipGlow()
+        {
+            if (equippedGlow == null) return;
+
+            var glowImage = equippedGlow.GetComponent<Image>();
+            if (glowImage != null)
+            {
+                glowImage.DOFade(0.5f, 1f)
+                    .SetLoops(-1, LoopType.Yoyo)
+                    .SetEase(Ease.InOutSine);
+            }
+        }
+
+        /// <summary>
+        /// Shakes the slot for error feedback
+        /// </summary>
+        private void ShakeAnimation()
+        {
+            transform.DOShakePosition(0.3f, 10f, 10, 90, false, true);
+        }
+
+        #endregion
+    }
+}
+// --- END FILE ---
+
+// File: UI/Screens/EquipmentHub/Loadout/InventorySlotController.cs
+// Size: 11933 characters
+// ---
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using TMPro;
+using DG.Tweening;
+using CyberPickle.Shop.Equipment.Data;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    public class InventorySlotController : MonoBehaviour,
+        IPointerEnterHandler,
+        IPointerExitHandler,
+        IPointerClickHandler,
+        IBeginDragHandler,
+        IDragHandler,
+        IEndDragHandler
+    {
+        [Header("UI References")]
+        [SerializeField] private Image backgroundImage;
+        [SerializeField] private Image itemIcon;
+        [SerializeField] private TextMeshProUGUI quantityText;
+        [SerializeField] private GameObject levelBadge;
+        [SerializeField] private TextMeshProUGUI levelText;
+        [SerializeField] private GameObject highlightBorder;
+        [SerializeField] private GameObject rarityGlow;
+
+        [Header("Visual Settings")]
+        [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
+        [SerializeField] private Color occupiedSlotColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+        [SerializeField] private Color hoverColor = new Color(0.4f, 0.4f, 0.4f, 1f);
+        [SerializeField] private float hoverScale = 1.1f;
+        [SerializeField] private float clickScale = 0.95f;
+
+        [Header("Rarity Colors")]
+        [SerializeField] private Color commonColor = Color.gray;
+        [SerializeField] private Color uncommonColor = Color.green;
+        [SerializeField] private Color rareColor = Color.blue;
+        [SerializeField] private Color epicColor = new Color(0.5f, 0f, 0.5f, 1f); // Purple
+        [SerializeField] private Color legendaryColor = new Color(1f, 0.5f, 0f, 1f); // Orange
+
+        private InventoryUIController inventoryController;
+        private EquipmentData currentEquipment;
+        private int slotIndex;
+        private int itemLevel = 1;
+        private bool isOccupied = false;
+        private bool isDragging = false;
+        private Vector3 originalScale;
+        private CanvasGroup canvasGroup;
+
+        public EquipmentData CurrentEquipment => currentEquipment;
+        public bool IsOccupied => isOccupied;
+        public int SlotIndex => slotIndex;
+
+        #region Initialization
+
+        public void Initialize(int index, InventoryUIController controller)
+        {
+            slotIndex = index;
+            inventoryController = controller;
+
+            // Cache components
+            if (backgroundImage == null) backgroundImage = GetComponent<Image>();
+            canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
+
+            originalScale = transform.localScale;
+
+            // Set initial state
+            ClearSlot();
+
+            // Hide optional elements
+            if (highlightBorder != null) highlightBorder.SetActive(false);
+            if (rarityGlow != null) rarityGlow.SetActive(false);
+        }
+
+        #endregion
+
+        #region Slot Management
+
+        public void SetItem(EquipmentData item, int level = 1)
+        {
+            if (item == null)
+            {
+                ClearSlot();
+                return;
+            }
+
+            currentEquipment = item;
+            itemLevel = level;
+            isOccupied = true;
+
+            // Update visuals
+            if (itemIcon != null)
+            {
+                itemIcon.sprite = item.equipmentIcon;
+                itemIcon.enabled = true;
+            }
+
+            if (backgroundImage != null)
+            {
+                backgroundImage.color = occupiedSlotColor;
+            }
+
+            // Update level display
+            if (levelBadge != null && levelText != null)
+            {
+                bool showLevel = level > 1;
+                levelBadge.SetActive(showLevel);
+                if (showLevel)
+                {
+                    levelText.text = level.ToString();
+                }
+            }
+
+            // Update quantity (for stackable items in the future)
+            UpdateQuantityDisplay(1);
+
+            // Set rarity glow
+            SetRarityVisuals(item);
+
+            // Animation
+            transform.DOScale(originalScale * 1.1f, 0.1f)
+                .OnComplete(() => transform.DOScale(originalScale, 0.1f));
+        }
+
+        public void ClearSlot()
+        {
+            currentEquipment = null;
+            itemLevel = 1;
+            isOccupied = false;
+
+            if (itemIcon != null)
+            {
+                itemIcon.sprite = null;
+                itemIcon.enabled = false;
+            }
+
+            if (backgroundImage != null)
+            {
+                backgroundImage.color = emptySlotColor;
+            }
+
+            if (levelBadge != null)
+            {
+                levelBadge.SetActive(false);
+            }
+
+            if (quantityText != null)
+            {
+                quantityText.gameObject.SetActive(false);
+            }
+
+            if (rarityGlow != null)
+            {
+                rarityGlow.SetActive(false);
+            }
+        }
+
+        public void UpdateQuantityDisplay(int quantity = 1)
+        {
+            if (quantityText != null)
+            {
+                bool showQuantity = quantity > 1;
+                quantityText.gameObject.SetActive(showQuantity);
+                if (showQuantity)
+                {
+                    quantityText.text = quantity.ToString();
+                }
+            }
+        }
+
+        private void SetRarityVisuals(EquipmentData item)
+        {
+            if (rarityGlow == null) return;
+
+            // Determine rarity based on item properties
+            Color glowColor = commonColor;
+
+            // Simple rarity determination based on cost
+            if (item.cyberCoinCost > 0)
+            {
+                glowColor = legendaryColor;
+            }
+            else if (item.neuralCreditCost >= 10000)
+            {
+                glowColor = epicColor;
+            }
+            else if (item.neuralCreditCost >= 5000)
+            {
+                glowColor = rareColor;
+            }
+            else if (item.neuralCreditCost >= 1000)
+            {
+                glowColor = uncommonColor;
+            }
+
+            var glowImage = rarityGlow.GetComponent<Image>();
+            if (glowImage != null)
+            {
+                glowImage.color = glowColor;
+                rarityGlow.SetActive(true);
+
+                // Pulse animation for epic and legendary
+                if (glowColor == epicColor || glowColor == legendaryColor)
+                {
+                    glowImage.DOFade(0.5f, 1f).SetLoops(-1, LoopType.Yoyo);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Pointer Events
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (isDragging) return;
+
+            // Visual feedback
+            transform.DOScale(originalScale * hoverScale, 0.2f).SetEase(Ease.OutQuad);
+
+            if (backgroundImage != null)
+            {
+                backgroundImage.DOColor(hoverColor, 0.2f);
+            }
+
+            if (highlightBorder != null)
+            {
+                highlightBorder.SetActive(true);
+            }
+
+            // Notify inventory controller
+            inventoryController?.OnItemHoverEnter(this);
+
+            // Play hover sound
+            //var audioController = GetComponentInParent<AudioFeedbackController>();
+           // audioController?.PlayHoverSound();
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (isDragging) return;
+
+            // Reset visual feedback
+            transform.DOScale(originalScale, 0.2f).SetEase(Ease.OutQuad);
+
+            if (backgroundImage != null)
+            {
+                Color targetColor = isOccupied ? occupiedSlotColor : emptySlotColor;
+                backgroundImage.DOColor(targetColor, 0.2f);
+            }
+
+            if (highlightBorder != null)
+            {
+                highlightBorder.SetActive(false);
+            }
+
+            // Notify inventory controller
+            inventoryController?.HandleItemHoverExit(this);
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (!isOccupied || currentEquipment == null) return;
+
+            if (eventData.button == PointerEventData.InputButton.Left)
+            {
+                // Click animation
+                transform.DOScale(originalScale * clickScale, 0.1f)
+                    .OnComplete(() => transform.DOScale(originalScale, 0.1f));
+
+                // Notify inventory controller
+                inventoryController?.OnItemClicked(this);
+            }
+            else if (eventData.button == PointerEventData.InputButton.Right)
+            {
+                // Right-click for quick equip or context menu
+                // TODO: Implement quick equip
+            }
+        }
+
+        #endregion
+
+        #region Drag & Drop
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (!isOccupied || currentEquipment == null) return;
+
+            isDragging = true;
+            canvasGroup.alpha = 0.6f;
+            canvasGroup.blocksRaycasts = false;
+
+            // Notify inventory controller
+            inventoryController?.OnItemDragStart(this);
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (!isDragging) return;
+
+            // Update drag visual position
+            inventoryController?.UpdateDragPosition(eventData.position);
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            if (!isDragging) return;
+
+            isDragging = false;
+            canvasGroup.alpha = 1f;
+            canvasGroup.blocksRaycasts = true;
+
+            // Check if dropped on valid target
+            GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
+            if (dropTarget != null)
+            {
+                var equipmentSlot = dropTarget.GetComponentInParent<EquipmentSlotController>();
+                if (equipmentSlot != null && IsCompatibleWith(equipmentSlot))
+                {
+                    // TODO: Handle equipment swap
+                }
+            }
+
+            // Notify inventory controller
+            inventoryController?.OnItemDragEnd();
+        }
+
+        public bool IsCompatibleWith(EquipmentSlotController targetSlot)
+        {
+            if (targetSlot == null || currentEquipment == null) return false;
+
+            return targetSlot.SlotType == currentEquipment.slotType;
+        }
+
+        #endregion
+
+        #region Visual Effects
+
+        public void PlayEquipAnimation()
+        {
+            // Flash effect
+            if (backgroundImage != null)
+            {
+                backgroundImage.DOColor(Color.white, 0.1f)
+                    .OnComplete(() => backgroundImage.DOColor(occupiedSlotColor, 0.2f));
+            }
+
+            // Scale punch
+            transform.DOPunchScale(Vector3.one * 0.2f, 0.3f, 1, 0.5f);
+        }
+
+        public void PlayErrorAnimation()
+        {
+            // Shake effect
+            transform.DOShakePosition(0.3f, 10f, 10, 90, false, true);
+
+            // Red flash
+            if (backgroundImage != null)
+            {
+                backgroundImage.DOColor(Color.red, 0.1f)
+                    .OnComplete(() => backgroundImage.DOColor(occupiedSlotColor, 0.2f));
+            }
+        }
+
+        #endregion
+
+        #region Cleanup
+
+        private void OnDestroy()
+        {
+            DOTween.Kill(this);
+        }
+
+        #endregion
+    }
+}
+// --- END FILE ---
+
+// File: UI/Screens/EquipmentHub/Loadout/InventoryTabController.cs
+// Size: 10962 characters
+// ---
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using System.Collections.Generic;
+using DG.Tweening;
+using CyberPickle.Core.Services.Authentication.Data;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    public class InventoryTabController : MonoBehaviour
+    {
+        [System.Serializable]
+        public class TabButton
+        {
+            public Button button;
+            public Image backgroundImage;
+            public Image iconImage;
+            public TextMeshProUGUI labelText;
+            public TextMeshProUGUI countText;
+            public GameObject countBadge;
+            public EquipmentSlotType? slotType; // null for "All" tab
+        }
+
+        [Header("Tab References")]
+        [SerializeField] private TabButton allTab;
+        [SerializeField] private TabButton weaponsTab;
+        [SerializeField] private TabButton powerUpsTab;
+        [SerializeField] private TabButton armorTab;
+        [SerializeField] private TabButton amuletsTab;
+
+        [Header("Visual Settings")]
+        [SerializeField] private Color activeTabColor = new Color(0.2f, 1f, 0.8f, 1f);
+        [SerializeField] private Color inactiveTabColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+        [SerializeField] private Color hoverTabColor = new Color(0.4f, 0.4f, 0.4f, 1f);
+        [SerializeField] private float tabTransitionDuration = 0.2f;
+
+        [Header("Tab Indicator")]
+        [SerializeField] private GameObject tabIndicator;
+        [SerializeField] private float indicatorMoveSpeed = 0.3f;
+
+        private InventoryUIController inventoryController;
+        private Dictionary<TabButton, EquipmentSlotType?> tabMapping;
+        private TabButton currentActiveTab;
+        private bool isInitialized = false;
+
+        #region Initialization
+
+        public void Initialize(InventoryUIController controller)
+        {
+            if (isInitialized) return;
+
+            inventoryController = controller;
+            SetupTabs();
+            SetupTabListeners();
+
+            // Set "All" as default active tab
+            OnTabSelected(allTab);
+
+            isInitialized = true;
+        }
+
+        private void SetupTabs()
+        {
+            // Configure tab types
+            allTab.slotType = null; // null means show all
+            weaponsTab.slotType = EquipmentSlotType.HandWeapon;
+            powerUpsTab.slotType = EquipmentSlotType.PowerUp;
+            armorTab.slotType = EquipmentSlotType.Armor;
+            amuletsTab.slotType = EquipmentSlotType.Amulet;
+
+            // Set tab labels
+            SetTabLabel(allTab, "All");
+            SetTabLabel(weaponsTab, "Weapons");
+            SetTabLabel(powerUpsTab, "Power-Ups");
+            SetTabLabel(armorTab, "Armor");
+            SetTabLabel(amuletsTab, "Amulets");
+
+            // Create tab mapping
+            tabMapping = new Dictionary<TabButton, EquipmentSlotType?>
+            {
+                { allTab, null },
+                { weaponsTab, EquipmentSlotType.HandWeapon },
+                { powerUpsTab, EquipmentSlotType.PowerUp },
+                { armorTab, EquipmentSlotType.Armor },
+                { amuletsTab, EquipmentSlotType.Amulet }
+            };
+
+            // Hide count badges initially
+            foreach (var tab in tabMapping.Keys)
+            {
+                if (tab.countBadge != null)
+                {
+                    tab.countBadge.SetActive(false);
+                }
+            }
+        }
+
+        private void SetupTabListeners()
+        {
+            foreach (var tab in tabMapping.Keys)
+            {
+                if (tab.button != null)
+                {
+                    var capturedTab = tab; // Capture for closure
+                    tab.button.onClick.AddListener(() => OnTabSelected(capturedTab));
+
+                    // Add hover effects
+                    AddHoverEffects(tab);
+                }
+            }
+        }
+
+        private void SetTabLabel(TabButton tab, string label)
+        {
+            if (tab.labelText != null)
+            {
+                tab.labelText.text = label;
+            }
+        }
+
+        #endregion
+
+        #region Tab Selection
+
+        private void OnTabSelected(TabButton selectedTab)
+        {
+            if (selectedTab == currentActiveTab) return;
+
+            // Update visual states
+            UpdateTabVisuals(selectedTab);
+
+            // Move indicator
+            if (tabIndicator != null && selectedTab.button != null)
+            {
+                MoveIndicatorToTab(selectedTab);
+            }
+
+            // Update inventory filter
+            if (inventoryController != null && tabMapping.TryGetValue(selectedTab, out var slotType))
+            {
+                inventoryController.SetActiveTab(slotType);
+            }
+
+            // Play tab switch sound
+            //var audioController = GetComponentInParent<AudioFeedbackController>();
+            //audioController?.PlayHoverSound();
+
+            currentActiveTab = selectedTab;
+        }
+
+        private void UpdateTabVisuals(TabButton activeTab = null)
+        {
+            foreach (var tab in tabMapping.Keys)
+            {
+                bool isActive = (tab == activeTab) || (activeTab == null && tab == currentActiveTab);
+                UpdateTabVisualState(tab, isActive);
+            }
+        }
+
+        private void UpdateTabVisualState(TabButton tab, bool isActive)
+        {
+            if (tab.backgroundImage != null)
+            {
+                Color targetColor = isActive ? activeTabColor : inactiveTabColor;
+                tab.backgroundImage.DOColor(targetColor, tabTransitionDuration);
+            }
+
+            if (tab.iconImage != null)
+            {
+                Color iconColor = isActive ? Color.white : new Color(0.7f, 0.7f, 0.7f, 1f);
+                tab.iconImage.DOColor(iconColor, tabTransitionDuration);
+            }
+
+            if (tab.labelText != null)
+            {
+                Color textColor = isActive ? Color.white : new Color(0.7f, 0.7f, 0.7f, 1f);
+                tab.labelText.DOColor(textColor, tabTransitionDuration);
+            }
+
+            // Scale effect for active tab
+            if (isActive && tab.button != null)
+            {
+                tab.button.transform.DOScale(1.05f, tabTransitionDuration * 0.5f)
+                    .OnComplete(() => tab.button.transform.DOScale(1f, tabTransitionDuration * 0.5f));
+            }
+        }
+
+        private void MoveIndicatorToTab(TabButton tab)
+        {
+            if (tabIndicator == null || tab.button == null) return;
+
+            tabIndicator.transform.DOMove(tab.button.transform.position, indicatorMoveSpeed)
+                .SetEase(Ease.OutQuad);
+        }
+
+        #endregion
+
+        #region Item Counting
+
+        public void UpdateItemCounts(Dictionary<EquipmentSlotType?, int> counts)
+        {
+            foreach (var kvp in tabMapping)
+            {
+                var tab = kvp.Key;
+                var slotType = kvp.Value;
+
+                if (counts.TryGetValue(slotType, out int count))
+                {
+                    ShowItemCount(tab, count);
+                }
+            }
+        }
+
+        private void ShowItemCount(TabButton tab, int count)
+        {
+            if (tab.countText != null && tab.countBadge != null)
+            {
+                tab.countText.text = count.ToString();
+
+                // Only show badge if count > 0
+                bool showBadge = count > 0;
+                tab.countBadge.SetActive(showBadge);
+
+                if (showBadge)
+                {
+                    // Animate badge appearance
+                    tab.countBadge.transform.DOScale(1.2f, 0.2f)
+                        .OnComplete(() => tab.countBadge.transform.DOScale(1f, 0.1f));
+                }
+            }
+        }
+
+        #endregion
+
+        #region Hover Effects
+
+        private void AddHoverEffects(TabButton tab)
+        {
+            if (tab.button == null) return;
+
+            var eventTriggers = tab.button.gameObject.GetComponent<UnityEngine.EventSystems.EventTrigger>();
+            if (eventTriggers == null)
+            {
+                eventTriggers = tab.button.gameObject.AddComponent<UnityEngine.EventSystems.EventTrigger>();
+            }
+
+            // Add hover enter event
+            var hoverEnter = new UnityEngine.EventSystems.EventTrigger.Entry();
+            hoverEnter.eventID = UnityEngine.EventSystems.EventTriggerType.PointerEnter;
+            hoverEnter.callback.AddListener((data) => OnTabHoverEnter(tab));
+            eventTriggers.triggers.Add(hoverEnter);
+
+            // Add hover exit event
+            var hoverExit = new UnityEngine.EventSystems.EventTrigger.Entry();
+            hoverExit.eventID = UnityEngine.EventSystems.EventTriggerType.PointerExit;
+            hoverExit.callback.AddListener((data) => OnTabHoverExit(tab));
+            eventTriggers.triggers.Add(hoverExit);
+        }
+
+        private void OnTabHoverEnter(TabButton tab)
+        {
+            if (tab == currentActiveTab) return;
+
+            if (tab.backgroundImage != null)
+            {
+                tab.backgroundImage.DOColor(hoverTabColor, 0.2f);
+            }
+
+            if (tab.button != null)
+            {
+                tab.button.transform.DOScale(1.05f, 0.2f);
+            }
+        }
+
+        private void OnTabHoverExit(TabButton tab)
+        {
+            if (tab == currentActiveTab) return;
+
+            if (tab.backgroundImage != null)
+            {
+                tab.backgroundImage.DOColor(inactiveTabColor, 0.2f);
+            }
+
+            if (tab.button != null)
+            {
+                tab.button.transform.DOScale(1f, 0.2f);
+            }
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        public void SelectTab(EquipmentSlotType? slotType)
+        {
+            foreach (var kvp in tabMapping)
+            {
+                if (kvp.Value == slotType)
+                {
+                    OnTabSelected(kvp.Key);
+                    break;
+                }
+            }
+        }
+
+        public void RefreshTabCounts()
+        {
+            // This would be called by InventoryUIController to update counts
+            // Implementation depends on how you want to count items
+        }
+
+        #endregion
+
+        #region Cleanup
+
+        private void OnDestroy()
+        {
+            // Remove all listeners
+            foreach (var tab in tabMapping.Keys)
+            {
+                if (tab.button != null)
+                {
+                    tab.button.onClick.RemoveAllListeners();
+                }
+            }
+
+            // Kill any active tweens
+            DOTween.Kill(this);
+        }
+
+        #endregion
+    }
+}
+// --- END FILE ---
+
+// File: UI/Screens/EquipmentHub/Loadout/InventoryUIController.cs
+// Size: 15012 characters
+// ---
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using System.Collections.Generic;
+using System.Linq;
+using DG.Tweening;
+using CyberPickle.Shop.Equipment;
+using CyberPickle.Shop.Equipment.Data;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Data;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    public enum SortType
+    {
+        Name,
+        Level,
+        Type,
+        Recent
+    }
+
+    public class InventoryUIController : MonoBehaviour
+    {
+        [Header("UI References")]
+        [SerializeField] private Transform inventoryGrid;
+        [SerializeField] private ScrollRect scrollRect;
+        [SerializeField] private InventoryTabController tabController;
+        [SerializeField] private TMP_Dropdown sortDropdown;
+        [SerializeField] private TextMeshProUGUI inventoryCountText;
+        [SerializeField] private GameObject inventorySlotPrefab;
+
+        [Header("Inventory Settings")]
+        [SerializeField] private int maxInventorySlots = 100;
+        [SerializeField] private int slotsPerRow = 10;
+        [SerializeField] private float slotSize = 80f;
+        [SerializeField] private float slotSpacing = 10f;
+
+        [Header("Visual Settings")]
+        [SerializeField] private float fadeInDuration = 0.3f;
+        [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
+        [SerializeField] private Color occupiedSlotColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+
+        [Header("Drag & Drop")]
+        [SerializeField] private Canvas dragCanvas;
+        [SerializeField] private float dragAlpha = 0.6f;
+
+        private EquipmentManager equipmentManager;
+        private ProfileManager profileManager;
+        private List<InventorySlotController> inventorySlots = new List<InventorySlotController>();
+        private Dictionary<string, EquipmentData> inventoryItems = new Dictionary<string, EquipmentData>();
+        private EquipmentSlotType? currentFilter = null;
+        private SortType currentSortType = SortType.Type;
+        private bool isInitialized = false;
+
+        // Drag & Drop state
+        private InventorySlotController draggedSlot;
+        private GameObject draggedIcon;
+
+        public event System.Action<EquipmentData> OnItemSelected;
+        public event System.Action<EquipmentData> OnItemHovered;
+        public event System.Action OnItemHoverExit;
+
+        #region Initialization
+
+        public void Initialize()
+        {
+            if (isInitialized) return;
+
+            equipmentManager = EquipmentManager.Instance;
+            profileManager = ProfileManager.Instance;
+
+            if (equipmentManager == null || profileManager == null)
+            {
+                Debug.LogError("[InventoryUIController] Required managers not found!");
+                return;
+            }
+
+            // Find drag canvas if not assigned
+            if (dragCanvas == null)
+            {
+                dragCanvas = GetComponentInParent<Canvas>();
+            }
+
+            SetupInventoryGrid();
+            CreateInventorySlots();
+            SetupSortDropdown();
+
+            if (tabController != null)
+            {
+                tabController.Initialize(this);
+            }
+
+            LoadInventory();
+
+            isInitialized = true;
+        }
+
+        private void SetupInventoryGrid()
+        {
+            if (inventoryGrid == null) return;
+
+            var gridLayout = inventoryGrid.GetComponent<GridLayoutGroup>();
+            if (gridLayout == null)
+            {
+                gridLayout = inventoryGrid.gameObject.AddComponent<GridLayoutGroup>();
+            }
+
+            gridLayout.cellSize = new Vector2(slotSize, slotSize);
+            gridLayout.spacing = new Vector2(slotSpacing, slotSpacing);
+            gridLayout.startCorner = GridLayoutGroup.Corner.UpperLeft;
+            gridLayout.startAxis = GridLayoutGroup.Axis.Horizontal;
+            gridLayout.childAlignment = TextAnchor.UpperLeft;
+            gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            gridLayout.constraintCount = slotsPerRow;
+        }
+
+        private void CreateInventorySlots()
+        {
+            if (inventorySlotPrefab == null || inventoryGrid == null) return;
+
+            // Clear existing slots
+            foreach (var slot in inventorySlots)
+            {
+                if (slot != null) Destroy(slot.gameObject);
+            }
+            inventorySlots.Clear();
+
+            // Create new slots
+            for (int i = 0; i < maxInventorySlots; i++)
+            {
+                GameObject slotObj = Instantiate(inventorySlotPrefab, inventoryGrid);
+                slotObj.name = $"InventorySlot_{i}";
+
+                var slotController = slotObj.GetComponent<InventorySlotController>();
+                if (slotController == null)
+                {
+                    slotController = slotObj.AddComponent<InventorySlotController>();
+                }
+
+                slotController.Initialize(i, this);
+                inventorySlots.Add(slotController);
+
+                // Fade in animation
+                var canvasGroup = slotObj.GetComponent<CanvasGroup>();
+                if (canvasGroup == null)
+                {
+                    canvasGroup = slotObj.AddComponent<CanvasGroup>();
+                }
+                canvasGroup.alpha = 0f;
+                canvasGroup.DOFade(1f, fadeInDuration).SetDelay(i * 0.01f);
+            }
+        }
+
+        private void SetupSortDropdown()
+        {
+            if (sortDropdown == null) return;
+
+            sortDropdown.ClearOptions();
+            var options = new List<string> { "Name", "Level", "Type", "Recent" };
+            sortDropdown.AddOptions(options);
+            sortDropdown.value = (int)currentSortType;
+            sortDropdown.onValueChanged.AddListener(OnSortChanged);
+        }
+
+        #endregion
+
+        #region Inventory Loading
+
+        public void LoadInventory()
+        {
+            if (!isInitialized) return;
+
+            var profile = profileManager.ActiveProfile;
+            if (profile == null)
+            {
+                Debug.LogError("[InventoryUIController] No active profile!");
+                return;
+            }
+
+            // Get all unlocked equipment
+            var unlockedEquipment = equipmentManager.GetUnlockedEquipment();
+
+            // Get equipped items to exclude them from inventory
+            var equippedItems = equipmentManager.GetEquippedEquipment();
+            var equippedIds = new HashSet<string>();
+
+            foreach (var slotItems in equippedItems.Values)
+            {
+                foreach (var item in slotItems)
+                {
+                    equippedIds.Add(item.equipmentId);
+                }
+            }
+
+            // Filter out equipped items
+            inventoryItems.Clear();
+            foreach (var equipment in unlockedEquipment)
+            {
+                if (!equippedIds.Contains(equipment.equipmentId))
+                {
+                    inventoryItems[equipment.equipmentId] = equipment;
+                }
+            }
+
+            RefreshDisplay();
+        }
+
+        public void RefreshDisplay()
+        {
+            // Clear all slots first
+            foreach (var slot in inventorySlots)
+            {
+                slot.ClearSlot();
+            }
+
+            // Get filtered and sorted items
+            var itemsToDisplay = GetFilteredAndSortedItems();
+
+            // Assign items to slots
+            for (int i = 0; i < itemsToDisplay.Count && i < inventorySlots.Count; i++)
+            {
+                var equipment = itemsToDisplay[i];
+                var profile = profileManager.ActiveProfile;
+                int level = profile.GetEquipmentLevel(equipment.equipmentId);
+
+                inventorySlots[i].SetItem(equipment, level > 0 ? level : 1);
+            }
+
+            // Update inventory count
+            UpdateInventoryCount(itemsToDisplay.Count);
+        }
+
+        private List<EquipmentData> GetFilteredAndSortedItems()
+        {
+            var items = inventoryItems.Values.AsEnumerable();
+
+            // Apply filter
+            if (currentFilter.HasValue)
+            {
+                items = items.Where(item => item.slotType == currentFilter.Value);
+            }
+
+            // Apply sorting
+            switch (currentSortType)
+            {
+                case SortType.Name:
+                    items = items.OrderBy(item => item.displayName);
+                    break;
+                case SortType.Level:
+                    var profile = profileManager.ActiveProfile;
+                    items = items.OrderByDescending(item => profile.GetEquipmentLevel(item.equipmentId));
+                    break;
+                case SortType.Type:
+                    items = items.OrderBy(item => item.slotType).ThenBy(item => item.displayName);
+                    break;
+                case SortType.Recent:
+                    // TODO: Track acquisition time
+                    items = items.Reverse();
+                    break;
+            }
+
+            return items.ToList();
+        }
+
+        #endregion
+
+        #region Filtering and Sorting
+
+        public void SetActiveTab(EquipmentSlotType? type)
+        {
+            currentFilter = type;
+            RefreshDisplay();
+
+            // Scroll to top when changing tabs
+            if (scrollRect != null)
+            {
+                scrollRect.verticalNormalizedPosition = 1f;
+            }
+        }
+
+        public void FilterByType(EquipmentSlotType type)
+        {
+            SetActiveTab(type);
+        }
+
+        public void ClearFilter()
+        {
+            SetActiveTab(null);
+        }
+
+        private void OnSortChanged(int index)
+        {
+            currentSortType = (SortType)index;
+            RefreshDisplay();
+        }
+
+        public void SortInventory(SortType sortType)
+        {
+            currentSortType = sortType;
+            if (sortDropdown != null)
+            {
+                sortDropdown.value = (int)sortType;
+            }
+            RefreshDisplay();
+        }
+
+        #endregion
+
+        #region Drag & Drop
+
+        public void OnItemDragStart(InventorySlotController slot)
+        {
+            if (slot == null || slot.CurrentEquipment == null) return;
+
+            draggedSlot = slot;
+
+            // Create drag icon
+            CreateDragIcon(slot.CurrentEquipment.equipmentIcon);
+
+            // Make the slot semi-transparent
+            var canvasGroup = slot.GetComponent<CanvasGroup>();
+            if (canvasGroup != null)
+            {
+                canvasGroup.alpha = dragAlpha;
+            }
+
+            // Notify equipment hub manager
+            var hubManager = GetComponentInParent<EquipmentHubManager>();
+            if (hubManager != null)
+            {
+                // TODO: Notify that drag started
+            }
+        }
+
+        public void OnItemDragEnd()
+        {
+            if (draggedSlot == null) return;
+
+            // Restore slot opacity
+            var canvasGroup = draggedSlot.GetComponent<CanvasGroup>();
+            if (canvasGroup != null)
+            {
+                canvasGroup.alpha = 1f;
+            }
+
+            // Destroy drag icon
+            if (draggedIcon != null)
+            {
+                Destroy(draggedIcon);
+                draggedIcon = null;
+            }
+
+            draggedSlot = null;
+        }
+
+        public void UpdateDragPosition(Vector2 position)
+        {
+            if (draggedIcon != null)
+            {
+                draggedIcon.transform.position = position;
+            }
+        }
+
+        private void CreateDragIcon(Sprite icon)
+        {
+            if (dragCanvas == null || icon == null) return;
+
+            draggedIcon = new GameObject("DragIcon");
+            draggedIcon.transform.SetParent(dragCanvas.transform, false);
+
+            var image = draggedIcon.AddComponent<Image>();
+            image.sprite = icon;
+            image.raycastTarget = false;
+
+            var rect = draggedIcon.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(slotSize, slotSize);
+
+            var group = draggedIcon.AddComponent<CanvasGroup>();
+            group.alpha = 0.8f;
+            group.blocksRaycasts = false;
+        }
+
+        #endregion
+
+        #region Inventory Management
+
+        public void AddItemToInventory(EquipmentData equipment)
+        {
+            if (equipment == null) return;
+
+            if (!inventoryItems.ContainsKey(equipment.equipmentId))
+            {
+                inventoryItems[equipment.equipmentId] = equipment;
+                RefreshDisplay();
+            }
+        }
+
+        public void RemoveItemFromInventory(string equipmentId)
+        {
+            if (inventoryItems.ContainsKey(equipmentId))
+            {
+                inventoryItems.Remove(equipmentId);
+                RefreshDisplay();
+            }
+        }
+
+        private void UpdateInventoryCount(int count)
+        {
+            if (inventoryCountText != null)
+            {
+                inventoryCountText.text = $"{count}/{maxInventorySlots}";
+
+                // Change color if inventory is getting full
+                if (count >= maxInventorySlots * 0.9f)
+                {
+                    inventoryCountText.color = Color.red;
+                }
+                else if (count >= maxInventorySlots * 0.7f)
+                {
+                    inventoryCountText.color = Color.yellow;
+                }
+                else
+                {
+                    inventoryCountText.color = Color.white;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Item Interaction
+
+        public void OnItemClicked(InventorySlotController slot)
+        {
+            if (slot == null || slot.CurrentEquipment == null) return;
+
+            OnItemSelected?.Invoke(slot.CurrentEquipment);
+        }
+
+        public void OnItemHoverEnter(InventorySlotController slot)
+        {
+            if (slot == null || slot.CurrentEquipment == null) return;
+
+            OnItemHovered?.Invoke(slot.CurrentEquipment);
+        }
+
+        public void HandleItemHoverExit(InventorySlotController slot)
+        {
+            OnItemHoverExit?.Invoke();
+        }
+
+        #endregion
+
+        #region Cleanup
+
+        private void OnDestroy()
+        {
+            if (sortDropdown != null)
+            {
+                sortDropdown.onValueChanged.RemoveAllListeners();
+            }
+
+            // Kill any active tweens
+            DOTween.Kill(this);
+        }
+
+        #endregion
+    }
+}
 // --- END FILE ---
 
 // File: Core/Services/Authentication/Flow/Commands/ClearProfilesCommand.cs
