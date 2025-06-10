@@ -335,20 +335,13 @@ MonoBehaviour:
   backgroundImage: {fileID: 7114185899080829978}
   itemIcon: {fileID: 5141668543987226430}
   quantityText: {fileID: 7792640244774181777}
-  levelBadge: {fileID: 2493065472364998133}
-  levelText: {fileID: 8538958105675594149}
   highlightBorder: {fileID: 8335448406847922746}
-  rarityGlow: {fileID: 5742044900488040660}
+  canvasGroup: {fileID: 0}
   emptySlotColor: {r: 0.2, g: 0.2, b: 0.2, a: 0.5}
   occupiedSlotColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
   hoverColor: {r: 0.4, g: 0.4, b: 0.4, a: 1}
   hoverScale: 1.1
   clickScale: 0.95
-  commonColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  uncommonColor: {r: 0, g: 1, b: 0, a: 1}
-  rareColor: {r: 0, g: 0, b: 1, a: 1}
-  epicColor: {r: 0.5, g: 0, b: 0.5, a: 1}
-  legendaryColor: {r: 1, g: 0.5, b: 0, a: 1}
 --- !u!1 &5742044900488040660
 GameObject:
   m_ObjectHideFlags: 0
@@ -414,10 +407,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  m_Type: 1
   m_PreserveAspect: 0
-  m_FillCenter: 1
+  m_FillCenter: 0
   m_FillMethod: 4
   m_FillAmount: 1
   m_FillClockwise: 1

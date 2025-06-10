@@ -312,72 +312,28 @@ namespace CyberPickle.UI.EquipmentHub
         {
             if (slot == null || slot.CurrentEquipment == null) return;
 
+            // The DragDropManager now handles the visual creation
+            // Just store reference if needed for other UI updates
             draggedSlot = slot;
-
-            // Create drag icon
-            CreateDragIcon(slot.CurrentEquipment.equipmentIcon);
-
-            // Make the slot semi-transparent
-            var canvasGroup = slot.GetComponent<CanvasGroup>();
-            if (canvasGroup != null)
-            {
-                canvasGroup.alpha = dragAlpha;
-            }
-
-            // Notify equipment hub manager
-            var hubManager = GetComponentInParent<EquipmentHubManager>();
-            if (hubManager != null)
-            {
-                // TODO: Notify that drag started
-            }
         }
 
         public void OnItemDragEnd()
         {
-            if (draggedSlot == null) return;
-
-            // Restore slot opacity
-            var canvasGroup = draggedSlot.GetComponent<CanvasGroup>();
-            if (canvasGroup != null)
-            {
-                canvasGroup.alpha = 1f;
-            }
-
-            // Destroy drag icon
-            if (draggedIcon != null)
-            {
-                Destroy(draggedIcon);
-                draggedIcon = null;
-            }
-
+            // The DragDropManager handles the visual cleanup
+            // Just clear our reference
             draggedSlot = null;
         }
 
         public void UpdateDragPosition(Vector2 position)
         {
-            if (draggedIcon != null)
-            {
-                draggedIcon.transform.position = position;
-            }
+            // This is now handled by DragDropManager
+            // Method kept for compatibility but no longer needs implementation
         }
 
         private void CreateDragIcon(Sprite icon)
         {
-            if (dragCanvas == null || icon == null) return;
-
-            draggedIcon = new GameObject("DragIcon");
-            draggedIcon.transform.SetParent(dragCanvas.transform, false);
-
-            var image = draggedIcon.AddComponent<Image>();
-            image.sprite = icon;
-            image.raycastTarget = false;
-
-            var rect = draggedIcon.GetComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(slotSize, slotSize);
-
-            var group = draggedIcon.AddComponent<CanvasGroup>();
-            group.alpha = 0.8f;
-            group.blocksRaycasts = false;
+            // This is now handled by DragDropManager
+            // Method can be removed or left empty for compatibility
         }
 
         #endregion

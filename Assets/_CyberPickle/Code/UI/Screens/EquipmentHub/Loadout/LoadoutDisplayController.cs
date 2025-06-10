@@ -138,7 +138,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (weaponData != null && handWeaponSlots[i] != null)
                 {
                     int level = profile.GetEquipmentLevel(weaponId);
-                    handWeaponSlots[i].SetEquipment(weaponData, level > 0 ? level : 1);
+                    handWeaponSlots[i].SetEquipment(weaponData);
                 }
             }
 
@@ -149,7 +149,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (weaponData != null)
                 {
                     int level = profile.GetEquipmentLevel(characterData.EquippedBodyWeapon);
-                    bodyWeaponSlot.SetEquipment(weaponData, level > 0 ? level : 1);
+                    bodyWeaponSlot.SetEquipment(weaponData);
                 }
             }
 
@@ -160,7 +160,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (armorData != null)
                 {
                     int level = profile.GetEquipmentLevel(characterData.EquippedArmor);
-                    armorSlot.SetEquipment(armorData, level > 0 ? level : 1);
+                    armorSlot.SetEquipment(armorData);
                 }
             }
 
@@ -171,7 +171,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (amuletData != null)
                 {
                     int level = profile.GetEquipmentLevel(characterData.EquippedAmulet);
-                    amuletSlot.SetEquipment(amuletData, level > 0 ? level : 1);
+                    amuletSlot.SetEquipment(amuletData);
                 }
             }
 
@@ -183,7 +183,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (powerUpData != null && powerUpSlots[i] != null)
                 {
                     int level = profile.GetEquipmentLevel(powerUpId);
-                    powerUpSlots[i].SetEquipment(powerUpData, level > 0 ? level : 1);
+                    powerUpSlots[i].SetEquipment(powerUpData);
                 }
             }
         }
