@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: Amulet 1
   m_EditorClassIdentifier: 
   equipmentId: amulet_1
-  displayName: 
+  displayName: Luck amulet
   description: 
   slotType: 4
-  equipmentIcon: {fileID: 0}
+  equipmentIcon: {fileID: 21300000, guid: ab415fd08a990274cb7af5b380d748ed, type: 3}
   equipmentPrefab: {fileID: 0}
   neuralCreditCost: 10
   cyberCoinCost: 0

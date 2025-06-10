@@ -66,10 +66,27 @@ namespace CyberPickle.Shop.Equipment
                 return;
             }
 
-            // Make sure equipment arrays are assigned in the Inspector
-            if (availableWeapons == null || availableWeapons.Length == 0)
+            // DEBUG: Check available weapons
+            Debug.Log($"[EquipmentManager] Available Weapons Count: {availableWeapons?.Length ?? 0}");
+            if (availableWeapons != null)
             {
-                Debug.LogWarning("[EquipmentManager] No weapons assigned! Please assign weapon data in the Inspector.");
+                for (int i = 0; i < availableWeapons.Length; i++)
+                {
+                    var weapon = availableWeapons[i];
+                    if (weapon != null)
+                    {
+                        Debug.Log($"[EquipmentManager] Weapon[{i}]: {weapon.displayName} (ID: {weapon.equipmentId})");
+                        Debug.Log($"[EquipmentManager] - Has Icon: {weapon.equipmentIcon != null} ({weapon.equipmentIcon?.name ?? "NULL"})");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[EquipmentManager] Weapon[{i}] is NULL!");
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError("[EquipmentManager] availableWeapons array is NULL!");
             }
 
             BuildEquipmentLookups();
@@ -359,8 +376,23 @@ namespace CyberPickle.Shop.Equipment
         /// <returns>Equipment data or null if not found</returns>
         public EquipmentData GetEquipmentById(string equipmentId)
         {
-            if (string.IsNullOrEmpty(equipmentId) || !equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+            Debug.Log($"[EquipmentManager] GetEquipmentById called for: {equipmentId}");
+
+            if (string.IsNullOrEmpty(equipmentId))
+            {
+                Debug.LogError("[EquipmentManager] equipmentId is null or empty!");
                 return null;
+            }
+
+            if (!equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+            {
+                Debug.LogError($"[EquipmentManager] Equipment with ID '{equipmentId}' not found in lookup!");
+                Debug.Log($"[EquipmentManager] Available IDs in lookup: {string.Join(", ", equipmentDataLookup.Keys)}");
+                return null;
+            }
+
+            Debug.Log($"[EquipmentManager] Found equipment: {equipmentData.displayName}");
+            Debug.Log($"[EquipmentManager] - Has Icon: {equipmentData.equipmentIcon != null} ({equipmentData.equipmentIcon?.name ?? "NULL"})");
 
             return equipmentData;
         }

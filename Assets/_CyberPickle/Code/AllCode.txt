@@ -4930,7 +4930,7 @@ namespace CyberPickle.Shop.Currency
 // --- END FILE ---
 
 // File: Shop/Equipment/EquipmentManager.cs
-// Size: 18776 characters
+// Size: 20298 characters
 // ---
 // File: Assets/Code/Shop/Equipment/EquipmentManager.cs
 //
@@ -4993,9 +4993,6 @@ namespace CyberPickle.Shop.Equipment
         {
             if (isInitialized) return;
 
-            Debug.Log("[EquipmentManager] Initializing...");
-
-            // Get profile manager reference
             profileManager = ProfileManager.Instance;
             if (profileManager == null)
             {
@@ -5003,14 +5000,32 @@ namespace CyberPickle.Shop.Equipment
                 return;
             }
 
-            // Setup data lookups
+            // DEBUG: Check available weapons
+            Debug.Log($"[EquipmentManager] Available Weapons Count: {availableWeapons?.Length ?? 0}");
+            if (availableWeapons != null)
+            {
+                for (int i = 0; i < availableWeapons.Length; i++)
+                {
+                    var weapon = availableWeapons[i];
+                    if (weapon != null)
+                    {
+                        Debug.Log($"[EquipmentManager] Weapon[{i}]: {weapon.displayName} (ID: {weapon.equipmentId})");
+                        Debug.Log($"[EquipmentManager] - Has Icon: {weapon.equipmentIcon != null} ({weapon.equipmentIcon?.name ?? "NULL"})");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[EquipmentManager] Weapon[{i}] is NULL!");
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError("[EquipmentManager] availableWeapons array is NULL!");
+            }
+
             BuildEquipmentLookups();
-
-            // Subscribe to profile events
             profileManager.SubscribeToProfileSwitched(OnProfileSwitched);
-
             isInitialized = true;
-            Debug.Log("[EquipmentManager] Initialized successfully");
         }
 
         /// <summary>
@@ -5295,8 +5310,23 @@ namespace CyberPickle.Shop.Equipment
         /// <returns>Equipment data or null if not found</returns>
         public EquipmentData GetEquipmentById(string equipmentId)
         {
-            if (string.IsNullOrEmpty(equipmentId) || !equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+            Debug.Log($"[EquipmentManager] GetEquipmentById called for: {equipmentId}");
+
+            if (string.IsNullOrEmpty(equipmentId))
+            {
+                Debug.LogError("[EquipmentManager] equipmentId is null or empty!");
                 return null;
+            }
+
+            if (!equipmentDataLookup.TryGetValue(equipmentId, out var equipmentData))
+            {
+                Debug.LogError($"[EquipmentManager] Equipment with ID '{equipmentId}' not found in lookup!");
+                Debug.Log($"[EquipmentManager] Available IDs in lookup: {string.Join(", ", equipmentDataLookup.Keys)}");
+                return null;
+            }
+
+            Debug.Log($"[EquipmentManager] Found equipment: {equipmentData.displayName}");
+            Debug.Log($"[EquipmentManager] - Has Icon: {equipmentData.equipmentIcon != null} ({equipmentData.equipmentIcon?.name ?? "NULL"})");
 
             return equipmentData;
         }
@@ -6089,7 +6119,7 @@ namespace CyberPickle.UI.Effects
 // --- END FILE ---
 
 // File: UI/EquipmentHubManager/EquipmentHubManager.cs
-// Size: 16399 characters
+// Size: 16677 characters
 // ---
 // File: Assets/Code/UI/EquipmentHub/EquipmentHubManager.cs
 //
@@ -6141,6 +6171,9 @@ namespace CyberPickle.UI.EquipmentHub
 
         [Header("Inventory References")]
         [SerializeField] private InventoryUIController inventoryController;
+
+        [Header("Loadout Display")]
+        [SerializeField] private LoadoutDisplayController loadoutDisplay;
 
         // Manager dependencies
         private ProfileManager profileManager;
@@ -6362,8 +6395,15 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         private void InitializeEquipmentSection()
         {
-            // Placeholder for equipment UI initialization based on currentCharacterData and profile
-            Debug.Log($"[EquipmentHubManager] Initializing equipment section for {currentCharacterData?.displayName ?? "Unknown Character"}");
+            // Initialize the loadout display with the current character
+            if (loadoutDisplay != null && !string.IsNullOrEmpty(currentCharacterId))
+            {
+                loadoutDisplay.Initialize(currentCharacterId);
+            }
+            else
+            {
+                Debug.LogWarning("[EquipmentHubManager] LoadoutDisplay not assigned or no character ID!");
+            }
         }
 
         /// <summary>
@@ -8988,7 +9028,7 @@ namespace CyberPickle.Shop.Equipment.Data
 // --- END FILE ---
 
 // File: Shop/Equipment/Data/WeaponData.cs
-// Size: 10077 characters
+// Size: 10562 characters
 // ---
 // File: Assets/Code/Shop/Equipment/Data/WeaponData.cs
 //
@@ -9088,6 +9128,18 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Required power-up ID to unlock final form")]
         public string requiredPowerUpId;
 
+        [ContextMenu("Debug Weapon Data")]
+        private void DebugWeaponData()
+        {
+            Debug.Log($"Weapon: {displayName}");
+            Debug.Log($"ID: {equipmentId}");
+            Debug.Log($"Icon assigned: {equipmentIcon != null}");
+            if (equipmentIcon != null)
+            {
+                Debug.Log($"Icon name: {equipmentIcon.name}");
+                Debug.Log($"Icon instance ID: {equipmentIcon.GetInstanceID()}");
+            }
+        }
         /// <summary>
         /// Validates the weapon data when it's created or modified in the editor.
         /// </summary>
@@ -14844,7 +14896,7 @@ namespace CyberPickle.Core.Services.Authentication.Flow
 // --- END FILE ---
 
 // File: UI/Screens/EquipmentHub/Loadout/EquipmentSlotController.cs
-// Size: 13959 characters
+// Size: 16199 characters
 // ---
 using CyberPickle.Core.Events;
 using CyberPickle.Core.Services.Authentication.Data;
@@ -14992,19 +15044,61 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         public void SetEquipment(EquipmentData equipment, int level = 1)
         {
+            Debug.Log($"[EquipmentSlotController] SetEquipment called for slot type: {slotType}, slot index: {slotIndex}");
+
             if (equipment == null)
             {
+                Debug.Log($"[EquipmentSlotController] Equipment is null, clearing slot");
                 SetEmpty();
                 return;
             }
 
+            Debug.Log($"[EquipmentSlotController] Setting equipment: {equipment.displayName} (ID: {equipment.equipmentId})");
             currentEquipment = equipment;
 
-            // Update visuals
+            // Debug equipment icon reference
+            if (equipmentIcon == null)
+            {
+                Debug.LogError($"[EquipmentSlotController] equipmentIcon reference is NULL! Check the prefab - the Image component should be assigned!");
+
+                // Try to find it as a fallback
+                equipmentIcon = GetComponentInChildren<Image>(true);
+                if (equipmentIcon != null)
+                {
+                    Debug.LogWarning($"[EquipmentSlotController] Found Image component as fallback: {equipmentIcon.name}");
+                }
+            }
+            else
+            {
+                Debug.Log($"[EquipmentSlotController] equipmentIcon reference is valid: {equipmentIcon.name}");
+            }
+
             if (equipmentIcon != null)
             {
-                equipmentIcon.sprite = equipment.equipmentIcon;
-                equipmentIcon.enabled = true;
+                if (equipment.equipmentIcon != null)
+                {
+                    Debug.Log($"[EquipmentSlotController] Equipment has icon: {equipment.equipmentIcon.name} (size: {equipment.equipmentIcon.rect.size})");
+                    equipmentIcon.sprite = equipment.equipmentIcon;
+                    equipmentIcon.enabled = true;
+                    Debug.Log($"[EquipmentSlotController] Icon assigned successfully. Enabled: {equipmentIcon.enabled}, Sprite: {equipmentIcon.sprite?.name}");
+
+                    // Check visibility
+                    var canvasGroup = equipmentIcon.GetComponent<CanvasGroup>();
+                    if (canvasGroup != null)
+                    {
+                        Debug.Log($"[EquipmentSlotController] Icon CanvasGroup alpha: {canvasGroup.alpha}");
+                    }
+
+                    // Check parent visibility
+                    if (!equipmentIcon.gameObject.activeInHierarchy)
+                    {
+                        Debug.LogWarning($"[EquipmentSlotController] Icon GameObject is not active in hierarchy!");
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"[EquipmentSlotController] Equipment '{equipment.displayName}' has NO ICON assigned in ScriptableObject!");
+                }
             }
 
             if (emptySlotOverlay != null)
@@ -15017,14 +15111,12 @@ namespace CyberPickle.UI.EquipmentHub
                 slotBackground.color = occupiedSlotColor;
             }
 
-            // Update level badge
             if (levelBadge != null && levelText != null)
             {
                 levelBadge.SetActive(level > 1);
                 levelText.text = level.ToString();
             }
 
-            // Show equipped glow
             if (equippedGlow != null)
             {
                 equippedGlow.SetActive(true);
@@ -15297,7 +15389,7 @@ namespace CyberPickle.UI.EquipmentHub
 // --- END FILE ---
 
 // File: UI/Screens/EquipmentHub/Loadout/InventorySlotController.cs
-// Size: 11933 characters
+// Size: 13222 characters
 // ---
 using UnityEngine;
 using UnityEngine.UI;
@@ -15380,21 +15472,50 @@ namespace CyberPickle.UI.EquipmentHub
 
         public void SetItem(EquipmentData item, int level = 1)
         {
+            Debug.Log($"[InventorySlotController] SetItem called for slot index: {slotIndex}");
+
             if (item == null)
             {
+                Debug.Log($"[InventorySlotController] Item is null, clearing slot");
                 ClearSlot();
                 return;
             }
 
+            Debug.Log($"[InventorySlotController] Setting item: {item.displayName} (ID: {item.equipmentId})");
             currentEquipment = item;
             itemLevel = level;
             isOccupied = true;
 
-            // Update visuals
+            // Debug item icon reference
+            if (itemIcon == null)
+            {
+                Debug.LogError($"[InventorySlotController] itemIcon reference is NULL! Check the prefab!");
+
+                // Try to find it
+                itemIcon = GetComponentInChildren<Image>(true);
+                if (itemIcon != null)
+                {
+                    Debug.LogWarning($"[InventorySlotController] Found Image component as fallback: {itemIcon.name}");
+                }
+            }
+            else
+            {
+                Debug.Log($"[InventorySlotController] itemIcon reference is valid: {itemIcon.name}");
+            }
+
             if (itemIcon != null)
             {
-                itemIcon.sprite = item.equipmentIcon;
-                itemIcon.enabled = true;
+                if (item.equipmentIcon != null)
+                {
+                    Debug.Log($"[InventorySlotController] Item has icon: {item.equipmentIcon.name}");
+                    itemIcon.sprite = item.equipmentIcon;
+                    itemIcon.enabled = true;
+                    Debug.Log($"[InventorySlotController] Icon assigned. Enabled: {itemIcon.enabled}, Sprite: {itemIcon.sprite?.name}");
+                }
+                else
+                {
+                    Debug.LogError($"[InventorySlotController] Item '{item.displayName}' has NO ICON in ScriptableObject!");
+                }
             }
 
             if (backgroundImage != null)
@@ -15402,7 +15523,6 @@ namespace CyberPickle.UI.EquipmentHub
                 backgroundImage.color = occupiedSlotColor;
             }
 
-            // Update level display
             if (levelBadge != null && levelText != null)
             {
                 bool showLevel = level > 1;
@@ -15413,13 +15533,8 @@ namespace CyberPickle.UI.EquipmentHub
                 }
             }
 
-            // Update quantity (for stackable items in the future)
             UpdateQuantityDisplay(1);
-
-            // Set rarity glow
             SetRarityVisuals(item);
-
-            // Animation
             transform.DOScale(originalScale * 1.1f, 0.1f)
                 .OnComplete(() => transform.DOScale(originalScale, 0.1f));
         }
@@ -16486,6 +16601,220 @@ namespace CyberPickle.UI.EquipmentHub
         }
 
         #endregion
+    }
+}
+// --- END FILE ---
+
+// File: UI/Screens/EquipmentHub/Loadout/LoadoutDisplayController.cs
+// Size: 8787 characters
+// ---
+using UnityEngine;
+using System.Collections.Generic;
+using CyberPickle.Core.Services.Authentication;
+using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Shop.Equipment;
+using CyberPickle.Shop.Equipment.Data;
+
+namespace CyberPickle.UI.EquipmentHub
+{
+    public class LoadoutDisplayController : MonoBehaviour
+    {
+        [Header("Equipment Slot References")]
+        [SerializeField] private EquipmentSlotController[] handWeaponSlots; // 2 slots
+        [SerializeField] private EquipmentSlotController bodyWeaponSlot;
+        [SerializeField] private EquipmentSlotController[] powerUpSlots; // 3 slots
+        [SerializeField] private EquipmentSlotController armorSlot;
+        [SerializeField] private EquipmentSlotController amuletSlot;
+
+        private EquipmentManager equipmentManager;
+        private ProfileManager profileManager;
+        private string currentCharacterId;
+
+        public void Initialize(string characterId)
+        {
+            equipmentManager = EquipmentManager.Instance;
+            profileManager = ProfileManager.Instance;
+            currentCharacterId = characterId;
+
+            // Check if this is a new character and assign defaults
+            CheckAndAssignDefaultEquipment();
+
+            // Load and display current equipment
+            RefreshLoadoutDisplay();
+        }
+
+        private void CheckAndAssignDefaultEquipment()
+        {
+            var profile = profileManager.ActiveProfile;
+            if (profile == null) return;
+
+            // Get or create character progression
+            if (!profile.CharacterProgress.TryGetValue(currentCharacterId, out var characterData))
+            {
+                characterData = new CharacterProgressionData(currentCharacterId);
+                profile.UpdateCharacterProgress(currentCharacterId, characterData);
+            }
+
+            // Check if character has any equipment
+            bool hasAnyEquipment = characterData.EquippedHandWeapons.Count > 0 ||
+                                   !string.IsNullOrEmpty(characterData.EquippedBodyWeapon) ||
+                                   !string.IsNullOrEmpty(characterData.EquippedArmor) ||
+                                   !string.IsNullOrEmpty(characterData.EquippedAmulet) ||
+                                   characterData.EquippedPowerupIds.Count > 0;
+
+            if (!hasAnyEquipment)
+            {
+                // Assign default equipment
+                AssignDefaultEquipment(characterData);
+
+                // Save the profile
+                System.Threading.Tasks.Task<ProfileOperationResult> task = profileManager.UpdateProfileAsync(profile);
+            }
+        }
+
+        private void AssignDefaultEquipment(CharacterProgressionData characterData)
+        {
+            // Get all available equipment
+            var allWeapons = equipmentManager.GetEquipmentBySlotType(EquipmentSlotType.HandWeapon);
+            var allArmor = equipmentManager.GetEquipmentBySlotType(EquipmentSlotType.Armor);
+            var allAmulets = equipmentManager.GetEquipmentBySlotType(EquipmentSlotType.Amulet);
+            var allPowerUps = equipmentManager.GetEquipmentBySlotType(EquipmentSlotType.PowerUp);
+
+            // Find and equip default items
+            foreach (var weapon in allWeapons)
+            {
+                if (weapon.unlockedByDefault)
+                {
+                    characterData.EquipItem(weapon.equipmentId, EquipmentSlotType.HandWeapon);
+
+                    // Also unlock it in the profile
+                    var profile = profileManager.ActiveProfile;
+                    profile.UnlockEquipment(weapon.equipmentId);
+                    break; // Only equip one default weapon
+                }
+            }
+
+            foreach (var armor in allArmor)
+            {
+                if (armor.unlockedByDefault)
+                {
+                    characterData.EquipItem(armor.equipmentId, EquipmentSlotType.Armor);
+                    var profile = profileManager.ActiveProfile;
+                    profile.UnlockEquipment(armor.equipmentId);
+                    break;
+                }
+            }
+
+            foreach (var amulet in allAmulets)
+            {
+                if (amulet.unlockedByDefault)
+                {
+                    characterData.EquipItem(amulet.equipmentId, EquipmentSlotType.Amulet);
+                    var profile = profileManager.ActiveProfile;
+                    profile.UnlockEquipment(amulet.equipmentId);
+                    break;
+                }
+            }
+
+            foreach (var powerUp in allPowerUps)
+            {
+                if (powerUp.unlockedByDefault)
+                {
+                    characterData.EquipItem(powerUp.equipmentId, EquipmentSlotType.PowerUp);
+                    var profile = profileManager.ActiveProfile;
+                    profile.UnlockEquipment(powerUp.equipmentId);
+                    break;
+                }
+            }
+        }
+
+        public void RefreshLoadoutDisplay()
+        {
+            var profile = profileManager.ActiveProfile;
+            if (profile == null || !profile.CharacterProgress.TryGetValue(currentCharacterId, out var characterData))
+            {
+                Debug.LogError($"[LoadoutDisplayController] No character data found for {currentCharacterId}");
+                return;
+            }
+
+            // Clear all slots first
+            ClearAllSlots();
+
+            // Populate hand weapons
+            for (int i = 0; i < characterData.EquippedHandWeapons.Count && i < handWeaponSlots.Length; i++)
+            {
+                var weaponId = characterData.EquippedHandWeapons[i];
+                var weaponData = equipmentManager.GetEquipmentById(weaponId);
+                if (weaponData != null && handWeaponSlots[i] != null)
+                {
+                    int level = profile.GetEquipmentLevel(weaponId);
+                    handWeaponSlots[i].SetEquipment(weaponData, level > 0 ? level : 1);
+                }
+            }
+
+            // Populate body weapon
+            if (!string.IsNullOrEmpty(characterData.EquippedBodyWeapon) && bodyWeaponSlot != null)
+            {
+                var weaponData = equipmentManager.GetEquipmentById(characterData.EquippedBodyWeapon);
+                if (weaponData != null)
+                {
+                    int level = profile.GetEquipmentLevel(characterData.EquippedBodyWeapon);
+                    bodyWeaponSlot.SetEquipment(weaponData, level > 0 ? level : 1);
+                }
+            }
+
+            // Populate armor
+            if (!string.IsNullOrEmpty(characterData.EquippedArmor) && armorSlot != null)
+            {
+                var armorData = equipmentManager.GetEquipmentById(characterData.EquippedArmor);
+                if (armorData != null)
+                {
+                    int level = profile.GetEquipmentLevel(characterData.EquippedArmor);
+                    armorSlot.SetEquipment(armorData, level > 0 ? level : 1);
+                }
+            }
+
+            // Populate amulet
+            if (!string.IsNullOrEmpty(characterData.EquippedAmulet) && amuletSlot != null)
+            {
+                var amuletData = equipmentManager.GetEquipmentById(characterData.EquippedAmulet);
+                if (amuletData != null)
+                {
+                    int level = profile.GetEquipmentLevel(characterData.EquippedAmulet);
+                    amuletSlot.SetEquipment(amuletData, level > 0 ? level : 1);
+                }
+            }
+
+            // Populate power-ups
+            for (int i = 0; i < characterData.EquippedPowerupIds.Count && i < powerUpSlots.Length; i++)
+            {
+                var powerUpId = characterData.EquippedPowerupIds[i];
+                var powerUpData = equipmentManager.GetEquipmentById(powerUpId);
+                if (powerUpData != null && powerUpSlots[i] != null)
+                {
+                    int level = profile.GetEquipmentLevel(powerUpId);
+                    powerUpSlots[i].SetEquipment(powerUpData, level > 0 ? level : 1);
+                }
+            }
+        }
+
+        private void ClearAllSlots()
+        {
+            foreach (var slot in handWeaponSlots)
+            {
+                if (slot != null) slot.SetEmpty();
+            }
+
+            if (bodyWeaponSlot != null) bodyWeaponSlot.SetEmpty();
+
+            foreach (var slot in powerUpSlots)
+            {
+                if (slot != null) slot.SetEmpty();
+            }
+
+            if (armorSlot != null) armorSlot.SetEmpty();
+            if (amuletSlot != null) amuletSlot.SetEmpty();
+        }
     }
 }
 // --- END FILE ---

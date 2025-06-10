@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: 
   description: 
   slotType: 4
-  equipmentIcon: {fileID: 0}
+  equipmentIcon: {fileID: 21300000, guid: ab415fd08a990274cb7af5b380d748ed, type: 3}
   equipmentPrefab: {fileID: 0}
   neuralCreditCost: 40
   cyberCoinCost: 2

@@ -12,16 +12,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 30e0e9430764202418afaabefa984e3b, type: 3}
   m_Name: Armor 3
   m_EditorClassIdentifier: 
-  equipmentId: 
+  equipmentId: armor_
   displayName: 
   description: 
-  slotType: 0
-  equipmentIcon: {fileID: 0}
+  slotType: 3
+  equipmentIcon: {fileID: 21300000, guid: e48a3ca6a5cb98642b72263c3efeb7ef, type: 3}
   equipmentPrefab: {fileID: 0}
   neuralCreditCost: 0
   cyberCoinCost: 0
   unlockedByDefault: 0
-  requiredPlayerLevel: 0
+  requiredPlayerLevel: 1
   requiredAchievements: []
   maxUpgradeLevel: 5
   focusType: 0

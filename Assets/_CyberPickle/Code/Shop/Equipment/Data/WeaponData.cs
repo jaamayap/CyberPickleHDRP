@@ -96,6 +96,18 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Required power-up ID to unlock final form")]
         public string requiredPowerUpId;
 
+        [ContextMenu("Debug Weapon Data")]
+        private void DebugWeaponData()
+        {
+            Debug.Log($"Weapon: {displayName}");
+            Debug.Log($"ID: {equipmentId}");
+            Debug.Log($"Icon assigned: {equipmentIcon != null}");
+            if (equipmentIcon != null)
+            {
+                Debug.Log($"Icon name: {equipmentIcon.name}");
+                Debug.Log($"Icon instance ID: {equipmentIcon.GetInstanceID()}");
+            }
+        }
         /// <summary>
         /// Validates the weapon data when it's created or modified in the editor.
         /// </summary>

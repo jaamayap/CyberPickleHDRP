@@ -144,19 +144,61 @@ namespace CyberPickle.UI.EquipmentHub
         /// </summary>
         public void SetEquipment(EquipmentData equipment, int level = 1)
         {
+            Debug.Log($"[EquipmentSlotController] SetEquipment called for slot type: {slotType}, slot index: {slotIndex}");
+
             if (equipment == null)
             {
+                Debug.Log($"[EquipmentSlotController] Equipment is null, clearing slot");
                 SetEmpty();
                 return;
             }
 
+            Debug.Log($"[EquipmentSlotController] Setting equipment: {equipment.displayName} (ID: {equipment.equipmentId})");
             currentEquipment = equipment;
 
-            // Update visuals
+            // Debug equipment icon reference
+            if (equipmentIcon == null)
+            {
+                Debug.LogError($"[EquipmentSlotController] equipmentIcon reference is NULL! Check the prefab - the Image component should be assigned!");
+
+                // Try to find it as a fallback
+                equipmentIcon = GetComponentInChildren<Image>(true);
+                if (equipmentIcon != null)
+                {
+                    Debug.LogWarning($"[EquipmentSlotController] Found Image component as fallback: {equipmentIcon.name}");
+                }
+            }
+            else
+            {
+                Debug.Log($"[EquipmentSlotController] equipmentIcon reference is valid: {equipmentIcon.name}");
+            }
+
             if (equipmentIcon != null)
             {
-                equipmentIcon.sprite = equipment.equipmentIcon;
-                equipmentIcon.enabled = true;
+                if (equipment.equipmentIcon != null)
+                {
+                    Debug.Log($"[EquipmentSlotController] Equipment has icon: {equipment.equipmentIcon.name} (size: {equipment.equipmentIcon.rect.size})");
+                    equipmentIcon.sprite = equipment.equipmentIcon;
+                    equipmentIcon.enabled = true;
+                    Debug.Log($"[EquipmentSlotController] Icon assigned successfully. Enabled: {equipmentIcon.enabled}, Sprite: {equipmentIcon.sprite?.name}");
+
+                    // Check visibility
+                    var canvasGroup = equipmentIcon.GetComponent<CanvasGroup>();
+                    if (canvasGroup != null)
+                    {
+                        Debug.Log($"[EquipmentSlotController] Icon CanvasGroup alpha: {canvasGroup.alpha}");
+                    }
+
+                    // Check parent visibility
+                    if (!equipmentIcon.gameObject.activeInHierarchy)
+                    {
+                        Debug.LogWarning($"[EquipmentSlotController] Icon GameObject is not active in hierarchy!");
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"[EquipmentSlotController] Equipment '{equipment.displayName}' has NO ICON assigned in ScriptableObject!");
+                }
             }
 
             if (emptySlotOverlay != null)
@@ -169,14 +211,12 @@ namespace CyberPickle.UI.EquipmentHub
                 slotBackground.color = occupiedSlotColor;
             }
 
-            // Update level badge
             if (levelBadge != null && levelText != null)
             {
                 levelBadge.SetActive(level > 1);
                 levelText.text = level.ToString();
             }
 
-            // Show equipped glow
             if (equippedGlow != null)
             {
                 equippedGlow.SetActive(true);

@@ -79,21 +79,50 @@ namespace CyberPickle.UI.EquipmentHub
 
         public void SetItem(EquipmentData item, int level = 1)
         {
+            Debug.Log($"[InventorySlotController] SetItem called for slot index: {slotIndex}");
+
             if (item == null)
             {
+                Debug.Log($"[InventorySlotController] Item is null, clearing slot");
                 ClearSlot();
                 return;
             }
 
+            Debug.Log($"[InventorySlotController] Setting item: {item.displayName} (ID: {item.equipmentId})");
             currentEquipment = item;
             itemLevel = level;
             isOccupied = true;
 
-            // Update visuals
+            // Debug item icon reference
+            if (itemIcon == null)
+            {
+                Debug.LogError($"[InventorySlotController] itemIcon reference is NULL! Check the prefab!");
+
+                // Try to find it
+                itemIcon = GetComponentInChildren<Image>(true);
+                if (itemIcon != null)
+                {
+                    Debug.LogWarning($"[InventorySlotController] Found Image component as fallback: {itemIcon.name}");
+                }
+            }
+            else
+            {
+                Debug.Log($"[InventorySlotController] itemIcon reference is valid: {itemIcon.name}");
+            }
+
             if (itemIcon != null)
             {
-                itemIcon.sprite = item.equipmentIcon;
-                itemIcon.enabled = true;
+                if (item.equipmentIcon != null)
+                {
+                    Debug.Log($"[InventorySlotController] Item has icon: {item.equipmentIcon.name}");
+                    itemIcon.sprite = item.equipmentIcon;
+                    itemIcon.enabled = true;
+                    Debug.Log($"[InventorySlotController] Icon assigned. Enabled: {itemIcon.enabled}, Sprite: {itemIcon.sprite?.name}");
+                }
+                else
+                {
+                    Debug.LogError($"[InventorySlotController] Item '{item.displayName}' has NO ICON in ScriptableObject!");
+                }
             }
 
             if (backgroundImage != null)
@@ -101,7 +130,6 @@ namespace CyberPickle.UI.EquipmentHub
                 backgroundImage.color = occupiedSlotColor;
             }
 
-            // Update level display
             if (levelBadge != null && levelText != null)
             {
                 bool showLevel = level > 1;
@@ -112,13 +140,8 @@ namespace CyberPickle.UI.EquipmentHub
                 }
             }
 
-            // Update quantity (for stackable items in the future)
             UpdateQuantityDisplay(1);
-
-            // Set rarity glow
             SetRarityVisuals(item);
-
-            // Animation
             transform.DOScale(originalScale * 1.1f, 0.1f)
                 .OnComplete(() => transform.DOScale(originalScale, 0.1f));
         }
@@ -234,7 +257,7 @@ namespace CyberPickle.UI.EquipmentHub
 
             // Play hover sound
             //var audioController = GetComponentInParent<AudioFeedbackController>();
-           // audioController?.PlayHoverSound();
+            // audioController?.PlayHoverSound();
         }
 
         public void OnPointerExit(PointerEventData eventData)

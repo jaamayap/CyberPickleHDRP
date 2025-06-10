@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Laser Gun
   description: This is a placeholder laser gun
   slotType: 0
-  equipmentIcon: {fileID: 0}
+  equipmentIcon: {fileID: 21300000, guid: 7def965e7d9a51d419db2530f8d66712, type: 3}
   equipmentPrefab: {fileID: 0}
   neuralCreditCost: 0
   cyberCoinCost: 0

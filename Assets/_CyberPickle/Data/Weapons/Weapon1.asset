@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a4fe5b1b6ff0064c87660a7bdd7eac6, type: 3}
   m_Name: Weapon1
   m_EditorClassIdentifier: 
-  equipmentId: handweapon_
+  equipmentId: handweapon_lasergun
   displayName: Laser Gun
   description: This is a placeholder laser gun
   slotType: 0
   equipmentIcon: {fileID: 21300000, guid: 21588412b60d6d949a2cf24355ce0293, type: 3}
-  equipmentPrefab: {fileID: 7844841441954294664, guid: 7592fa1295daca14794fbda29a896daf,
+  equipmentPrefab: {fileID: 7844841441954294664, guid: 4eb0f783e0419524481e2f6308d61ccc,
     type: 3}
   neuralCreditCost: 0
   cyberCoinCost: 0
