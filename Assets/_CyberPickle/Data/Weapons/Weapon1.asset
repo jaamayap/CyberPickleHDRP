@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a4fe5b1b6ff0064c87660a7bdd7eac6, type: 3}
+  m_Name: Weapon1
+  m_EditorClassIdentifier: 
+  equipmentId: handweapon_lasergun
+  displayName: Laser Gun
+  description: This is a placeholder laser gun
+  slotType: 0
+  equipmentIcon: {fileID: 21300000, guid: 21588412b60d6d949a2cf24355ce0293, type: 3}
+  equipmentPrefab: {fileID: 7844841441954294664, guid: 4eb0f783e0419524481e2f6308d61ccc,
+    type: 3}
+  neuralCreditCost: 0
+  cyberCoinCost: 0
+  unlockedByDefault: 1
+  requiredPlayerLevel: 1
+  requiredAchievements: []
+  maxUpgradeLevel: 5
+  weaponType: 0
+  attackType: 0
+  baseDamage: 5
+  baseFireRate: 5
+  baseProjectileSpeed: 15
+  baseAreaOfEffect: 1
+  basePierceCount: 0
+  canCriticalHit: 1
+  baseCriticalChance: 0.05
+  criticalDamageMultiplier: 2
+  projectilePrefab: {fileID: 0}
+  fireSound: {fileID: 0}
+  hitSound: {fileID: 0}
+  hitEffectPrefab: {fileID: 0}
+  damageUpgradeMultiplier: 1.2
+  fireRateUpgradeMultiplier: 1.1
+  otherStatsUpgradeMultiplier: 1.15
+  finalForm: {fileID: 11400000, guid: 4f1abd6e117fde44d8848e414ac53232, type: 2}
+  requiredPowerUpId: powerup_1

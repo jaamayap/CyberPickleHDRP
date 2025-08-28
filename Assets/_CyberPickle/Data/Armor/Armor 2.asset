@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30e0e9430764202418afaabefa984e3b, type: 3}
+  m_Name: Armor 2
+  m_EditorClassIdentifier: 
+  equipmentId: armor_speed
+  displayName: 
+  description: 
+  slotType: 3
+  equipmentIcon: {fileID: 21300000, guid: e48a3ca6a5cb98642b72263c3efeb7ef, type: 3}
+  equipmentPrefab: {fileID: 0}
+  neuralCreditCost: 10
+  cyberCoinCost: 1
+  unlockedByDefault: 0
+  requiredPlayerLevel: 2
+  requiredAchievements: []
+  maxUpgradeLevel: 5
+  focusType: 0
+  baseDefenseBonus: 15
+  baseHealthBonus: 20
+  speedModifier: 0.25
+  healthRegenBonus: 0
+  hasSpecialEffect: 0
+  specialEffectDescription: 
+  specialEffectChance: 0.1
+  specialEffectCooldown: 10
+  specialEffectVFX: {fileID: 0}
+  specialEffectSound: {fileID: 0}
+  armorMaterial: {fileID: 0}
+  defenseUpgradeMultiplier: 1.2
+  healthUpgradeMultiplier: 1.15
+  specialEffectChanceIncrease: 0.02

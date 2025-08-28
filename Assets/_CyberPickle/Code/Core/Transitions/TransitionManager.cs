@@ -182,6 +182,9 @@ namespace CyberPickle.Core.Transitions
 
             while (elapsedTime < duration)
             {
+                // Add a null check for bonfireLight inside the loop
+                if (bonfireLight == null) yield break;
+
                 elapsedTime += Time.deltaTime;
                 float normalizedTime = elapsedTime / duration;
                 float curveValue = transitionCurve.Evaluate(normalizedTime);
@@ -190,7 +193,11 @@ namespace CyberPickle.Core.Transitions
                 yield return null;
             }
 
-            bonfireLight.intensity = targetIntensity;
+            // Final check before setting intensity
+            if (bonfireLight != null)
+            {
+                bonfireLight.intensity = targetIntensity;
+            }
         }
 
 

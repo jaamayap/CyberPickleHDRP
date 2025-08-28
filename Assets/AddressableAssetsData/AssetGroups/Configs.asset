@@ -23,12 +23,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - config-core
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: eff71fba439510f4182b07f484c17e2e
-    m_Address: config/game
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - config-core
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aec7a184b22e7ea44b3e8ac3e94bec64
     m_Address: config/ui/drgs-glitch
     m_ReadOnly: 0
@@ -46,6 +40,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - config-ui
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3451cabe7cfed8b4d875dbc9c3eb65a7
+    m_Address: config/game
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - config-core
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: a94d9961289a91f47aeaff6b5c61d38c, type: 2}

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mainMenuSceneName: MainMenu
   characterSelectSceneName: CharacterSelect
-  equipmentSelectSceneName: EquipmentSelect
+  equipmentSelectSceneName: EquipmentHub
   levelSelectSceneName: LevelSelect
   gameSceneName: Game
   postGameSceneName: PostGame

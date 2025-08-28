@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60c4bada8b422b54bbfdd7a4003062ca, type: 3}
+  m_Name: PowerUp 2
+  m_EditorClassIdentifier: 
+  equipmentId: powerup_2
+  displayName: 
+  description: 
+  slotType: 2
+  equipmentIcon: {fileID: 21300000, guid: 08b3fdf1413418d4cbc81ba07d51dd44, type: 3}
+  equipmentPrefab: {fileID: 0}
+  neuralCreditCost: 0
+  cyberCoinCost: 0
+  unlockedByDefault: 0
+  requiredPlayerLevel: 1
+  requiredAchievements: []
+  maxUpgradeLevel: 5
+  effectType: 0
+  baseDuration: 0
+  baseCooldown: 0
+  isPassive: 1
+  affectedStat: Power
+  baseStatBoost: 10
+  isPercentageBased: 1
+  compatibleWeaponTypes: 
+  synergisticWeaponIds: []
+  affectedWeaponProperties: []
+  baseWeaponEnhancementMultiplier: 1.2
+  baseEffectDescription: 
+  maxLevelEffectDescription: 
+  activeEffectPrefab: {fileID: 0}
+  activationSound: {fileID: 0}
+  effectStrengthUpgradeMultiplier: 1.2
+  durationUpgradeMultiplier: 1.15
+  cooldownReductionMultiplier: 0.9

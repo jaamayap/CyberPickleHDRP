@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04dc4b901bae5e6439b044dfde900814, type: 3}
+  m_Name: equipmentHubGlitchTextConfig
+  m_EditorClassIdentifier: 
+  glitchInterval: 0.95
+  glitchIntensity: 0.161
+  glitchIntensityMax: 0.339
+  glitchIntensityMin: 0
+  glitchAmplitude: 0.086
+  glitchSpeed: 3.51
+  randomCharIntervalMin: 0.5
+  randomCharIntervalMax: 2
+  randomCharDisplayDurationMin: 0.05
+  randomCharDisplayDurationMax: 0.3
+  randomCharIntensity: 0.5
+  fadeDuration: 2
+  pulseScale: 1.1
+  pulseSpeed: 1
+  scanlineIntensity: 0.774
+  scanlineSpeed: 0.6
+  scanlineFrequency: 190
+  chromAberration: 0.00405
+  colorGlitchIntensity: 0.583
+  colorGlitchDuration: 0.5
+  glitchIntensityDuration: 2
+  glitchIntensityInterval: 10
+  rgbSplitAmount: 0.01
