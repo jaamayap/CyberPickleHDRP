@@ -18,8 +18,8 @@ MonoBehaviour:
   slotType: 3
   equipmentIcon: {fileID: 21300000, guid: e48a3ca6a5cb98642b72263c3efeb7ef, type: 3}
   equipmentPrefab: {fileID: 0}
-  neuralCreditCost: 0
-  cyberCoinCost: 0
+  neuralCreditCost: 20
+  cyberCoinCost: 2
   unlockedByDefault: 0
   requiredPlayerLevel: 1
   requiredAchievements: []

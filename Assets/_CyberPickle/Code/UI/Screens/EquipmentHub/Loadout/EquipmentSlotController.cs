@@ -235,34 +235,41 @@ namespace CyberPickle.UI.EquipmentHub
             }
         }
 
+        // File: UI/Screens/EquipmentHub/Loadout/EquipmentSlotController.cs
+
         public bool OnDropReceived(IDraggable draggable)
         {
-            var draggedEquipment = draggable.GetDraggedEquipment();
+            var draggedEquipment = draggable.GetDraggedEquipment(); // 
             if (draggedEquipment == null || !CanAcceptDrop(draggable))
-                return false;
+            {
+                return false; // 
+            }
 
-            // Handle equipment swapping if slot is occupied
             EquipmentData previousEquipment = currentEquipment;
 
-            // Equip the new item
-            SetEquipment(draggedEquipment);
+            // Equip the new item in this slot.
+            SetEquipment(draggedEquipment); // 
 
-            // If we had equipment and the source was also an equipment slot, swap
-            if (previousEquipment != null && draggable.GetDragSourceType() == DragSourceType.Equipment)
+            // Handle the source slot to correctly perform a move or swap.
+            if (draggable.GetDragSourceType() == DragSourceType.Inventory && draggable is InventorySlotController sourceInventorySlot)
             {
-                if (draggable is EquipmentSlotController sourceSlot)
-                {
-                    sourceSlot.SetEquipment(previousEquipment);
-                }
+                // If the item came from inventory, place our old item (or nothing) back into that inventory slot.
+                sourceInventorySlot.SetItem(previousEquipment, previousEquipment != null ? 1 : 0);
+            }
+            else if (draggable.GetDragSourceType() == DragSourceType.Equipment && draggable is EquipmentSlotController sourceEquipmentSlot)
+            {
+                // If the item came from another equipment slot, perform a swap.
+                sourceEquipmentSlot.SetEquipment(previousEquipment);
             }
 
-            // Update equipment in profile through manager
+            // Persist the change via the EquipmentManager
             if (EquipmentManager.Instance != null)
             {
-                // This will be implemented when integrating with EquipmentManager
+                // This logic will need to be fully implemented to save the changes
+                // EquipmentManager.Instance.EquipItem(...);
             }
 
-            return true;
+            return true; // 
         }
 
         public EquipmentData GetCurrentEquipment() => currentEquipment;

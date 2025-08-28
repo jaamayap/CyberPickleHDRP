@@ -4705,7 +4705,7 @@ namespace CyberPickle.UI.Effects
 
 // --- END FILE ---
 
-// File: UI/EquipmentHubManager/EquipmentHubManager.cs
+// File: UI/EquipmentHub/EquipmentHubManager.cs
 // ---
 using CyberPickle.Characters;
 using CyberPickle.Characters.Data;
@@ -7849,6 +7849,422 @@ namespace CyberPickle.UI.Effects.Config
         public float glitchIntensityInterval = 10f;
         [Range(0f, 0.05f)]
         public float rgbSplitAmount = 0.01f;
+    }
+}
+
+// --- END FILE ---
+
+// File: UI/EquipmentHub/DragDrop/DragDropManager.cs
+// ---
+using UnityEngine;
+using UnityEngine.UI;
+using System;
+using System.Collections.Generic;
+using CyberPickle.Core.Management;
+using CyberPickle.Shop.Equipment.Data;
+using DG.Tweening;
+namespace CyberPickle.UI.EquipmentHub.DragDrop
+{
+
+    public class DragDropManager : Manager<DragDropManager>
+    {
+        [Header("Drag Visual Settings")]
+        [SerializeField] private float dragIconAlpha = 0.8f;
+        [SerializeField] private Vector2 dragIconOffset = new Vector2(0, -20f);
+        [SerializeField] private float dragIconScale = 1.1f;
+        [Header("Drop Validation Colors")]
+        [SerializeField] private Color validDropColor = new Color(0.2f, 1f, 0.2f, 0.5f);
+        [SerializeField] private Color invalidDropColor = new Color(1f, 0.2f, 0.2f, 0.5f);
+        [SerializeField] private Color neutralColor = new Color(1f, 1f, 1f, 0.3f);
+        public event Action<IDraggable> OnDragStarted;
+        public event Action<IDraggable, bool> OnDragEnded;
+        public event Action<IDraggable, IDropTarget> OnDropCompleted;
+        public event Action<DragSourceType, DropTargetType> OnInvalidDrop;
+        private IDraggable currentDraggable;
+        private GameObject dragVisual;
+        private Canvas dragCanvas;
+        private List<IDropTarget> highlightedTargets = new List<IDropTarget>();
+        private Dictionary<(DragSourceType, DropTargetType), Func<IDraggable, IDropTarget, bool>> validationRules;
+        #region Initialization
+
+        protected override void Awake()
+        {
+            base.Awake();
+            InitializeValidationRules();
+            FindOrCreateDragCanvas();
+        }
+
+        private void InitializeValidationRules()
+        {
+            validationRules = new Dictionary<(DragSourceType, DropTargetType), Func<IDraggable, IDropTarget, bool>>();
+            validationRules[(DragSourceType.Shop, DropTargetType.InventorySlot)] = ValidateShopToInventory;
+            validationRules[(DragSourceType.Inventory, DropTargetType.EquipmentSlot)] = ValidateInventoryToEquipment;
+            validationRules[(DragSourceType.Equipment, DropTargetType.InventorySlot)] = ValidateEquipmentToInventory;
+            validationRules[(DragSourceType.Inventory, DropTargetType.InventorySlot)] = ValidateInventoryToInventory;
+            validationRules[(DragSourceType.Equipment, DropTargetType.EquipmentSlot)] = ValidateEquipmentToEquipment;
+        }
+
+        private void FindOrCreateDragCanvas()
+        {
+            var existingCanvas = GameObject.Find("DragCanvas");
+            if (existingCanvas != null)
+            {
+                dragCanvas = existingCanvas.GetComponent<Canvas>();
+            }
+            else
+            {
+                var dragCanvasGO = new GameObject("DragCanvas");
+                dragCanvas = dragCanvasGO.AddComponent<Canvas>();
+                dragCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                dragCanvas.sortingOrder = 999;
+                dragCanvasGO.AddComponent<CanvasScaler>();
+                dragCanvasGO.AddComponent<GraphicRaycaster>();
+                DontDestroyOnLoad(dragCanvasGO);
+            }
+        }
+
+        #endregion
+        #region Drag Operations
+
+        public bool StartDrag(IDraggable draggable, Vector2 pointerPosition)
+        {
+            if (draggable == null || !draggable.CanDrag())
+                return false;
+            if (currentDraggable != null)
+            {
+                CancelDrag();
+            }
+
+            currentDraggable = draggable;
+            CreateDragVisual(draggable.GetDragIcon(), pointerPosition);
+            draggable.OnDragStarted();
+            OnDragStarted?.Invoke(draggable);
+            return true;
+        }
+
+        public void UpdateDrag(Vector2 pointerPosition)
+        {
+            if (dragVisual != null)
+            {
+                dragVisual.transform.position = pointerPosition + dragIconOffset;
+            }
+        }
+
+        public bool CompleteDrop(IDropTarget dropTarget, Vector2 pointerPosition)
+        {
+            if (currentDraggable == null || dropTarget == null)
+            {
+                CancelDrag();
+                return false;
+            }
+
+            bool success = false;
+            if (ValidateDrop(currentDraggable, dropTarget))
+            {
+                success = dropTarget.OnDropReceived(currentDraggable);
+                if (success)
+                {
+                    OnDropCompleted?.Invoke(currentDraggable, dropTarget);
+                }
+            }
+            else
+            {
+                OnInvalidDrop?.Invoke(currentDraggable.GetDragSourceType(), dropTarget.GetDropTargetType());
+            }
+
+            EndDrag(success);
+            return success;
+        }
+
+        public void CancelDrag()
+        {
+            if (currentDraggable != null)
+            {
+                EndDrag(false);
+            }
+        }
+
+        private void EndDrag(bool successful)
+        {
+            ClearHighlightedTargets();
+            DestroyDragVisual();
+            if (currentDraggable != null)
+            {
+                currentDraggable.OnDragEnded(successful);
+                OnDragEnded?.Invoke(currentDraggable, successful);
+                currentDraggable = null;
+            }
+        }
+
+        #endregion
+        #region Visual Management
+
+        private void CreateDragVisual(Sprite icon, Vector2 position)
+        {
+            if (dragCanvas == null || icon == null)
+                return;
+            dragVisual = new GameObject("DragIcon");
+            dragVisual.transform.SetParent(dragCanvas.transform, false);
+            dragVisual.transform.position = position + dragIconOffset;
+            var image = dragVisual.AddComponent<Image>();
+            image.sprite = icon;
+            image.raycastTarget = false;
+            var canvasGroup = dragVisual.AddComponent<CanvasGroup>();
+            canvasGroup.alpha = dragIconAlpha;
+            canvasGroup.blocksRaycasts = false;
+            dragVisual.transform.localScale = Vector3.one * dragIconScale;
+            dragVisual.transform.DOScale(Vector3.one, 0.2f).SetEase(Ease.OutBack);
+        }
+
+        private void DestroyDragVisual()
+        {
+            if (dragVisual != null)
+            {
+                var canvasGroup = dragVisual.GetComponent<CanvasGroup>();
+                if (canvasGroup != null)
+                {
+                    canvasGroup.DOFade(0f, 0.1f).OnComplete(() => {
+                        Destroy(dragVisual);
+                        dragVisual = null;
+                    });
+                }
+                else
+                {
+                    Destroy(dragVisual);
+                    dragVisual = null;
+                }
+            }
+        }
+
+        #endregion
+        #region Drop Target Highlighting
+
+        public void HighlightValidTargets(List<IDropTarget> targets)
+        {
+            ClearHighlightedTargets();
+            foreach (var target in targets)
+            {
+                if (target != null && ValidateDrop(currentDraggable, target))
+                {
+                    HighlightTarget(target, true);
+                    highlightedTargets.Add(target);
+                }
+            }
+        }
+
+        public void HighlightTarget(IDropTarget target, bool isValid)
+        {
+            if (target == null)
+                return;
+            var targetGO = target.GetTargetObject();
+            if (targetGO == null)
+                return;
+            var image = targetGO.GetComponent<Image>();
+            if (image != null)
+            {
+                Color targetColor = isValid ? validDropColor : invalidDropColor;
+                image.DOColor(targetColor, 0.2f);
+            }
+
+            var outline = targetGO.GetComponent<Outline>();
+            if (outline != null)
+            {
+                outline.enabled = true;
+                outline.effectColor = isValid ? validDropColor : invalidDropColor;
+            }
+        }
+
+        private void ClearHighlightedTargets()
+        {
+            foreach (var target in highlightedTargets)
+            {
+                if (target != null)
+                {
+                    var targetGO = target.GetTargetObject();
+                    if (targetGO != null)
+                    {
+                        var image = targetGO.GetComponent<Image>();
+                        if (image != null)
+                        {
+                            image.DOColor(Color.white, 0.2f);
+                        }
+
+                        var outline = targetGO.GetComponent<Outline>();
+                        if (outline != null)
+                        {
+                            outline.enabled = false;
+                        }
+                    }
+                }
+            }
+            highlightedTargets.Clear();
+        }
+
+        #endregion
+        #region Validation
+
+        public bool ValidateDrop(IDraggable draggable, IDropTarget target)
+        {
+            if (draggable == null || target == null)
+                return false;
+            var key = (draggable.GetDragSourceType(), target.GetDropTargetType());
+            if (validationRules.TryGetValue(key, out var validator))
+            {
+                return validator(draggable, target);
+            }
+
+            return false;
+        }
+
+        private bool ValidateShopToInventory(IDraggable draggable, IDropTarget target)
+        {
+            return true;
+        }
+
+        private bool ValidateInventoryToEquipment(IDraggable draggable, IDropTarget target)
+        {
+            var equipment = draggable.GetDraggedEquipment();
+            if (equipment == null)
+                return false;
+            var equipmentSlot = target as EquipmentSlotController;
+            if (equipmentSlot != null)
+            {
+                return equipmentSlot.SlotType == equipment.slotType;
+            }
+
+            return false;
+        }
+
+        private bool ValidateEquipmentToInventory(IDraggable draggable, IDropTarget target)
+        {
+            return target.GetCurrentEquipment() == null;
+        }
+
+        private bool ValidateInventoryToInventory(IDraggable draggable, IDropTarget target)
+        {
+            return true;
+        }
+
+        private bool ValidateEquipmentToEquipment(IDraggable draggable, IDropTarget target)
+        {
+            var sourceEquipment = draggable.GetDraggedEquipment();
+            var targetEquipment = target.GetCurrentEquipment();
+            if (sourceEquipment == null)
+                return false;
+            var targetSlot = target as EquipmentSlotController;
+            if (targetSlot != null)
+            {
+                bool sourceCanGoToTarget = targetSlot.SlotType == sourceEquipment.slotType;
+                bool targetCanGoToSource = true;
+                return sourceCanGoToTarget && targetCanGoToSource;
+            }
+
+            return false;
+        }
+
+        #endregion
+        #region Utility Methods
+
+        public bool IsDragging()
+        {
+            return currentDraggable != null;
+        }
+
+        public IDraggable GetCurrentDraggable()
+        {
+            return currentDraggable;
+        }
+
+        public DragSourceType? GetCurrentDragSourceType()
+        {
+            return currentDraggable?.GetDragSourceType();
+        }
+
+        #endregion
+    }
+}
+
+// --- END FILE ---
+
+// File: UI/EquipmentHub/DragDrop/DragDropTransaction.cs
+// ---
+using CyberPickle.Shop.Equipment.Data;
+namespace CyberPickle.UI.EquipmentHub.DragDrop
+{
+
+    public class DragDropTransaction
+    {
+        public DragSourceType SourceType { get; set; }
+        public DropTargetType TargetType { get; set; }
+        public EquipmentData Equipment { get; set; }
+        public string SourceId { get; set; }
+        public string TargetId { get; set; }
+        public bool WasSuccessful { get; set; }
+        public float TransactionCost { get; set; }
+        public System.DateTime Timestamp { get; set; }
+
+        public DragDropTransaction()
+        {
+            Timestamp = System.DateTime.Now;
+        }
+    }
+}
+
+// --- END FILE ---
+
+// File: UI/EquipmentHub/DragDrop/IDraggable.cs
+// ---
+using UnityEngine;
+using CyberPickle.Shop.Equipment.Data;
+namespace CyberPickle.UI.EquipmentHub.DragDrop
+{
+
+    public interface IDraggable
+    {
+        EquipmentData GetDraggedEquipment();
+        DragSourceType GetDragSourceType();
+        bool CanDrag();
+        void OnDragStarted();
+        void OnDragEnded(bool successful);
+        Sprite GetDragIcon();
+        GameObject GetSourceObject();
+    }
+
+
+    public enum DragSourceType
+    {
+        Inventory,
+        Equipment,
+        Shop
+    }
+}
+
+// --- END FILE ---
+
+// File: UI/EquipmentHub/DragDrop/IDropTarget.cs
+// ---
+using UnityEngine;
+using CyberPickle.Shop.Equipment.Data;
+namespace CyberPickle.UI.EquipmentHub.DragDrop
+{
+
+    public interface IDropTarget
+    {
+        DropTargetType GetDropTargetType();
+        bool CanAcceptDrop(IDraggable draggable);
+        void OnDropPreview(IDraggable draggable);
+        void OnDropPreviewEnd();
+        bool OnDropReceived(IDraggable draggable);
+        EquipmentData GetCurrentEquipment();
+        GameObject GetTargetObject();
+    }
+
+
+    public enum DropTargetType
+    {
+        InventorySlot,
+        EquipmentSlot,
+        TrashBin
     }
 }
 
@@ -11481,9 +11897,10 @@ namespace CyberPickle.Core.Services.Authentication.Flow
 
 // File: UI/Screens/EquipmentHub/Loadout/EquipmentSlotController.cs
 // ---
-using CyberPickle.Core.Events;
 using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Shop.Equipment;
 using CyberPickle.Shop.Equipment.Data;
+using CyberPickle.UI.EquipmentHub.DragDrop;
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -11491,335 +11908,343 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 namespace CyberPickle.UI.EquipmentHub
 {
-
     public class EquipmentSlotController : MonoBehaviour,
         IPointerEnterHandler,
         IPointerExitHandler,
-        IPointerClickHandler,
+        IPointerDownHandler,
+        IPointerUpHandler,
         IBeginDragHandler,
         IDragHandler,
         IEndDragHandler,
-        IDropHandler
+        IDropHandler,
+        IDraggable,
+        IDropTarget
     {
-        #region Serialized Fields
+        [Header("UI References")]
+        [SerializeField] private Image slotFrame;
+        [SerializeField] private Image slotIcon;
+        [SerializeField] private Image equipmentIcon;
+        [SerializeField] private TextMeshProUGUI levelText;
+        [SerializeField] private GameObject equippedGlow;
+        [SerializeField] private GameObject highlightEffect;
+        [SerializeField] private CanvasGroup canvasGroup;
         [Header("Slot Configuration")]
         [SerializeField] private EquipmentSlotType slotType;
         [SerializeField] private int slotIndex = 0;
-        [Header("UI References")]
-        [SerializeField] private Image slotBackground;
-        [SerializeField] private Image slotFrame;
-        [SerializeField] private Image equipmentIcon;
-        [SerializeField] private GameObject emptySlotOverlay;
-        [SerializeField] private TextMeshProUGUI slotTypeText;
-        [SerializeField] private GameObject equippedGlow;
-        [SerializeField] private GameObject levelBadge;
-        [SerializeField] private TextMeshProUGUI levelText;
         [Header("Visual Settings")]
-        [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
-        [SerializeField] private Color occupiedSlotColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-        [SerializeField] private Color validDropColor = new Color(0.2f, 1f, 0.2f, 0.5f);
-        [SerializeField] private Color invalidDropColor = new Color(1f, 0.2f, 0.2f, 0.5f);
+        [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.7f);
+        [SerializeField] private Color occupiedSlotColor = Color.white;
+        [SerializeField] private Color highlightColor = new Color(1f, 0.8f, 0.2f, 1f);
+        [SerializeField] private Color validDropColor = new Color(0.2f, 1f, 0.2f, 0.8f);
+        [SerializeField] private Color invalidDropColor = new Color(1f, 0.2f, 0.2f, 0.8f);
         [SerializeField] private float hoverScale = 1.1f;
-        [SerializeField] private float clickScale = 0.95f;
-        [Header("Drag Settings")]
-        [SerializeField] private float dragAlpha = 0.6f;
-        [SerializeField] private Canvas dragCanvas;
-        #endregion
-        #region Private Fields
+        [SerializeField] private float clickScale = 0.9f;
 
         private EquipmentData currentEquipment;
-        private RectTransform rectTransform;
-        private CanvasGroup canvasGroup;
+        private LoadoutDisplayController loadoutController;
+        private bool isOccupied = false;
+        private bool isDragging = false;
         private Vector3 originalScale;
-        private bool isDragging;
-        private GameObject draggedIcon;
-        private bool isValidDropTarget;
-        #endregion
-        #region Properties
+        private DragDropManager dragDropManager;
 
         public EquipmentSlotType SlotType => slotType;
-        public bool IsOccupied => currentEquipment != null;
+        public bool IsOccupied => isOccupied;
         public EquipmentData CurrentEquipment => currentEquipment;
-        public int SlotIndex => slotIndex;
-        #endregion
-        #region Unity Lifecycle
+        #region Initialization
 
         private void Awake()
         {
-            rectTransform = GetComponent<RectTransform>();
-            canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup == null)
-            {
+                canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
                 canvasGroup = gameObject.AddComponent<CanvasGroup>();
-            }
-
             originalScale = transform.localScale;
-            InitializeSlot();
-        }
-
-        #endregion
-        #region Initialization
-
-        private void InitializeSlot()
-        {
-            if (slotTypeText != null)
-            {
-                slotTypeText.text = GetSlotTypeDisplayName();
-            }
-
             SetEmpty();
-            if (dragCanvas == null)
-            {
-                dragCanvas = GetComponentInParent<Canvas>();
-            }
         }
 
-
-        private string GetSlotTypeDisplayName()
+        private void Start()
         {
-            switch (slotType)
-            {
-                case EquipmentSlotType.HandWeapon:
-                    return $"Hand Weapon {slotIndex + 1}";
-                case EquipmentSlotType.BodyWeapon:
-                    return "Body Weapon";
-                case EquipmentSlotType.PowerUp:
-                    return $"Power-Up {slotIndex + 1}";
-                case EquipmentSlotType.Armor:
-                    return "Armor";
-                case EquipmentSlotType.Amulet:
-                    return "Amulet";
-                default:
-                    return slotType.ToString();
-            }
-        }
-
-        #endregion
-        #region Equipment Management
-
-        public void SetEquipment(EquipmentData equipment, int level = 1)
-        {
-            if (equipment == null)
-            {
-                SetEmpty();
-                return;
-            }
-
-            currentEquipment = equipment;
-            if (equipmentIcon == null)
-            {
-                Debug.LogError($"[EquipmentSlotController] equipmentIcon reference is NULL! Check the prefab - the Image component should be assigned!");
-                equipmentIcon = GetComponentInChildren<Image>(true);
-                if (equipmentIcon != null)
-                {
-                    Debug.LogWarning($"[EquipmentSlotController] Found Image component as fallback: {equipmentIcon.name}");
-                }
-            }
-            else
-            {
-            }
-
-            if (equipmentIcon != null)
-            {
-                if (equipment.equipmentIcon != null)
-                {
-                    equipmentIcon.sprite = equipment.equipmentIcon;
-                    equipmentIcon.enabled = true;
-                    var canvasGroup = equipmentIcon.GetComponent<CanvasGroup>();
-                    if (canvasGroup != null)
-                    {
-                    }
-
-                    if (!equipmentIcon.gameObject.activeInHierarchy)
-                    {
-                        Debug.LogWarning($"[EquipmentSlotController] Icon GameObject is not active in hierarchy!");
-                    }
-                }
-                else
-                {
-                    Debug.LogError($"[EquipmentSlotController] Equipment '{equipment.displayName}' has NO ICON assigned in ScriptableObject!");
-                }
-            }
-
-            if (emptySlotOverlay != null)
-            {
-                emptySlotOverlay.SetActive(false);
-            }
-
-            if (slotBackground != null)
-            {
-                slotBackground.color = occupiedSlotColor;
-            }
-
-            if (levelBadge != null && levelText != null)
-            {
-                levelBadge.SetActive(level > 1);
-                levelText.text = level.ToString();
-            }
-
-            if (equippedGlow != null)
-            {
-                equippedGlow.SetActive(true);
-                AnimateEquipGlow();
-            }
-        }
-
-
-        public void SetEmpty()
-        {
-            currentEquipment = null;
-            if (equipmentIcon != null)
-            {
-                equipmentIcon.enabled = false;
-            }
-
-            if (emptySlotOverlay != null)
-            {
-                emptySlotOverlay.SetActive(true);
-            }
-
-            if (slotBackground != null)
-            {
-                slotBackground.color = emptySlotColor;
-            }
-
-            if (levelBadge != null)
-            {
-                levelBadge.SetActive(false);
-            }
-
+            dragDropManager = DragDropManager.Instance;
+            loadoutController = GetComponentInParent<LoadoutDisplayController>();
             if (equippedGlow != null)
             {
                 equippedGlow.SetActive(false);
             }
         }
 
+        public void Initialize(EquipmentSlotType type, int index = 0)
+        {
+            slotType = type;
+            slotIndex = index;
+            UpdateSlotVisual();
+        }
+
+        #endregion
+        #region Equipment Management
+
+        public void SetEquipment(EquipmentData equipment)
+        {
+            if (equipment != null && equipment.slotType != slotType)
+            {
+                Debug.LogWarning($"[EquipmentSlotController] Wrong equipment type {equipment.slotType} for slot {slotType}");
+                return;
+            }
+
+            currentEquipment = equipment;
+            isOccupied = equipment != null;
+            UpdateVisual();
+            if (isOccupied)
+            {
+                PlayEquipAnimation();
+            }
+        }
+
+        public void SetEmpty()
+        {
+            currentEquipment = null;
+            isOccupied = false;
+            UpdateVisual();
+        }
+
+        private void UpdateVisual()
+        {
+            if (equipmentIcon != null)
+            {
+                equipmentIcon.enabled = isOccupied;
+                if (isOccupied && currentEquipment != null)
+                {
+                    equipmentIcon.sprite = currentEquipment.equipmentIcon;
+                    equipmentIcon.DOFade(1f, 0.2f);
+                }
+            }
+
+            if (slotIcon != null)
+            {
+                slotIcon.DOFade(isOccupied ? 0.3f : 0.7f, 0.2f);
+            }
+
+            if (levelText != null)
+            {
+                levelText.gameObject.SetActive(isOccupied && currentEquipment != null);
+                if (isOccupied && currentEquipment != null)
+                {
+                    levelText.text = $"Lv.{currentEquipment.requiredPlayerLevel}";
+                }
+            }
+
+            if (equippedGlow != null)
+            {
+                equippedGlow.SetActive(isOccupied);
+                if (isOccupied)
+                {
+                    AnimateEquipGlow();
+                }
+            }
+
+            var targetColor = isOccupied ? occupiedSlotColor : emptySlotColor;
+            if (slotFrame != null)
+            {
+                slotFrame.DOColor(targetColor, 0.3f);
+            }
+        }
+
+        #endregion
+        #region IDraggable Implementation
+
+        public EquipmentData GetDraggedEquipment() => currentEquipment;
+
+        public DragSourceType GetDragSourceType() => DragSourceType.Equipment;
+
+        public bool CanDrag() => isOccupied && currentEquipment != null;
+
+        public void OnDragStarted()
+        {
+            canvasGroup.alpha = 0.6f;
+            canvasGroup.blocksRaycasts = false;
+        }
+
+        public void OnDragEnded(bool successful)
+        {
+            canvasGroup.alpha = 1f;
+            canvasGroup.blocksRaycasts = true;
+            if (successful && isOccupied)
+            {
+                SetEmpty();
+            }
+            else if (!successful)
+            {
+                ShakeAnimation();
+            }
+        }
+
+        public Sprite GetDragIcon() => equipmentIcon?.sprite;
+
+        public GameObject GetSourceObject() => gameObject;
+        #endregion
+        #region IDropTarget Implementation
+
+        public DropTargetType GetDropTargetType() => DropTargetType.EquipmentSlot;
+
+        public bool CanAcceptDrop(IDraggable draggable)
+        {
+            var equipment = draggable.GetDraggedEquipment();
+            if (equipment == null) return false;
+            return equipment.slotType == slotType;
+        }
+
+        public void OnDropPreview(IDraggable draggable)
+        {
+            if (highlightEffect != null)
+            {
+                highlightEffect.SetActive(true);
+            }
+
+            bool canAccept = CanAcceptDrop(draggable);
+            HighlightDropFeedback(canAccept);
+        }
+
+        public void OnDropPreviewEnd()
+        {
+            if (highlightEffect != null)
+            {
+                highlightEffect.SetActive(false);
+            }
+
+            if (slotFrame != null)
+            {
+                slotFrame.DOColor(isOccupied ? occupiedSlotColor : emptySlotColor, 0.3f);
+            }
+        }
+
+
+        public bool OnDropReceived(IDraggable draggable)
+        {
+            var draggedEquipment = draggable.GetDraggedEquipment();
+            if (draggedEquipment == null || !CanAcceptDrop(draggable))
+            {
+                return false;
+            }
+
+            EquipmentData previousEquipment = currentEquipment;
+            SetEquipment(draggedEquipment);
+            if (draggable.GetDragSourceType() == DragSourceType.Inventory && draggable is InventorySlotController sourceInventorySlot)
+            {
+                sourceInventorySlot.SetItem(previousEquipment, previousEquipment != null ? 1 : 0);
+            }
+            else if (draggable.GetDragSourceType() == DragSourceType.Equipment && draggable is EquipmentSlotController sourceEquipmentSlot)
+            {
+                sourceEquipmentSlot.SetEquipment(previousEquipment);
+            }
+
+            if (EquipmentManager.Instance != null)
+            {
+            }
+
+            return true;
+        }
+
+        public EquipmentData GetCurrentEquipment() => currentEquipment;
+
+        public GameObject GetTargetObject() => gameObject;
         #endregion
         #region Pointer Events
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (isDragging) return;
-            transform.DOScale(originalScale * hoverScale, 0.2f).SetEase(Ease.OutQuad);
-            if (IsOccupied && currentEquipment != null)
+            if (!isDragging)
             {
-                // TODO: Show equipment tooltip
+                transform.DOScale(originalScale * hoverScale, 0.2f);
+                if (highlightEffect != null && !highlightEffect.activeSelf)
+                {
+                    highlightEffect.SetActive(true);
+                    highlightEffect.GetComponent<Image>()?.DOFade(0.3f, 0.2f);
+                }
             }
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            if (isDragging) return;
-            transform.DOScale(originalScale, 0.2f).SetEase(Ease.OutQuad);
-            // TODO: Hide equipment tooltip
-        }
-
-        public void OnPointerClick(PointerEventData eventData)
-        {
-            if (eventData.button == PointerEventData.InputButton.Right && IsOccupied)
+            if (!isDragging)
             {
-                UnequipItem();
-            }
-            else if (eventData.button == PointerEventData.InputButton.Left)
-            {
-                transform.DOScale(originalScale * clickScale, 0.1f)
-                    .SetEase(Ease.OutQuad)
-                    .OnComplete(() => {
-                        transform.DOScale(originalScale * hoverScale, 0.1f).SetEase(Ease.OutQuad);
-                    });
-            }
-        }
-
-        #endregion
-        #region Drag and Drop
-
-        public void OnBeginDrag(PointerEventData eventData)
-        {
-            if (!IsOccupied || currentEquipment == null) return;
-            isDragging = true;
-            CreateDragIcon();
-            canvasGroup.alpha = dragAlpha;
-            canvasGroup.blocksRaycasts = false;
-        }
-
-        public void OnDrag(PointerEventData eventData)
-        {
-            if (!isDragging || draggedIcon == null) return;
-            draggedIcon.transform.position = eventData.position;
-        }
-
-        public void OnEndDrag(PointerEventData eventData)
-        {
-            if (!isDragging) return;
-            isDragging = false;
-            canvasGroup.alpha = 1f;
-            canvasGroup.blocksRaycasts = true;
-            if (draggedIcon != null)
-            {
-                Destroy(draggedIcon);
-                draggedIcon = null;
-            }
-
-            GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
-            if (dropTarget != null)
-            {
-                var targetSlot = dropTarget.GetComponentInParent<EquipmentSlotController>();
-                if (targetSlot != null && targetSlot != this)
+                transform.DOScale(originalScale, 0.2f);
+                if (highlightEffect != null)
                 {
-                    TrySwapEquipment(targetSlot);
+                    highlightEffect.GetComponent<Image>()?.DOFade(0f, 0.2f)
+                        .OnComplete(() => highlightEffect.SetActive(false));
                 }
             }
         }
 
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Left)
+            {
+                transform.DOScale(originalScale * clickScale, 0.1f);
+            }
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            transform.DOScale(originalScale, 0.1f);
+            if (eventData.button == PointerEventData.InputButton.Right && isOccupied)
+            {
+                UnequipItem();
+            }
+        }
+
+        #endregion
+        #region Drag & Drop Events
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (!isOccupied || currentEquipment == null || dragDropManager == null) return;
+            isDragging = dragDropManager.StartDrag(this, eventData.position);
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (isDragging && dragDropManager != null)
+            {
+                dragDropManager.UpdateDrag(eventData.position);
+            }
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            if (!isDragging || dragDropManager == null) return;
+            isDragging = false;
+            GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
+            if (dropTarget != null)
+            {
+                var dropTargetComponent = dropTarget.GetComponentInParent<IDropTarget>();
+                if (dropTargetComponent != null)
+                {
+                    dragDropManager.CompleteDrop(dropTargetComponent, eventData.position);
+                    return;
+                }
+            }
+
+            dragDropManager.CancelDrag();
+        }
+
         public void OnDrop(PointerEventData eventData)
         {
-            var sourceSlot = eventData.pointerDrag?.GetComponent<EquipmentSlotController>();
-            if (sourceSlot != null && sourceSlot != this)
+            if (dragDropManager != null && dragDropManager.IsDragging())
             {
-                HighlightDropFeedback(CanAcceptEquipment(sourceSlot.CurrentEquipment));
+                var draggable = dragDropManager.GetCurrentDraggable();
+                if (draggable != null)
+                {
+                    HighlightDropFeedback(CanAcceptDrop(draggable));
+                }
             }
         }
 
         #endregion
         #region Helper Methods
 
-        private void CreateDragIcon()
+        private void UpdateSlotVisual()
         {
-            if (dragCanvas == null || equipmentIcon == null) return;
-            draggedIcon = new GameObject("DragIcon");
-            draggedIcon.transform.SetParent(dragCanvas.transform, false);
-            var dragImage = draggedIcon.AddComponent<Image>();
-            dragImage.sprite = equipmentIcon.sprite;
-            dragImage.raycastTarget = false;
-            var dragRect = draggedIcon.GetComponent<RectTransform>();
-            dragRect.sizeDelta = equipmentIcon.rectTransform.sizeDelta;
-            var dragCanvasGroup = draggedIcon.AddComponent<CanvasGroup>();
-            dragCanvasGroup.alpha = 0.8f;
         }
-
-
-        private bool CanAcceptEquipment(EquipmentData equipment)
-        {
-            if (equipment == null) return true;
-            return equipment.slotType == slotType;
-        }
-
-
-        private void TrySwapEquipment(EquipmentSlotController targetSlot)
-        {
-            if (!CanAcceptEquipment(targetSlot.CurrentEquipment) ||
-                !targetSlot.CanAcceptEquipment(this.CurrentEquipment))
-            {
-                ShakeAnimation();
-                return;
-            }
-
-            var tempEquipment = targetSlot.CurrentEquipment;
-            targetSlot.SetEquipment(this.CurrentEquipment);
-            this.SetEquipment(tempEquipment);
-            // TODO: Update equipment in profile
-        }
-
 
         private void UnequipItem()
         {
@@ -11829,19 +12254,14 @@ namespace CyberPickle.UI.EquipmentHub
             transform.DOPunchScale(Vector3.one * 0.1f, 0.3f, 5);
         }
 
-
         private void HighlightDropFeedback(bool isValid)
         {
             if (slotFrame != null)
             {
                 Color targetColor = isValid ? validDropColor : invalidDropColor;
-                slotFrame.DOColor(targetColor, 0.2f)
-                    .OnComplete(() => {
-                        slotFrame.DOColor(Color.white, 0.3f);
-                    });
+                slotFrame.DOColor(targetColor, 0.2f);
             }
         }
-
 
         private void AnimateEquipGlow()
         {
@@ -11855,13 +12275,32 @@ namespace CyberPickle.UI.EquipmentHub
             }
         }
 
-
         private void ShakeAnimation()
         {
             transform.DOShakePosition(0.3f, 10f, 10, 90, false, true);
         }
 
+        private void PlayEquipAnimation()
+        {
+            transform.DOPunchScale(Vector3.one * 0.2f, 0.4f, 5);
+            if (equippedGlow != null)
+            {
+                var glowImage = equippedGlow.GetComponent<Image>();
+                if (glowImage != null)
+                {
+                    glowImage.DOFade(1f, 0.2f).OnComplete(() => {
+                        glowImage.DOFade(0.5f, 0.3f);
+                    });
+                }
+            }
+        }
+
         #endregion
+
+        private void OnDestroy()
+        {
+            DOTween.Kill(this);
+        }
     }
 }
 
@@ -11875,272 +12314,162 @@ using UnityEngine.EventSystems;
 using TMPro;
 using DG.Tweening;
 using CyberPickle.Shop.Equipment.Data;
+using CyberPickle.UI.EquipmentHub.DragDrop;
 namespace CyberPickle.UI.EquipmentHub
 {
-    public class InventorySlotController : MonoBehaviour,
-        IPointerEnterHandler,
-        IPointerExitHandler,
-        IPointerClickHandler,
-        IBeginDragHandler,
-        IDragHandler,
-        IEndDragHandler
+    public class InventorySlotController : MonoBehaviour, IDraggable, IDropTarget,
+        IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler,
+        IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
     {
         [Header("UI References")]
         [SerializeField] private Image backgroundImage;
         [SerializeField] private Image itemIcon;
         [SerializeField] private TextMeshProUGUI quantityText;
-        [SerializeField] private GameObject levelBadge;
-        [SerializeField] private TextMeshProUGUI levelText;
         [SerializeField] private GameObject highlightBorder;
-        [SerializeField] private GameObject rarityGlow;
         [Header("Visual Settings")]
+        [SerializeField] private float hoverScale = 1.05f;
+        [SerializeField] private Color hoverColor = new Color(0.4f, 0.4f, 0.4f, 1f);
         [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
         [SerializeField] private Color occupiedSlotColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-        [SerializeField] private Color hoverColor = new Color(0.4f, 0.4f, 0.4f, 1f);
-        [SerializeField] private float hoverScale = 1.1f;
-        [SerializeField] private float clickScale = 0.95f;
-        [Header("Rarity Colors")]
-        [SerializeField] private Color commonColor = Color.gray;
-        [SerializeField] private Color uncommonColor = Color.green;
-        [SerializeField] private Color rareColor = Color.blue;
-        [SerializeField] private Color epicColor = new Color(0.5f, 0f, 0.5f, 1f);
-        [SerializeField] private Color legendaryColor = new Color(1f, 0.5f, 0f, 1f);
 
-        private InventoryUIController inventoryController;
-        private EquipmentData currentEquipment;
         private int slotIndex;
-        private int itemLevel = 1;
-        private bool isOccupied = false;
-        private bool isDragging = false;
+        private EquipmentData currentEquipment;
+        private int currentQuantity;
+        private bool isOccupied;
+        private bool isDragging;
         private Vector3 originalScale;
         private CanvasGroup canvasGroup;
+        private InventoryUIController inventoryController;
+        private DragDropManager dragDropManager;
 
-        public EquipmentData CurrentEquipment => currentEquipment;
-        public bool IsOccupied => isOccupied;
         public int SlotIndex => slotIndex;
+        public EquipmentData CurrentEquipment => currentEquipment;
+        public int Quantity => currentQuantity;
+        public bool IsOccupied => isOccupied;
         #region Initialization
+
+        private void Awake()
+        {
+            canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+                canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            originalScale = transform.localScale;
+            SetEmpty();
+        }
+
+        private void Start()
+        {
+            dragDropManager = DragDropManager.Instance;
+            inventoryController = GetComponentInParent<InventoryUIController>();
+        }
 
         public void Initialize(int index, InventoryUIController controller)
         {
             slotIndex = index;
             inventoryController = controller;
+            SetEmpty();
             if (backgroundImage == null) backgroundImage = GetComponent<Image>();
-            canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
             originalScale = transform.localScale;
-            ClearSlot();
             if (highlightBorder != null) highlightBorder.SetActive(false);
-            if (rarityGlow != null) rarityGlow.SetActive(false);
+        }
+
+        public void OnDrop(PointerEventData eventData)
+        {
+            if (dragDropManager != null && dragDropManager.IsDragging())
+            {
+                var draggable = dragDropManager.GetCurrentDraggable();
+                if (draggable != null && CanAcceptDrop(draggable))
+                {
+                    OnDropPreview(draggable);
+                }
+            }
         }
 
         #endregion
         #region Slot Management
 
-        public void SetItem(EquipmentData item, int level = 1)
+        public void SetItem(EquipmentData equipment, int quantity = 1)
         {
-            if (item == null)
+            if (equipment == null)
             {
-                ClearSlot();
+                SetEmpty();
                 return;
             }
 
-            currentEquipment = item;
-            itemLevel = level;
+            currentEquipment = equipment;
+            currentQuantity = quantity;
             isOccupied = true;
-            if (itemIcon == null)
-            {
-                Debug.LogError($"[InventorySlotController] itemIcon reference is NULL! Check the prefab!");
-                itemIcon = GetComponentInChildren<Image>(true);
-                if (itemIcon != null)
-                {
-                    Debug.LogWarning($"[InventorySlotController] Found Image component as fallback: {itemIcon.name}");
-                }
-            }
-            else
-            {
-            }
-
             if (itemIcon != null)
             {
-                if (item.equipmentIcon != null)
-                {
-                    itemIcon.sprite = item.equipmentIcon;
-                    itemIcon.enabled = true;
-                }
-                else
-                {
-                    Debug.LogError($"[InventorySlotController] Item '{item.displayName}' has NO ICON in ScriptableObject!");
-                }
+                itemIcon.sprite = equipment.equipmentIcon;
+                itemIcon.enabled = true;
+                itemIcon.DOFade(1f, 0.2f);
+            }
+
+            if (quantityText != null)
+            {
+                quantityText.text = quantity > 1 ? quantity.ToString() : "";
+                quantityText.enabled = quantity > 1;
             }
 
             if (backgroundImage != null)
             {
-                backgroundImage.color = occupiedSlotColor;
+                backgroundImage.DOColor(occupiedSlotColor, 0.2f);
             }
+        }
 
-            if (levelBadge != null && levelText != null)
+        public void SetEmpty()
+        {
+            currentEquipment = null;
+            currentQuantity = 0;
+            isOccupied = false;
+            if (itemIcon != null)
             {
-                bool showLevel = level > 1;
-                levelBadge.SetActive(showLevel);
-                if (showLevel)
-                {
-                    levelText.text = level.ToString();
-                }
+                itemIcon.enabled = false;
             }
 
-            UpdateQuantityDisplay(1);
-            SetRarityVisuals(item);
-            transform.DOScale(originalScale * 1.1f, 0.1f)
-                .OnComplete(() => transform.DOScale(originalScale, 0.1f));
+            if (quantityText != null)
+            {
+                quantityText.enabled = false;
+            }
+
+            if (backgroundImage != null)
+            {
+                backgroundImage.DOColor(emptySlotColor, 0.2f);
+            }
         }
 
         public void ClearSlot()
         {
-            currentEquipment = null;
-            itemLevel = 1;
-            isOccupied = false;
-            if (itemIcon != null)
-            {
-                itemIcon.sprite = null;
-                itemIcon.enabled = false;
-            }
-
-            if (backgroundImage != null)
-            {
-                backgroundImage.color = emptySlotColor;
-            }
-
-            if (levelBadge != null)
-            {
-                levelBadge.SetActive(false);
-            }
-
-            if (quantityText != null)
-            {
-                quantityText.gameObject.SetActive(false);
-            }
-
-            if (rarityGlow != null)
-            {
-                rarityGlow.SetActive(false);
-            }
-        }
-
-        public void UpdateQuantityDisplay(int quantity = 1)
-        {
-            if (quantityText != null)
-            {
-                bool showQuantity = quantity > 1;
-                quantityText.gameObject.SetActive(showQuantity);
-                if (showQuantity)
-                {
-                    quantityText.text = quantity.ToString();
-                }
-            }
-        }
-
-        private void SetRarityVisuals(EquipmentData item)
-        {
-            if (rarityGlow == null) return;
-            Color glowColor = commonColor;
-            if (item.cyberCoinCost > 0)
-            {
-                glowColor = legendaryColor;
-            }
-            else if (item.neuralCreditCost >= 10000)
-            {
-                glowColor = epicColor;
-            }
-            else if (item.neuralCreditCost >= 5000)
-            {
-                glowColor = rareColor;
-            }
-            else if (item.neuralCreditCost >= 1000)
-            {
-                glowColor = uncommonColor;
-            }
-
-            var glowImage = rarityGlow.GetComponent<Image>();
-            if (glowImage != null)
-            {
-                glowImage.color = glowColor;
-                rarityGlow.SetActive(true);
-                if (glowColor == epicColor || glowColor == legendaryColor)
-                {
-                    glowImage.DOFade(0.5f, 1f).SetLoops(-1, LoopType.Yoyo);
-                }
-            }
+            SetEmpty();
         }
 
         #endregion
-        #region Pointer Events
-
-        public void OnPointerEnter(PointerEventData eventData)
-        {
-            if (isDragging) return;
-            transform.DOScale(originalScale * hoverScale, 0.2f).SetEase(Ease.OutQuad);
-            if (backgroundImage != null)
-            {
-                backgroundImage.DOColor(hoverColor, 0.2f);
-            }
-
-            if (highlightBorder != null)
-            {
-                highlightBorder.SetActive(true);
-            }
-
-            inventoryController?.OnItemHoverEnter(this);
-        }
-
-        public void OnPointerExit(PointerEventData eventData)
-        {
-            if (isDragging) return;
-            transform.DOScale(originalScale, 0.2f).SetEase(Ease.OutQuad);
-            if (backgroundImage != null)
-            {
-                Color targetColor = isOccupied ? occupiedSlotColor : emptySlotColor;
-                backgroundImage.DOColor(targetColor, 0.2f);
-            }
-
-            if (highlightBorder != null)
-            {
-                highlightBorder.SetActive(false);
-            }
-
-            inventoryController?.HandleItemHoverExit(this);
-        }
-
-        public void OnPointerClick(PointerEventData eventData)
-        {
-            if (!isOccupied || currentEquipment == null) return;
-            if (eventData.button == PointerEventData.InputButton.Left)
-            {
-                transform.DOScale(originalScale * clickScale, 0.1f)
-                    .OnComplete(() => transform.DOScale(originalScale, 0.1f));
-                inventoryController?.OnItemClicked(this);
-            }
-            else if (eventData.button == PointerEventData.InputButton.Right)
-            {
-                // TODO: Implement quick equip
-            }
-        }
-
-        #endregion
-        #region Drag & Drop
+        #region Drag & Drop Implementation
 
         public void OnBeginDrag(PointerEventData eventData)
         {
             if (!isOccupied || currentEquipment == null) return;
-            isDragging = true;
-            canvasGroup.alpha = 0.6f;
-            canvasGroup.blocksRaycasts = false;
-            inventoryController?.OnItemDragStart(this);
+            if (dragDropManager == null)
+            {
+                dragDropManager = DragDropManager.Instance;
+            }
+
+            if (dragDropManager != null && dragDropManager.StartDrag(this, eventData.position))
+            {
+                isDragging = true;
+                canvasGroup.alpha = 0.6f;
+                canvasGroup.blocksRaycasts = false;
+                inventoryController?.OnItemDragStart(this);
+            }
         }
 
         public void OnDrag(PointerEventData eventData)
         {
-            if (!isDragging) return;
-            inventoryController?.UpdateDragPosition(eventData.position);
+            if (!isDragging || dragDropManager == null) return;
+            dragDropManager.UpdateDrag(eventData.position);
         }
 
         public void OnEndDrag(PointerEventData eventData)
@@ -12149,55 +12478,189 @@ namespace CyberPickle.UI.EquipmentHub
             isDragging = false;
             canvasGroup.alpha = 1f;
             canvasGroup.blocksRaycasts = true;
-            GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
-            if (dropTarget != null)
+            inventoryController?.OnItemDragEnd();
+            if (dragDropManager != null)
             {
-                var equipmentSlot = dropTarget.GetComponentInParent<EquipmentSlotController>();
-                if (equipmentSlot != null && IsCompatibleWith(equipmentSlot))
+                GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
+                if (dropTarget != null)
                 {
-                    // TODO: Handle equipment swap
+                    var dropTargetComponent = dropTarget.GetComponentInParent<IDropTarget>();
+                    if (dropTargetComponent != null && dropTargetComponent != this)
+                    {
+                        dragDropManager.CompleteDrop(dropTargetComponent, eventData.position);
+                        return;
+                    }
+
+                }
+
+                dragDropManager.CancelDrag();
+                transform.DOShakePosition(0.3f, 5f, 10, 90, false, true);
+            }
+        }
+
+        #endregion
+        #region IDraggable Implementation
+
+        public EquipmentData GetDraggedEquipment() => currentEquipment;
+        public DragSourceType GetDragSourceType() => DragSourceType.Inventory;
+        public bool CanDrag() => isOccupied && currentEquipment != null;
+
+        public void OnDragStarted()
+        {
+        }
+
+        public void OnDragEnded(bool successful)
+        {
+        }
+
+        public Sprite GetDragIcon() => itemIcon?.sprite;
+        public GameObject GetSourceObject() => gameObject;
+        #endregion
+        #region IDropTarget Implementation
+
+        public DropTargetType GetDropTargetType() => DropTargetType.InventorySlot;
+
+        public bool CanAcceptDrop(IDraggable draggable)
+        {
+            if (draggable == null) return false;
+            if (draggable.GetSourceObject() == gameObject) return false;
+            var draggedEquipment = draggable.GetDraggedEquipment();
+            if (draggedEquipment == null) return false;
+            switch (draggable.GetDragSourceType())
+            {
+                case DragSourceType.Inventory:
+                    return true;
+                case DragSourceType.Equipment:
+                    return !isOccupied || (currentEquipment != null &&
+                           currentEquipment.equipmentId == draggedEquipment.equipmentId);
+                case DragSourceType.Shop:
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        public void OnDropPreview(IDraggable draggable)
+        {
+            if (highlightBorder != null)
+            {
+                highlightBorder.SetActive(true);
+            }
+            backgroundImage?.DOColor(hoverColor, 0.2f);
+        }
+
+        public void OnDropPreviewEnd()
+        {
+            if (highlightBorder != null)
+            {
+                highlightBorder.SetActive(false);
+            }
+            backgroundImage?.DOColor(isOccupied ? occupiedSlotColor : emptySlotColor, 0.2f);
+        }
+
+        public bool OnDropReceived(IDraggable draggable)
+        {
+            if (draggable == null) return false;
+            var draggedEquipment = draggable.GetDraggedEquipment();
+            if (draggedEquipment == null) return false;
+            switch (draggable.GetDragSourceType())
+            {
+                case DragSourceType.Inventory:
+                    return HandleInventoryToInventoryDrop(draggable);
+                case DragSourceType.Equipment:
+                    return HandleEquipmentToInventoryDrop(draggable);
+                default:
+                    return false;
+            }
+        }
+
+        private bool HandleInventoryToInventoryDrop(IDraggable draggable)
+        {
+            if (!(draggable is InventorySlotController sourceSlot)) return false;
+            var draggedEquipment = sourceSlot.CurrentEquipment;
+            var draggedQuantity = sourceSlot.Quantity;
+            if (!isOccupied)
+            {
+                SetItem(draggedEquipment, draggedQuantity);
+                sourceSlot.SetEmpty();
+                inventoryController?.OnItemMoved(sourceSlot, this);
+                return true;
+            }
+            else if (currentEquipment != null && draggedEquipment != null &&
+                     currentEquipment.equipmentId == draggedEquipment.equipmentId)
+            {
+                currentQuantity += draggedQuantity;
+                quantityText.text = currentQuantity.ToString();
+                quantityText.enabled = true;
+                sourceSlot.SetEmpty();
+                inventoryController?.OnItemMoved(sourceSlot, this);
+                return true;
+            }
+            else
+            {
+                var tempEquipment = currentEquipment;
+                var tempQuantity = currentQuantity;
+                SetItem(draggedEquipment, draggedQuantity);
+                sourceSlot.SetItem(tempEquipment, tempQuantity);
+                inventoryController?.OnItemMoved(sourceSlot, this);
+                return true;
+            }
+        }
+
+        private bool HandleEquipmentToInventoryDrop(IDraggable draggable)
+        {
+            var draggedEquipment = draggable.GetDraggedEquipment();
+            if (!isOccupied)
+            {
+                SetItem(draggedEquipment, 1);
+                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                return true;
+            }
+            else if (currentEquipment != null && draggedEquipment != null &&
+                     currentEquipment.equipmentId == draggedEquipment.equipmentId)
+            {
+                currentQuantity++;
+                quantityText.text = currentQuantity.ToString();
+                quantityText.enabled = true;
+                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                return true;
+            }
+
+            return false;
+        }
+
+        public EquipmentData GetCurrentEquipment() => currentEquipment;
+        public GameObject GetTargetObject() => gameObject;
+        #endregion
+        #region Pointer Events
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (!isDragging)
+            {
+                transform.DOScale(originalScale * hoverScale, 0.2f);
+                if (isOccupied && currentEquipment != null)
+                {
+                    inventoryController?.InvokeItemHovered(currentEquipment);
                 }
             }
-
-            inventoryController?.OnItemDragEnd();
         }
 
-        public bool IsCompatibleWith(EquipmentSlotController targetSlot)
+        public void OnPointerExit(PointerEventData eventData)
         {
-            if (targetSlot == null || currentEquipment == null) return false;
-            return targetSlot.SlotType == currentEquipment.slotType;
-        }
-
-        #endregion
-        #region Visual Effects
-
-        public void PlayEquipAnimation()
-        {
-            if (backgroundImage != null)
+            if (!isDragging)
             {
-                backgroundImage.DOColor(Color.white, 0.1f)
-                    .OnComplete(() => backgroundImage.DOColor(occupiedSlotColor, 0.2f));
-            }
-
-            transform.DOPunchScale(Vector3.one * 0.2f, 0.3f, 1, 0.5f);
-        }
-
-        public void PlayErrorAnimation()
-        {
-            transform.DOShakePosition(0.3f, 10f, 10, 90, false, true);
-            if (backgroundImage != null)
-            {
-                backgroundImage.DOColor(Color.red, 0.1f)
-                    .OnComplete(() => backgroundImage.DOColor(occupiedSlotColor, 0.2f));
+                transform.DOScale(originalScale, 0.2f);
+                inventoryController?.InvokeItemHoverExit();
             }
         }
 
-        #endregion
-        #region Cleanup
-
-        private void OnDestroy()
+        public void OnPointerClick(PointerEventData eventData)
         {
-            DOTween.Kill(this);
+            if (isOccupied && currentEquipment != null && eventData.button == PointerEventData.InputButton.Left)
+            {
+                inventoryController?.InvokeItemSelected(currentEquipment);
+            }
         }
 
         #endregion
@@ -12543,7 +13006,8 @@ namespace CyberPickle.UI.EquipmentHub
         private EquipmentManager equipmentManager;
         private ProfileManager profileManager;
         private List<InventorySlotController> inventorySlots = new List<InventorySlotController>();
-        private Dictionary<string, EquipmentData> inventoryItems = new Dictionary<string, EquipmentData>();
+        private Dictionary<string, InventoryItemData> inventoryItems = new Dictionary<string, InventoryItemData>();
+
         private EquipmentSlotType? currentFilter = null;
         private SortType currentSortType = SortType.Type;
         private bool isInitialized = false;
@@ -12553,6 +13017,21 @@ namespace CyberPickle.UI.EquipmentHub
         public event System.Action<EquipmentData> OnItemSelected;
         public event System.Action<EquipmentData> OnItemHovered;
         public event System.Action OnItemHoverExit;
+        [System.Serializable]
+        private class InventoryItemData
+        {
+            public EquipmentData equipment;
+            public int quantity;
+            public int slotIndex;
+
+            public InventoryItemData(EquipmentData equipment, int quantity = 1, int slotIndex = -1)
+            {
+                this.equipment = equipment;
+                this.quantity = quantity;
+                this.slotIndex = slotIndex;
+            }
+        }
+
         #region Initialization
 
         public void Initialize()
@@ -12670,7 +13149,8 @@ namespace CyberPickle.UI.EquipmentHub
             {
                 if (!equippedIds.Contains(equipment.equipmentId))
                 {
-                    inventoryItems[equipment.equipmentId] = equipment;
+                    int level = profile.GetEquipmentLevel(equipment.equipmentId);
+                    inventoryItems[equipment.equipmentId] = new InventoryItemData(equipment, level > 0 ? level : 1);
                 }
             }
 
@@ -12687,37 +13167,35 @@ namespace CyberPickle.UI.EquipmentHub
             var itemsToDisplay = GetFilteredAndSortedItems();
             for (int i = 0; i < itemsToDisplay.Count && i < inventorySlots.Count; i++)
             {
-                var equipment = itemsToDisplay[i];
-                var profile = profileManager.ActiveProfile;
-                int level = profile.GetEquipmentLevel(equipment.equipmentId);
-                inventorySlots[i].SetItem(equipment, level > 0 ? level : 1);
+                var itemData = itemsToDisplay[i];
+                itemData.slotIndex = i;
+                inventorySlots[i].SetItem(itemData.equipment, itemData.quantity);
             }
 
             UpdateInventoryCount(itemsToDisplay.Count);
         }
 
-        private List<EquipmentData> GetFilteredAndSortedItems()
+        private List<InventoryItemData> GetFilteredAndSortedItems()
         {
             var items = inventoryItems.Values.AsEnumerable();
             if (currentFilter.HasValue)
             {
-                items = items.Where(item => item.slotType == currentFilter.Value);
+                items = items.Where(item => item.equipment.slotType == currentFilter.Value);
             }
 
             switch (currentSortType)
             {
                 case SortType.Name:
-                    items = items.OrderBy(item => item.displayName);
+                    items = items.OrderBy(item => item.equipment.displayName);
                     break;
                 case SortType.Level:
-                    var profile = profileManager.ActiveProfile;
-                    items = items.OrderByDescending(item => profile.GetEquipmentLevel(item.equipmentId));
+                    items = items.OrderByDescending(item => item.quantity);
                     break;
                 case SortType.Type:
-                    items = items.OrderBy(item => item.slotType).ThenBy(item => item.displayName);
+                    items = items.OrderBy(item => item.equipment.slotType)
+                                 .ThenBy(item => item.equipment.displayName);
                     break;
                 case SortType.Recent:
-                    // TODO: Track acquisition time
                     items = items.Reverse();
                     break;
             }
@@ -12737,7 +13215,20 @@ namespace CyberPickle.UI.EquipmentHub
                 scrollRect.verticalNormalizedPosition = 1f;
             }
         }
+        public void InvokeItemSelected(EquipmentData equipment)
+        {
+            OnItemSelected?.Invoke(equipment);
+        }
 
+        public void InvokeItemHovered(EquipmentData equipment)
+        {
+            OnItemHovered?.Invoke(equipment);
+        }
+
+        public void InvokeItemHoverExit()
+        {
+            OnItemHoverExit?.Invoke();
+        }
         public void FilterByType(EquipmentSlotType type)
         {
             SetActiveTab(type);
@@ -12771,59 +13262,69 @@ namespace CyberPickle.UI.EquipmentHub
         {
             if (slot == null || slot.CurrentEquipment == null) return;
             draggedSlot = slot;
-            CreateDragIcon(slot.CurrentEquipment.equipmentIcon);
-            var canvasGroup = slot.GetComponent<CanvasGroup>();
-            if (canvasGroup != null)
-            {
-                canvasGroup.alpha = dragAlpha;
-            }
-
-            var hubManager = GetComponentInParent<EquipmentHubManager>();
-            if (hubManager != null)
-            {
-                // TODO: Notify that drag started
-            }
         }
 
         public void OnItemDragEnd()
         {
-            if (draggedSlot == null) return;
-            var canvasGroup = draggedSlot.GetComponent<CanvasGroup>();
-            if (canvasGroup != null)
-            {
-                canvasGroup.alpha = 1f;
-            }
-
-            if (draggedIcon != null)
-            {
-                Destroy(draggedIcon);
-                draggedIcon = null;
-            }
-
             draggedSlot = null;
+        }
+
+        public void OnItemMoved(InventorySlotController fromSlot, InventorySlotController toSlot)
+        {
+            if (fromSlot == null || toSlot == null) return;
+            var fromEquipment = fromSlot.CurrentEquipment;
+            var toEquipment = toSlot.CurrentEquipment;
+            if (fromEquipment == null) return;
+            if (toEquipment == null)
+            {
+                if (inventoryItems.ContainsKey(fromEquipment.equipmentId))
+                {
+                    inventoryItems[fromEquipment.equipmentId].slotIndex = toSlot.SlotIndex;
+                }
+            }
+            else
+            {
+                if (inventoryItems.ContainsKey(fromEquipment.equipmentId))
+                {
+                    inventoryItems[fromEquipment.equipmentId].slotIndex = toSlot.SlotIndex;
+                }
+                if (inventoryItems.ContainsKey(toEquipment.equipmentId))
+                {
+                    inventoryItems[toEquipment.equipmentId].slotIndex = fromSlot.SlotIndex;
+                }
+            }
+        }
+
+        public void OnItemRemoved(string equipmentId)
+        {
+            if (inventoryItems.ContainsKey(equipmentId))
+            {
+                inventoryItems.Remove(equipmentId);
+                RefreshDisplay();
+            }
+        }
+
+        public void OnItemAdded(EquipmentData equipment, int quantity = 1)
+        {
+            if (equipment == null) return;
+            if (inventoryItems.ContainsKey(equipment.equipmentId))
+            {
+                inventoryItems[equipment.equipmentId].quantity += quantity;
+            }
+            else
+            {
+                inventoryItems[equipment.equipmentId] = new InventoryItemData(equipment, quantity);
+            }
+
+            RefreshDisplay();
         }
 
         public void UpdateDragPosition(Vector2 position)
         {
-            if (draggedIcon != null)
-            {
-                draggedIcon.transform.position = position;
-            }
         }
 
         private void CreateDragIcon(Sprite icon)
         {
-            if (dragCanvas == null || icon == null) return;
-            draggedIcon = new GameObject("DragIcon");
-            draggedIcon.transform.SetParent(dragCanvas.transform, false);
-            var image = draggedIcon.AddComponent<Image>();
-            image.sprite = icon;
-            image.raycastTarget = false;
-            var rect = draggedIcon.GetComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(slotSize, slotSize);
-            var group = draggedIcon.AddComponent<CanvasGroup>();
-            group.alpha = 0.8f;
-            group.blocksRaycasts = false;
         }
 
         #endregion
@@ -12831,21 +13332,12 @@ namespace CyberPickle.UI.EquipmentHub
 
         public void AddItemToInventory(EquipmentData equipment)
         {
-            if (equipment == null) return;
-            if (!inventoryItems.ContainsKey(equipment.equipmentId))
-            {
-                inventoryItems[equipment.equipmentId] = equipment;
-                RefreshDisplay();
-            }
+            OnItemAdded(equipment, 1);
         }
 
         public void RemoveItemFromInventory(string equipmentId)
         {
-            if (inventoryItems.ContainsKey(equipmentId))
-            {
-                inventoryItems.Remove(equipmentId);
-                RefreshDisplay();
-            }
+            OnItemRemoved(equipmentId);
         }
 
         private void UpdateInventoryCount(int count)
@@ -12869,38 +13361,12 @@ namespace CyberPickle.UI.EquipmentHub
         }
 
         #endregion
-        #region Item Interaction
+        #region Public Properties
 
-        public void OnItemClicked(InventorySlotController slot)
-        {
-            if (slot == null || slot.CurrentEquipment == null) return;
-            OnItemSelected?.Invoke(slot.CurrentEquipment);
-        }
-
-        public void OnItemHoverEnter(InventorySlotController slot)
-        {
-            if (slot == null || slot.CurrentEquipment == null) return;
-            OnItemHovered?.Invoke(slot.CurrentEquipment);
-        }
-
-        public void HandleItemHoverExit(InventorySlotController slot)
-        {
-            OnItemHoverExit?.Invoke();
-        }
-
-        #endregion
-        #region Cleanup
-
-        private void OnDestroy()
-        {
-            if (sortDropdown != null)
-            {
-                sortDropdown.onValueChanged.RemoveAllListeners();
-            }
-
-            DOTween.Kill(this);
-        }
-
+        public int MaxSlots => maxInventorySlots;
+        public int UsedSlots => inventoryItems.Count;
+        public bool IsFull => UsedSlots >= MaxSlots;
+        public InventorySlotController DraggedSlot => draggedSlot;
         #endregion
     }
 }
@@ -13029,7 +13495,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (weaponData != null && handWeaponSlots[i] != null)
                 {
                     int level = profile.GetEquipmentLevel(weaponId);
-                    handWeaponSlots[i].SetEquipment(weaponData, level > 0 ? level : 1);
+                    handWeaponSlots[i].SetEquipment(weaponData);
                 }
             }
 
@@ -13039,7 +13505,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (weaponData != null)
                 {
                     int level = profile.GetEquipmentLevel(characterData.EquippedBodyWeapon);
-                    bodyWeaponSlot.SetEquipment(weaponData, level > 0 ? level : 1);
+                    bodyWeaponSlot.SetEquipment(weaponData);
                 }
             }
 
@@ -13049,7 +13515,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (armorData != null)
                 {
                     int level = profile.GetEquipmentLevel(characterData.EquippedArmor);
-                    armorSlot.SetEquipment(armorData, level > 0 ? level : 1);
+                    armorSlot.SetEquipment(armorData);
                 }
             }
 
@@ -13059,7 +13525,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (amuletData != null)
                 {
                     int level = profile.GetEquipmentLevel(characterData.EquippedAmulet);
-                    amuletSlot.SetEquipment(amuletData, level > 0 ? level : 1);
+                    amuletSlot.SetEquipment(amuletData);
                 }
             }
 
@@ -13070,7 +13536,7 @@ namespace CyberPickle.UI.EquipmentHub
                 if (powerUpData != null && powerUpSlots[i] != null)
                 {
                     int level = profile.GetEquipmentLevel(powerUpId);
-                    powerUpSlots[i].SetEquipment(powerUpData, level > 0 ? level : 1);
+                    powerUpSlots[i].SetEquipment(powerUpData);
                 }
             }
         }

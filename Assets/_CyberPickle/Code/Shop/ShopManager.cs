@@ -99,6 +99,7 @@ namespace CyberPickle.Shop
         // Events
         public event Action<EquipmentData, ShopTransactionType> OnPurchaseCompleted;
         public event Action<EquipmentData, ShopTransactionType, string> OnPurchaseFailed;
+        public event Action<ShopTransactionResult> OnItemPurchaseCompleted;
 
         // Dependencies
         private EquipmentManager equipmentManager;
@@ -197,15 +198,18 @@ namespace CyberPickle.Shop
                 return ShopTransactionResult.Failed($"Failed to unlock {equipment.displayName}");
             }
 
-            // Notify purchase completed
-            OnPurchaseCompleted?.Invoke(equipment, ShopTransactionType.Purchase);
-
-            return ShopTransactionResult.Succeeded(
+            // Create result and notify purchase completed
+            var result = ShopTransactionResult.Succeeded(
                 $"Successfully purchased {equipment.displayName}",
                 cost,
                 currencyType,
                 equipment
             );
+
+            OnPurchaseCompleted?.Invoke(equipment, ShopTransactionType.Purchase);
+            OnItemPurchaseCompleted?.Invoke(result);
+
+            return result;
         }
 
         /// <summary>
@@ -213,38 +217,38 @@ namespace CyberPickle.Shop
         /// </summary>
         /// <param name="equipmentId">ID of the equipment to unlock</param>
         /// <returns>Result of the transaction</returns>
-        public async Task<ShopTransactionResult> UnlockEquipmentFree(string equipmentId)
+        public Task<ShopTransactionResult> UnlockEquipmentFree(string equipmentId)
         {
             if (!isInitialized)
-                return ShopTransactionResult.Failed("Shop manager not initialized");
+                return Task.FromResult(ShopTransactionResult.Failed("Shop manager not initialized"));
 
             // Get equipment data
             var equipment = equipmentManager.GetEquipmentById(equipmentId);
             if (equipment == null)
-                return ShopTransactionResult.Failed($"Equipment with ID {equipmentId} not found");
+                return Task.FromResult(ShopTransactionResult.Failed($"Equipment with ID {equipmentId} not found"));
 
             // Check if already unlocked
             var profile = profileManager.ActiveProfile;
             if (profile == null)
-                return ShopTransactionResult.Failed("No active profile");
+                return Task.FromResult(ShopTransactionResult.Failed("No active profile"));
 
             if (profile.IsEquipmentUnlocked(equipmentId))
-                return ShopTransactionResult.Failed($"{equipment.displayName} is already unlocked");
+                return Task.FromResult(ShopTransactionResult.Failed($"{equipment.displayName} is already unlocked"));
 
             // Unlock equipment
             bool unlockSuccess = equipmentManager.UnlockEquipment(equipmentId);
             if (!unlockSuccess)
-                return ShopTransactionResult.Failed($"Failed to unlock {equipment.displayName}");
+                return Task.FromResult(ShopTransactionResult.Failed($"Failed to unlock {equipment.displayName}"));
 
             // Notify purchase completed (as an unlock)
             OnPurchaseCompleted?.Invoke(equipment, ShopTransactionType.Unlock);
 
-            return ShopTransactionResult.Succeeded(
+            return Task.FromResult(ShopTransactionResult.Succeeded(
                 $"Successfully unlocked {equipment.displayName}",
                 0,
                 CurrencyType.NeuralCredits,
                 equipment
-            );
+            ));
         }
 
         /// <summary>
@@ -356,6 +360,40 @@ namespace CyberPickle.Shop
             );
         }
 
+
+        /// <summary>
+        /// Purchase an equipment item using its default currency
+        /// </summary>
+        /// <param name="equipment">The equipment to purchase</param>
+        /// <returns>Result of the transaction</returns>
+        public async Task<ShopTransactionResult> PurchaseItemAsync(EquipmentData equipment)
+        {
+            if (equipment == null)
+                return ShopTransactionResult.Failed("Equipment data is null");
+
+            // Determine which currency to use based on equipment data
+            // Prefer the currency that has a non-zero cost
+            CurrencyType currencyType;
+            if (equipment.neuralCreditCost > 0)
+            {
+                currencyType = CurrencyType.NeuralCredits;
+            }
+            else if (equipment.cyberCoinCost > 0)
+            {
+                currencyType = CurrencyType.CyberCoins;
+            }
+            else
+            {
+                return ShopTransactionResult.Failed($"{equipment.displayName} has no valid purchase cost");
+            }
+            
+            var result = await PurchaseEquipment(equipment.equipmentId, currencyType);
+            
+            // Invoke the specific event for UI controller
+            OnItemPurchaseCompleted?.Invoke(result);
+            
+            return result;
+        }
 
         #endregion
 

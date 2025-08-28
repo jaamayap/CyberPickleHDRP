@@ -47,18 +47,35 @@ namespace CyberPickle.UI.EquipmentHub
         private EquipmentManager equipmentManager;
         private ProfileManager profileManager;
         private List<InventorySlotController> inventorySlots = new List<InventorySlotController>();
-        private Dictionary<string, EquipmentData> inventoryItems = new Dictionary<string, EquipmentData>();
+
+        // This is our source of truth for inventory items
+        private Dictionary<string, InventoryItemData> inventoryItems = new Dictionary<string, InventoryItemData>();
+
         private EquipmentSlotType? currentFilter = null;
         private SortType currentSortType = SortType.Type;
         private bool isInitialized = false;
-
-        // Drag & Drop state
         private InventorySlotController draggedSlot;
         private GameObject draggedIcon;
 
         public event System.Action<EquipmentData> OnItemSelected;
         public event System.Action<EquipmentData> OnItemHovered;
         public event System.Action OnItemHoverExit;
+
+        // Helper class to store item data with quantity
+        [System.Serializable]
+        private class InventoryItemData
+        {
+            public EquipmentData equipment;
+            public int quantity;
+            public int slotIndex; // Track which slot this item is in
+
+            public InventoryItemData(EquipmentData equipment, int quantity = 1, int slotIndex = -1)
+            {
+                this.equipment = equipment;
+                this.quantity = quantity;
+                this.slotIndex = slotIndex;
+            }
+        }
 
         #region Initialization
 
@@ -75,7 +92,6 @@ namespace CyberPickle.UI.EquipmentHub
                 return;
             }
 
-            // Find drag canvas if not assigned
             if (dragCanvas == null)
             {
                 dragCanvas = GetComponentInParent<Canvas>();
@@ -91,7 +107,6 @@ namespace CyberPickle.UI.EquipmentHub
             }
 
             LoadInventory();
-
             isInitialized = true;
         }
 
@@ -118,14 +133,12 @@ namespace CyberPickle.UI.EquipmentHub
         {
             if (inventorySlotPrefab == null || inventoryGrid == null) return;
 
-            // Clear existing slots
             foreach (var slot in inventorySlots)
             {
                 if (slot != null) Destroy(slot.gameObject);
             }
             inventorySlots.Clear();
 
-            // Create new slots
             for (int i = 0; i < maxInventorySlots; i++)
             {
                 GameObject slotObj = Instantiate(inventorySlotPrefab, inventoryGrid);
@@ -140,7 +153,6 @@ namespace CyberPickle.UI.EquipmentHub
                 slotController.Initialize(i, this);
                 inventorySlots.Add(slotController);
 
-                // Fade in animation
                 var canvasGroup = slotObj.GetComponent<CanvasGroup>();
                 if (canvasGroup == null)
                 {
@@ -177,13 +189,12 @@ namespace CyberPickle.UI.EquipmentHub
                 return;
             }
 
-            // Get all unlocked equipment
+            // Get unlocked equipment
             var unlockedEquipment = equipmentManager.GetUnlockedEquipment();
-
-            // Get equipped items to exclude them from inventory
             var equippedItems = equipmentManager.GetEquippedEquipment();
-            var equippedIds = new HashSet<string>();
 
+            // Create a set of equipped item IDs for faster lookup
+            var equippedIds = new HashSet<string>();
             foreach (var slotItems in equippedItems.Values)
             {
                 foreach (var item in slotItems)
@@ -192,13 +203,15 @@ namespace CyberPickle.UI.EquipmentHub
                 }
             }
 
-            // Filter out equipped items
+            // Clear and rebuild inventory items
             inventoryItems.Clear();
             foreach (var equipment in unlockedEquipment)
             {
                 if (!equippedIds.Contains(equipment.equipmentId))
                 {
-                    inventoryItems[equipment.equipmentId] = equipment;
+                    // Get the level/quantity from profile
+                    int level = profile.GetEquipmentLevel(equipment.equipmentId);
+                    inventoryItems[equipment.equipmentId] = new InventoryItemData(equipment, level > 0 ? level : 1);
                 }
             }
 
@@ -213,48 +226,45 @@ namespace CyberPickle.UI.EquipmentHub
                 slot.ClearSlot();
             }
 
-            // Get filtered and sorted items
+            // Get filtered and sorted items from our source of truth
             var itemsToDisplay = GetFilteredAndSortedItems();
 
             // Assign items to slots
             for (int i = 0; i < itemsToDisplay.Count && i < inventorySlots.Count; i++)
             {
-                var equipment = itemsToDisplay[i];
-                var profile = profileManager.ActiveProfile;
-                int level = profile.GetEquipmentLevel(equipment.equipmentId);
-
-                inventorySlots[i].SetItem(equipment, level > 0 ? level : 1);
+                var itemData = itemsToDisplay[i];
+                itemData.slotIndex = i; // Update slot index
+                inventorySlots[i].SetItem(itemData.equipment, itemData.quantity);
             }
 
-            // Update inventory count
             UpdateInventoryCount(itemsToDisplay.Count);
         }
 
-        private List<EquipmentData> GetFilteredAndSortedItems()
+        private List<InventoryItemData> GetFilteredAndSortedItems()
         {
+            // Use the inventoryItems dictionary as source of truth
             var items = inventoryItems.Values.AsEnumerable();
 
             // Apply filter
             if (currentFilter.HasValue)
             {
-                items = items.Where(item => item.slotType == currentFilter.Value);
+                items = items.Where(item => item.equipment.slotType == currentFilter.Value);
             }
 
             // Apply sorting
             switch (currentSortType)
             {
                 case SortType.Name:
-                    items = items.OrderBy(item => item.displayName);
+                    items = items.OrderBy(item => item.equipment.displayName);
                     break;
                 case SortType.Level:
-                    var profile = profileManager.ActiveProfile;
-                    items = items.OrderByDescending(item => profile.GetEquipmentLevel(item.equipmentId));
+                    items = items.OrderByDescending(item => item.quantity);
                     break;
                 case SortType.Type:
-                    items = items.OrderBy(item => item.slotType).ThenBy(item => item.displayName);
+                    items = items.OrderBy(item => item.equipment.slotType)
+                                 .ThenBy(item => item.equipment.displayName);
                     break;
                 case SortType.Recent:
-                    // TODO: Track acquisition time
                     items = items.Reverse();
                     break;
             }
@@ -271,13 +281,25 @@ namespace CyberPickle.UI.EquipmentHub
             currentFilter = type;
             RefreshDisplay();
 
-            // Scroll to top when changing tabs
             if (scrollRect != null)
             {
                 scrollRect.verticalNormalizedPosition = 1f;
             }
         }
+        public void InvokeItemSelected(EquipmentData equipment)
+        {
+            OnItemSelected?.Invoke(equipment);
+        }
 
+        public void InvokeItemHovered(EquipmentData equipment)
+        {
+            OnItemHovered?.Invoke(equipment);
+        }
+
+        public void InvokeItemHoverExit()
+        {
+            OnItemHoverExit?.Invoke();
+        }
         public void FilterByType(EquipmentSlotType type)
         {
             SetActiveTab(type);
@@ -311,47 +333,49 @@ namespace CyberPickle.UI.EquipmentHub
         public void OnItemDragStart(InventorySlotController slot)
         {
             if (slot == null || slot.CurrentEquipment == null) return;
-
-            // The DragDropManager now handles the visual creation
-            // Just store reference if needed for other UI updates
             draggedSlot = slot;
         }
 
         public void OnItemDragEnd()
         {
-            // The DragDropManager handles the visual cleanup
-            // Just clear our reference
             draggedSlot = null;
         }
 
-        public void UpdateDragPosition(Vector2 position)
+        // Called when an item is moved between slots
+        public void OnItemMoved(InventorySlotController fromSlot, InventorySlotController toSlot)
         {
-            // This is now handled by DragDropManager
-            // Method kept for compatibility but no longer needs implementation
-        }
+            if (fromSlot == null || toSlot == null) return;
 
-        private void CreateDragIcon(Sprite icon)
-        {
-            // This is now handled by DragDropManager
-            // Method can be removed or left empty for compatibility
-        }
+            var fromEquipment = fromSlot.CurrentEquipment;
+            var toEquipment = toSlot.CurrentEquipment;
 
-        #endregion
+            if (fromEquipment == null) return;
 
-        #region Inventory Management
-
-        public void AddItemToInventory(EquipmentData equipment)
-        {
-            if (equipment == null) return;
-
-            if (!inventoryItems.ContainsKey(equipment.equipmentId))
+            // Update our inventory items dictionary
+            if (toEquipment == null)
             {
-                inventoryItems[equipment.equipmentId] = equipment;
-                RefreshDisplay();
+                // Moving to empty slot
+                if (inventoryItems.ContainsKey(fromEquipment.equipmentId))
+                {
+                    inventoryItems[fromEquipment.equipmentId].slotIndex = toSlot.SlotIndex;
+                }
+            }
+            else
+            {
+                // Swapping items
+                if (inventoryItems.ContainsKey(fromEquipment.equipmentId))
+                {
+                    inventoryItems[fromEquipment.equipmentId].slotIndex = toSlot.SlotIndex;
+                }
+                if (inventoryItems.ContainsKey(toEquipment.equipmentId))
+                {
+                    inventoryItems[toEquipment.equipmentId].slotIndex = fromSlot.SlotIndex;
+                }
             }
         }
 
-        public void RemoveItemFromInventory(string equipmentId)
+        // Called when an item is removed from inventory (equipped, sold, etc.)
+        public void OnItemRemoved(string equipmentId)
         {
             if (inventoryItems.ContainsKey(equipmentId))
             {
@@ -360,13 +384,53 @@ namespace CyberPickle.UI.EquipmentHub
             }
         }
 
+        // Called when an item is added to inventory
+        public void OnItemAdded(EquipmentData equipment, int quantity = 1)
+        {
+            if (equipment == null) return;
+
+            if (inventoryItems.ContainsKey(equipment.equipmentId))
+            {
+                inventoryItems[equipment.equipmentId].quantity += quantity;
+            }
+            else
+            {
+                inventoryItems[equipment.equipmentId] = new InventoryItemData(equipment, quantity);
+            }
+
+            RefreshDisplay();
+        }
+
+        public void UpdateDragPosition(Vector2 position)
+        {
+            // Implementation for drag visual
+        }
+
+        private void CreateDragIcon(Sprite icon)
+        {
+            // Implementation for drag icon
+        }
+
+        #endregion
+
+        #region Inventory Management
+
+        public void AddItemToInventory(EquipmentData equipment)
+        {
+            OnItemAdded(equipment, 1);
+        }
+
+        public void RemoveItemFromInventory(string equipmentId)
+        {
+            OnItemRemoved(equipmentId);
+        }
+
         private void UpdateInventoryCount(int count)
         {
             if (inventoryCountText != null)
             {
                 inventoryCountText.text = $"{count}/{maxInventorySlots}";
 
-                // Change color if inventory is getting full
                 if (count >= maxInventorySlots * 0.9f)
                 {
                     inventoryCountText.color = Color.red;
@@ -384,41 +448,12 @@ namespace CyberPickle.UI.EquipmentHub
 
         #endregion
 
-        #region Item Interaction
+        #region Public Properties
 
-        public void OnItemClicked(InventorySlotController slot)
-        {
-            if (slot == null || slot.CurrentEquipment == null) return;
-
-            OnItemSelected?.Invoke(slot.CurrentEquipment);
-        }
-
-        public void OnItemHoverEnter(InventorySlotController slot)
-        {
-            if (slot == null || slot.CurrentEquipment == null) return;
-
-            OnItemHovered?.Invoke(slot.CurrentEquipment);
-        }
-
-        public void HandleItemHoverExit(InventorySlotController slot)
-        {
-            OnItemHoverExit?.Invoke();
-        }
-
-        #endregion
-
-        #region Cleanup
-
-        private void OnDestroy()
-        {
-            if (sortDropdown != null)
-            {
-                sortDropdown.onValueChanged.RemoveAllListeners();
-            }
-
-            // Kill any active tweens
-            DOTween.Kill(this);
-        }
+        public int MaxSlots => maxInventorySlots;
+        public int UsedSlots => inventoryItems.Count;
+        public bool IsFull => UsedSlots >= MaxSlots;
+        public InventorySlotController DraggedSlot => draggedSlot;
 
         #endregion
     }

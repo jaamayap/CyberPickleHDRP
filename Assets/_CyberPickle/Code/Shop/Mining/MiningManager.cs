@@ -93,7 +93,7 @@ namespace CyberPickle.Shop.Mining
             Debug.Log("[MiningManager] Initialized successfully");
         }
 
-        private void OnEnable()
+        protected override void OnEnable()
         {
             if (isInitialized)
             {
@@ -102,7 +102,7 @@ namespace CyberPickle.Shop.Mining
             }
         }
 
-        private void OnDisable()
+        protected override void OnDisable()
         {
             CancelInvoke(nameof(UpdateMiningStats));
         }
@@ -341,14 +341,14 @@ namespace CyberPickle.Shop.Mining
         /// Calculate pending earnings from all mining nodes
         /// </summary>
         /// <returns>Total pending CyberCoins</returns>
-        public async Task<float> CalculatePendingEarnings()
+        public Task<float> CalculatePendingEarnings()
         {
             if (!isInitialized)
-                return 0f;
+                return Task.FromResult(0f);
 
             var profile = profileManager.ActiveProfile;
             if (profile == null)
-                return 0f;
+                return Task.FromResult(0f);
 
             float totalEarnings = 0f;
 
@@ -364,7 +364,7 @@ namespace CyberPickle.Shop.Mining
             // Apply performance multiplier
             totalEarnings *= currentPerformanceMultiplier;
 
-            return totalEarnings;
+            return Task.FromResult(totalEarnings);
         }
 
         /// <summary>

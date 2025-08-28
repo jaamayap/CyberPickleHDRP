@@ -91,11 +91,10 @@ namespace CyberPickle.UI.Components.ProfileCard
             RectTransform canvasRect = mainCanvas.GetComponent<RectTransform>();
 
             // Top-right corner positioning
-            float padding = 20f;
-            minimizedPosition = new Vector2(-padding, -padding);
+            minimizedPosition = new Vector2(-cornerPadding, -cornerPadding);
 
             // Expanded position also in top-right
-            float expandedPadding = 40f;
+            float expandedPadding = cornerPadding * 2f;
             expandedPosition = new Vector2(-expandedPadding, -expandedPadding);
         }
 
@@ -326,8 +325,7 @@ namespace CyberPickle.UI.Components.ProfileCard
             cardRect.pivot = Vector2.one;
 
             // Position from top-right corner with padding
-            float padding = 20f;
-            minimizedPosition = new Vector2(-padding, -padding);
+            minimizedPosition = new Vector2(-cornerPadding, -cornerPadding);
         }
 
         private void SetupExpandedCardPosition(RectTransform cardRect)
@@ -338,9 +336,8 @@ namespace CyberPickle.UI.Components.ProfileCard
             cardRect.pivot = new Vector2(1f, 1f);
 
             // Calculate expanded position (still in top-right, but larger)
-            float xPadding = 40f;  // Increased padding for expanded state
-            float yPadding = 40f;
-            expandedPosition = new Vector2(-xPadding, -yPadding);
+            float expandedPadding = cornerPadding * 2f;  // Increased padding for expanded state
+            expandedPosition = new Vector2(-expandedPadding, -expandedPadding);
         }
         private void HandleCardClicked()
         {

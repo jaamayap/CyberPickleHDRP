@@ -40,7 +40,9 @@ namespace CyberPickle.Shop.Equipment
         public event Action<EquipmentData> OnEquipmentEquipped;
         public event Action<EquipmentData> OnEquipmentUnequipped;
         public event Action<EquipmentData> OnEquipmentUnlocked;
+        #pragma warning disable 0067
         public event Action<EquipmentData, int> OnEquipmentUpgraded;
+        #pragma warning restore 0067
 
         // Dependencies
         private ProfileManager profileManager;

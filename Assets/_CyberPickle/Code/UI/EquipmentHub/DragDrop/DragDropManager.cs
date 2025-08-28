@@ -160,7 +160,7 @@ namespace CyberPickle.UI.EquipmentHub.DragDrop
             }
         }
 
-        private void EndDrag(bool successful)
+        public void EndDrag(bool successful)
         {
             ClearHighlightedTargets();
             DestroyDragVisual();

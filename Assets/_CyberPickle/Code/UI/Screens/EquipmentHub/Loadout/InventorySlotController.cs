@@ -1,4 +1,3 @@
-// File: UI/Screens/EquipmentHub/Loadout/InventorySlotController.cs
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -9,50 +8,42 @@ using CyberPickle.UI.EquipmentHub.DragDrop;
 
 namespace CyberPickle.UI.EquipmentHub
 {
-    public class InventorySlotController : MonoBehaviour,
-        IPointerEnterHandler,
-        IPointerExitHandler,
-        IPointerClickHandler,
-        IBeginDragHandler,
-        IDragHandler,
-        IEndDragHandler,
-        IDraggable,
-        IDropTarget,
-        IDropHandler
+    public class InventorySlotController : MonoBehaviour, IDraggable, IDropTarget,
+        IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler,
+        IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
     {
         [Header("UI References")]
         [SerializeField] private Image backgroundImage;
         [SerializeField] private Image itemIcon;
         [SerializeField] private TextMeshProUGUI quantityText;
         [SerializeField] private GameObject highlightBorder;
-        [SerializeField] private CanvasGroup canvasGroup;
 
         [Header("Visual Settings")]
+        [SerializeField] private float hoverScale = 1.05f;
+        [SerializeField] private Color hoverColor = new Color(0.4f, 0.4f, 0.4f, 1f);
         [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
         [SerializeField] private Color occupiedSlotColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-        [SerializeField] private Color hoverColor = new Color(0.4f, 0.4f, 0.4f, 1f);
-        [SerializeField] private float hoverScale = 1.05f;
-        [SerializeField] private float clickScale = 0.95f;
 
-        private InventoryUIController inventoryController;
-        private EquipmentData currentEquipment;
-        private int currentQuantity = 1;
-        private bool isOccupied = false;
-        private bool isDragging = false;
-        private Vector3 originalScale;
-        private DragDropManager dragDropManager;
         private int slotIndex;
+        private EquipmentData currentEquipment;
+        private int currentQuantity;
+        private bool isOccupied;
+        private bool isDragging;
+        private Vector3 originalScale;
+        private CanvasGroup canvasGroup;
+        private InventoryUIController inventoryController;
+        private DragDropManager dragDropManager;
+
+        public int SlotIndex => slotIndex;
         public EquipmentData CurrentEquipment => currentEquipment;
-        public bool IsOccupied => isOccupied;
         public int Quantity => currentQuantity;
+        public bool IsOccupied => isOccupied;
 
         #region Initialization
 
         private void Awake()
         {
-            if (canvasGroup == null)
-                canvasGroup = GetComponent<CanvasGroup>();
-
+            canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup == null)
                 canvasGroup = gameObject.AddComponent<CanvasGroup>();
 
@@ -72,16 +63,31 @@ namespace CyberPickle.UI.EquipmentHub
             inventoryController = controller;
             SetEmpty();
 
-            // Cache components
             if (backgroundImage == null) backgroundImage = GetComponent<Image>();
             if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
-            originalScale = transform.localScale;
 
-            // Hide optional elements
+            originalScale = transform.localScale;
             if (highlightBorder != null) highlightBorder.SetActive(false);
-            // If you use rarityGlow, handle it here as well.
         }
+
+        public void OnDrop(PointerEventData eventData)
+        {
+            // This is called when something is dropped on this slot
+            // The actual drop handling is done through DragDropManager
+            if (dragDropManager != null && dragDropManager.IsDragging())
+            {
+                var draggable = dragDropManager.GetCurrentDraggable();
+                if (draggable != null && CanAcceptDrop(draggable))
+                {
+                    OnDropPreview(draggable);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Slot Management
 
         public void SetItem(EquipmentData equipment, int quantity = 1)
         {
@@ -143,35 +149,81 @@ namespace CyberPickle.UI.EquipmentHub
 
         #endregion
 
-        #region IDraggable Implementation
+        #region Drag & Drop Implementation
 
-        public EquipmentData GetDraggedEquipment() => currentEquipment;
-
-        public DragSourceType GetDragSourceType() => DragSourceType.Inventory;
-
-        public bool CanDrag() => isOccupied && currentEquipment != null;
-
-        public void OnDragStarted()
+        public void OnBeginDrag(PointerEventData eventData)
         {
-            canvasGroup.alpha = 0.6f;
-            canvasGroup.blocksRaycasts = false;
-            inventoryController?.OnItemDragStart(this);
+            if (!isOccupied || currentEquipment == null) return;
+
+            if (dragDropManager == null)
+            {
+                dragDropManager = DragDropManager.Instance;
+            }
+
+            if (dragDropManager != null && dragDropManager.StartDrag(this, eventData.position))
+            {
+                isDragging = true;
+                canvasGroup.alpha = 0.6f;
+                canvasGroup.blocksRaycasts = false;
+                inventoryController?.OnItemDragStart(this);
+            }
         }
 
-        public void OnDragEnded(bool successful)
+        public void OnDrag(PointerEventData eventData)
         {
+            if (!isDragging || dragDropManager == null) return;
+            dragDropManager.UpdateDrag(eventData.position);
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            if (!isDragging) return;
+
+            isDragging = false;
             canvasGroup.alpha = 1f;
             canvasGroup.blocksRaycasts = true;
 
-            if (!successful)
+            inventoryController?.OnItemDragEnd();
+
+            if (dragDropManager != null)
             {
-                // Shake animation for failed drop
+                // Let DragDropManager handle the drop detection
+                GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
+                if (dropTarget != null)
+                {
+                    var dropTargetComponent = dropTarget.GetComponentInParent<IDropTarget>();
+                    if (dropTargetComponent != null && !ReferenceEquals(dropTargetComponent, this))
+                    {
+                        dragDropManager.CompleteDrop(dropTargetComponent, eventData.position);
+                        return;
+                    }
+
+                }
+
+                dragDropManager.CancelDrag();
                 transform.DOShakePosition(0.3f, 5f, 10, 90, false, true);
             }
         }
 
-        public Sprite GetDragIcon() => itemIcon?.sprite;
+        #endregion
 
+        #region IDraggable Implementation
+
+        public EquipmentData GetDraggedEquipment() => currentEquipment;
+        public DragSourceType GetDragSourceType() => DragSourceType.Inventory;
+        public bool CanDrag() => isOccupied && currentEquipment != null;
+
+        public void OnDragStarted()
+        {
+            // Already handled in OnBeginDrag
+        }
+
+        public void OnDragEnded(bool successful)
+        {
+            // Already handled in OnEndDrag
+        }
+
+        public Sprite GetDragIcon() => itemIcon?.sprite;
         public GameObject GetSourceObject() => gameObject;
 
         #endregion
@@ -182,18 +234,32 @@ namespace CyberPickle.UI.EquipmentHub
 
         public bool CanAcceptDrop(IDraggable draggable)
         {
-            // Inventory slots can accept items from anywhere if empty
-            // Or if the dragged item can stack with current item
-            if (!isOccupied) return true;
+            if (draggable == null) return false;
+
+            // Can't drop on self
+            if (draggable.GetSourceObject() == gameObject) return false;
 
             var draggedEquipment = draggable.GetDraggedEquipment();
-            if (draggedEquipment != null && currentEquipment != null)
-            {
-                // Check if items can stack (same equipment ID)
-                return draggedEquipment.equipmentId == currentEquipment.equipmentId;
-            }
+            if (draggedEquipment == null) return false;
 
-            return false;
+            switch (draggable.GetDragSourceType())
+            {
+                case DragSourceType.Inventory:
+                    // Always allow inventory-to-inventory drops
+                    return true;
+
+                case DragSourceType.Equipment:
+                    // Allow unequipping to inventory if there's space
+                    return !isOccupied || (currentEquipment != null &&
+                           currentEquipment.equipmentId == draggedEquipment.equipmentId);
+
+                case DragSourceType.Shop:
+                    // Don't allow direct shop drops
+                    return false;
+
+                default:
+                    return false;
+            }
         }
 
         public void OnDropPreview(IDraggable draggable)
@@ -216,69 +282,89 @@ namespace CyberPickle.UI.EquipmentHub
 
         public bool OnDropReceived(IDraggable draggable)
         {
+            if (draggable == null) return false;
+
             var draggedEquipment = draggable.GetDraggedEquipment();
             if (draggedEquipment == null) return false;
 
-            // Handle different source types
             switch (draggable.GetDragSourceType())
             {
-                case DragSourceType.Shop:
-                    // This will be handled by shop purchase logic
-                    return false;
+                case DragSourceType.Inventory:
+                    return HandleInventoryToInventoryDrop(draggable);
 
                 case DragSourceType.Equipment:
-                    // Unequipping to inventory
-                    if (!isOccupied)
-                    {
-                        SetItem(draggedEquipment);
-                        return true;
-                    }
-                    break;
+                    return HandleEquipmentToInventoryDrop(draggable);
 
-                case DragSourceType.Inventory:
-                    // Rearranging or stacking
-                    if (!isOccupied)
-                    {
-                        // Move to empty slot
-                        SetItem(draggedEquipment, 1);
-                        if (draggable is InventorySlotController sourceSlot)
-                        {
-                            sourceSlot.SetEmpty();
-                        }
-                        return true;
-                    }
-                    else if (currentEquipment.equipmentId == draggedEquipment.equipmentId)
-                    {
-                        // Stack items
-                        currentQuantity++;
-                        quantityText.text = currentQuantity.ToString();
-                        quantityText.enabled = true;
-                        if (draggable is InventorySlotController sourceSlot)
-                        {
-                            sourceSlot.SetEmpty();
-                        }
-                        return true;
-                    }
-                    else
-                    {
-                        // Swap items
-                        if (draggable is InventorySlotController sourceSlot)
-                        {
-                            var tempEquipment = currentEquipment;
-                            var tempQuantity = currentQuantity;
-                            SetItem(draggedEquipment, sourceSlot.Quantity);
-                            sourceSlot.SetItem(tempEquipment, tempQuantity);
-                            return true;
-                        }
-                    }
-                    break;
+                default:
+                    return false;
+            }
+        }
+
+        private bool HandleInventoryToInventoryDrop(IDraggable draggable)
+        {
+            if (!(draggable is InventorySlotController sourceSlot)) return false;
+
+            var draggedEquipment = sourceSlot.CurrentEquipment;
+            var draggedQuantity = sourceSlot.Quantity;
+
+            if (!isOccupied)
+            {
+                // Moving to empty slot
+                SetItem(draggedEquipment, draggedQuantity);
+                sourceSlot.SetEmpty();
+                inventoryController?.OnItemMoved(sourceSlot, this);
+                return true;
+            }
+            else if (currentEquipment != null && draggedEquipment != null &&
+                     currentEquipment.equipmentId == draggedEquipment.equipmentId)
+            {
+                // Stacking same items
+                currentQuantity += draggedQuantity;
+                quantityText.text = currentQuantity.ToString();
+                quantityText.enabled = true;
+                sourceSlot.SetEmpty();
+                inventoryController?.OnItemMoved(sourceSlot, this);
+                return true;
+            }
+            else
+            {
+                // Swapping different items
+                var tempEquipment = currentEquipment;
+                var tempQuantity = currentQuantity;
+
+                SetItem(draggedEquipment, draggedQuantity);
+                sourceSlot.SetItem(tempEquipment, tempQuantity);
+                inventoryController?.OnItemMoved(sourceSlot, this);
+                return true;
+            }
+        }
+
+        private bool HandleEquipmentToInventoryDrop(IDraggable draggable)
+        {
+            var draggedEquipment = draggable.GetDraggedEquipment();
+
+            if (!isOccupied)
+            {
+                // Unequipping to empty slot
+                SetItem(draggedEquipment, 1);
+                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                return true;
+            }
+            else if (currentEquipment != null && draggedEquipment != null &&
+                     currentEquipment.equipmentId == draggedEquipment.equipmentId)
+            {
+                // Stacking same equipment
+                currentQuantity++;
+                quantityText.text = currentQuantity.ToString();
+                quantityText.enabled = true;
+                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                return true;
             }
 
             return false;
         }
 
         public EquipmentData GetCurrentEquipment() => currentEquipment;
-
         public GameObject GetTargetObject() => gameObject;
 
         #endregion
@@ -290,19 +376,11 @@ namespace CyberPickle.UI.EquipmentHub
             if (!isDragging)
             {
                 transform.DOScale(originalScale * hoverScale, 0.2f);
-                if (backgroundImage != null)
+                if (isOccupied && currentEquipment != null)
                 {
-                    var targetColor = isOccupied ? hoverColor : emptySlotColor;
-                    backgroundImage.DOColor(targetColor, 0.2f);
+                    inventoryController?.InvokeItemHovered(currentEquipment);
                 }
             }
-
-            if (highlightBorder != null && isOccupied)
-            {
-                highlightBorder.SetActive(true);
-            }
-
-            inventoryController?.OnItemHoverEnter(this);
         }
 
         public void OnPointerExit(PointerEventData eventData)
@@ -310,115 +388,18 @@ namespace CyberPickle.UI.EquipmentHub
             if (!isDragging)
             {
                 transform.DOScale(originalScale, 0.2f);
-                if (backgroundImage != null)
-                {
-                    var targetColor = isOccupied ? occupiedSlotColor : emptySlotColor;
-                    backgroundImage.DOColor(targetColor, 0.2f);
-                }
+                inventoryController?.InvokeItemHoverExit();
             }
-
-            if (highlightBorder != null)
-            {
-                highlightBorder.SetActive(false);
-            }
-
-            inventoryController?.HandleItemHoverExit(this);
         }
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (!isOccupied || currentEquipment == null) return;
-
-            if (eventData.button == PointerEventData.InputButton.Left)
+            if (isOccupied && currentEquipment != null && eventData.button == PointerEventData.InputButton.Left)
             {
-                transform.DOScale(originalScale * clickScale, 0.1f)
-                    .OnComplete(() => transform.DOScale(originalScale, 0.1f));
-                inventoryController?.OnItemClicked(this);
-            }
-            else if (eventData.button == PointerEventData.InputButton.Right)
-            {
-                // TODO: Implement quick equip
+                inventoryController?.InvokeItemSelected(currentEquipment);
             }
         }
 
         #endregion
-
-        #region Drag & Drop Events
-
-        public void OnBeginDrag(PointerEventData eventData)
-        {
-            if (!isOccupied || currentEquipment == null || dragDropManager == null) return;
-
-            isDragging = dragDropManager.StartDrag(this, eventData.position);
-        }
-
-        public void OnDrag(PointerEventData eventData)
-        {
-            if (isDragging && dragDropManager != null)
-            {
-                dragDropManager.UpdateDrag(eventData.position);
-            }
-        }
-
-        public void OnEndDrag(PointerEventData eventData)
-        {
-            if (!isDragging || dragDropManager == null) return;
-
-            isDragging = false;
-
-            // Try to find drop target
-            GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
-            if (dropTarget != null)
-            {
-                var dropTargetComponent = dropTarget.GetComponentInParent<IDropTarget>();
-                if (dropTargetComponent != null)
-                {
-                    dragDropManager.CompleteDrop(dropTargetComponent, eventData.position);
-                    return;
-                }
-            }
-
-            dragDropManager.CancelDrag();
-        }
-
-        public void OnDrop(PointerEventData eventData)
-        {
-            // Handle as drop target
-            if (dragDropManager != null && dragDropManager.IsDragging())
-            {
-                var draggable = dragDropManager.GetCurrentDraggable();
-                if (draggable != null && CanAcceptDrop(draggable))
-                {
-                    OnDropPreview(draggable);
-                }
-            }
-        }
-
-        #endregion
-
-        #region Visual Effects
-
-        public void PlayEquipAnimation()
-        {
-            if (backgroundImage != null)
-            {
-                backgroundImage.DOColor(Color.white, 0.1f)
-                    .OnComplete(() => backgroundImage.DOColor(occupiedSlotColor, 0.2f));
-            }
-
-            transform.DOPunchScale(Vector3.one * 0.2f, 0.3f, 5);
-        }
-
-        public void PlayErrorAnimation()
-        {
-            transform.DOShakePosition(0.3f, 10f, 10, 90, false, true);
-        }
-
-        #endregion
-
-        private void OnDestroy()
-        {
-            DOTween.Kill(this);
-        }
     }
 }

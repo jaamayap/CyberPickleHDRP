@@ -35,7 +35,6 @@ namespace CyberPickle.Core.Camera
         [SerializeField] private bool enableMenuIdleAnimation = false; // Set to false by default
         [SerializeField] private bool enableCharacterSelectIdleAnimation = true;
 
-
         [Header("Camera Settings")]
         [SerializeField] private float defaultFieldOfView = 60f;
         public Transform CharacterSelectCameraPosition => characterSelectCameraPosition;
@@ -94,6 +93,7 @@ namespace CyberPickle.Core.Camera
             {
                 mainCamera.transform.position = menuCameraPosition.position;
                 mainCamera.transform.rotation = menuCameraPosition.rotation;
+                mainCamera.fieldOfView = defaultFieldOfView;
 
                 if (enableMenuIdleAnimation)
                 {
@@ -202,6 +202,12 @@ namespace CyberPickle.Core.Camera
 
         private void StartCharacterSelectIdleAnimation()
         {
+            if (!enableCharacterSelectIdleAnimation)
+            {
+                Debug.Log("[CameraManager] Character select idle animation disabled");
+                return;
+            }
+
             StopIdleAnimation();
             idleAnimationCoroutine = StartCoroutine(CharacterSelectIdleAnimationRoutine());
         }

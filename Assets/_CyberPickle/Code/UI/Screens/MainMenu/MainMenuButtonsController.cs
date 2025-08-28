@@ -110,7 +110,13 @@ namespace CyberPickle.UI.Screens.MainMenu
             if (newState == GameState.MainMenu)
             {
                 Debug.Log("[MainMenuButtonsController] Transitioning to MainMenu state");
+                isTransitioning = false;
                 ForceActivateButtons();
+            }
+            else
+            {
+                isTransitioning = true;
+                SetButtonsInteractable(false);
             }
         }
 
@@ -192,9 +198,15 @@ namespace CyberPickle.UI.Screens.MainMenu
 
         private void OnStartClicked()
         {
+            if (isTransitioning) return;
+            
             Debug.Log("[MainMenuButtonsController] Start button clicked");
             Debug.Log($"[MainMenu] Starting character select. Active profile: {ProfileManager.Instance.ActiveProfile?.ProfileId}");
-            GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);            
+            
+            isTransitioning = true;
+            SetButtonsInteractable(false);
+            
+            GameEvents.OnGameStateChanged.Invoke(GameState.CharacterSelect);
         }
 
         private void OnOptionsClicked()
