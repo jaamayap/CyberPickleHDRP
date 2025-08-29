@@ -35,6 +35,7 @@ namespace CyberPickle.UI.EquipmentHub
         private Button button;
         private InventoryUIController inventoryController;
         private DragDropManager dragDropManager;
+        private CanvasGroup canvasGroup;
 
         public int SlotIndex => slotIndex;
         public EquipmentData CurrentEquipment => currentEquipment;
@@ -64,7 +65,6 @@ namespace CyberPickle.UI.EquipmentHub
 
             if (backgroundImage == null) backgroundImage = GetComponent<Image>();
             if (button == null) button = GetComponent<Button>();
-
             originalScale = transform.localScale;
             if (highlightBorder != null) highlightBorder.SetActive(false);
         }
@@ -221,18 +221,14 @@ namespace CyberPickle.UI.EquipmentHub
             {
                 isDragging = true;
                 
-                // Use Image alpha for visual feedback instead of CanvasGroup
-                if (backgroundImage != null)
+                // Create CanvasGroup only for drag visual feedback
+                canvasGroup = GetComponent<CanvasGroup>();
+                if (canvasGroup == null)
                 {
-                    var color = backgroundImage.color;
-                    backgroundImage.color = new Color(color.r, color.g, color.b, 0.6f);
+                    canvasGroup = gameObject.AddComponent<CanvasGroup>();
                 }
-                
-                // Disable button interaction during drag
-                if (button != null)
-                {
-                    button.interactable = false;
-                }
+                canvasGroup.alpha = 0.6f;
+                canvasGroup.blocksRaycasts = false;
                 
                 inventoryController?.OnItemDragStart(this);
             }
@@ -250,17 +246,11 @@ namespace CyberPickle.UI.EquipmentHub
 
             isDragging = false;
             
-            // Restore Image alpha
-            if (backgroundImage != null)
+            // Clean up CanvasGroup used for drag feedback
+            if (canvasGroup != null)
             {
-                var color = backgroundImage.color;
-                backgroundImage.color = new Color(color.r, color.g, color.b, 1f);
-            }
-            
-            // Re-enable button interaction
-            if (button != null)
-            {
-                button.interactable = true;
+                DestroyImmediate(canvasGroup);
+                canvasGroup = null;
             }
             
             // Clear any lingering highlight border
