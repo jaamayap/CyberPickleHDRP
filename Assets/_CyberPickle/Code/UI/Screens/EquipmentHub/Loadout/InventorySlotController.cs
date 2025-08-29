@@ -345,20 +345,35 @@ namespace CyberPickle.UI.EquipmentHub
 
             if (!isOccupied)
             {
-                // Unequipping to empty slot
+                // Unequipping to empty slot - update visual and data without refresh
                 SetItem(draggedEquipment, 1);
-                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                inventoryController?.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
                 return true;
             }
             else if (currentEquipment != null && draggedEquipment != null &&
                      currentEquipment.equipmentId == draggedEquipment.equipmentId)
             {
-                // Stacking same equipment
+                // Stacking same equipment - update visual and data without refresh
                 currentQuantity++;
                 quantityText.text = currentQuantity.ToString();
                 quantityText.enabled = true;
-                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                inventoryController?.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
                 return true;
+            }
+            else
+            {
+                // Slot is occupied with different equipment - try to find an empty slot
+                if (inventoryController != null)
+                {
+                    var emptySlot = inventoryController.FindFirstEmptySlot();
+                    if (emptySlot != null && emptySlot != this)
+                    {
+                        // Place in the empty slot instead - update visual and data without refresh
+                        emptySlot.SetItem(draggedEquipment, 1);
+                        inventoryController.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
+                        return true;
+                    }
+                }
             }
 
             return false;

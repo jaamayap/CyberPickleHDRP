@@ -335,7 +335,11 @@ namespace CyberPickle.UI.EquipmentHub.DragDrop
         private bool ValidateEquipmentToInventory(IDraggable draggable, IDropTarget target)
         {
             // Equipment can always be unequipped to inventory
-            return target.GetCurrentEquipment() == null; // Target slot must be empty
+            if (target is InventorySlotController inventorySlot)
+            {
+                return !inventorySlot.IsOccupied || inventorySlot.CanAcceptDrop(draggable);
+            }
+            return false;
         }
 
         private bool ValidateInventoryToInventory(IDraggable draggable, IDropTarget target)
