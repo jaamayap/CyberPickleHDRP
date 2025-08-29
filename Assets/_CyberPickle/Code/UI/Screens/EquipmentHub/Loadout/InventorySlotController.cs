@@ -16,7 +16,9 @@ namespace CyberPickle.UI.EquipmentHub
         [SerializeField] private Image backgroundImage;
         [SerializeField] private Image itemIcon;
         [SerializeField] private TextMeshProUGUI quantityText;
+        [SerializeField] private TextMeshProUGUI levelText;
         [SerializeField] private GameObject highlightBorder;
+        [SerializeField] private GameObject rarityGlow;
 
         [Header("Visual Settings")]
         [SerializeField] private float hoverScale = 1.05f;
@@ -30,7 +32,7 @@ namespace CyberPickle.UI.EquipmentHub
         private bool isOccupied;
         private bool isDragging;
         private Vector3 originalScale;
-        private CanvasGroup canvasGroup;
+        private Button button;
         private InventoryUIController inventoryController;
         private DragDropManager dragDropManager;
 
@@ -43,12 +45,9 @@ namespace CyberPickle.UI.EquipmentHub
 
         private void Awake()
         {
-            canvasGroup = GetComponent<CanvasGroup>();
-            if (canvasGroup == null)
-                canvasGroup = gameObject.AddComponent<CanvasGroup>();
-
+            button = GetComponent<Button>();
             originalScale = transform.localScale;
-            SetEmpty();
+            SetEmpty(false); // Don't animate during initialization
         }
 
         private void Start()
@@ -61,11 +60,10 @@ namespace CyberPickle.UI.EquipmentHub
         {
             slotIndex = index;
             inventoryController = controller;
-            SetEmpty();
+            SetEmpty(false); // Don't animate during initialization
 
             if (backgroundImage == null) backgroundImage = GetComponent<Image>();
-            if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
-            if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            if (button == null) button = GetComponent<Button>();
 
             originalScale = transform.localScale;
             if (highlightBorder != null) highlightBorder.SetActive(false);
@@ -91,9 +89,14 @@ namespace CyberPickle.UI.EquipmentHub
 
         public void SetItem(EquipmentData equipment, int quantity = 1)
         {
+            SetItem(equipment, quantity, true);
+        }
+
+        public void SetItem(EquipmentData equipment, int quantity, bool animate)
+        {
             if (equipment == null)
             {
-                SetEmpty();
+                SetEmpty(animate);
                 return;
             }
 
@@ -105,7 +108,15 @@ namespace CyberPickle.UI.EquipmentHub
             {
                 itemIcon.sprite = equipment.equipmentIcon;
                 itemIcon.enabled = true;
-                itemIcon.DOFade(1f, 0.2f);
+                if (animate)
+                {
+                    itemIcon.DOFade(1f, 0.2f);
+                }
+                else
+                {
+                    var color = itemIcon.color;
+                    itemIcon.color = new Color(color.r, color.g, color.b, 1f);
+                }
             }
 
             if (quantityText != null)
@@ -113,14 +124,38 @@ namespace CyberPickle.UI.EquipmentHub
                 quantityText.text = quantity > 1 ? quantity.ToString() : "";
                 quantityText.enabled = quantity > 1;
             }
+            
+            if (levelText != null)
+            {
+                levelText.gameObject.SetActive(true);
+                levelText.text = $"Lv.{equipment.requiredPlayerLevel}";
+            }
+            
+            if (rarityGlow != null)
+            {
+                rarityGlow.SetActive(true);
+                // You can add rarity-based color logic here if needed
+            }
 
             if (backgroundImage != null)
             {
-                backgroundImage.DOColor(occupiedSlotColor, 0.2f);
+                if (animate)
+                {
+                    backgroundImage.DOColor(occupiedSlotColor, 0.2f);
+                }
+                else
+                {
+                    backgroundImage.color = occupiedSlotColor;
+                }
             }
         }
 
         public void SetEmpty()
+        {
+            SetEmpty(true);
+        }
+
+        public void SetEmpty(bool animate = true)
         {
             currentEquipment = null;
             currentQuantity = 0;
@@ -135,16 +170,38 @@ namespace CyberPickle.UI.EquipmentHub
             {
                 quantityText.enabled = false;
             }
+            
+            if (levelText != null)
+            {
+                levelText.gameObject.SetActive(false);
+            }
+            
+            if (rarityGlow != null)
+            {
+                rarityGlow.SetActive(false);
+            }
 
             if (backgroundImage != null)
             {
-                backgroundImage.DOColor(emptySlotColor, 0.2f);
+                if (animate)
+                {
+                    backgroundImage.DOColor(emptySlotColor, 0.2f);
+                }
+                else
+                {
+                    backgroundImage.color = emptySlotColor;
+                }
             }
         }
 
         public void ClearSlot()
         {
             SetEmpty();
+        }
+
+        public void ClearSlot(bool animate)
+        {
+            SetEmpty(animate);
         }
 
         #endregion
@@ -163,8 +220,20 @@ namespace CyberPickle.UI.EquipmentHub
             if (dragDropManager != null && dragDropManager.StartDrag(this, eventData.position))
             {
                 isDragging = true;
-                canvasGroup.alpha = 0.6f;
-                canvasGroup.blocksRaycasts = false;
+                
+                // Use Image alpha for visual feedback instead of CanvasGroup
+                if (backgroundImage != null)
+                {
+                    var color = backgroundImage.color;
+                    backgroundImage.color = new Color(color.r, color.g, color.b, 0.6f);
+                }
+                
+                // Disable button interaction during drag
+                if (button != null)
+                {
+                    button.interactable = false;
+                }
+                
                 inventoryController?.OnItemDragStart(this);
             }
         }
@@ -180,8 +249,25 @@ namespace CyberPickle.UI.EquipmentHub
             if (!isDragging) return;
 
             isDragging = false;
-            canvasGroup.alpha = 1f;
-            canvasGroup.blocksRaycasts = true;
+            
+            // Restore Image alpha
+            if (backgroundImage != null)
+            {
+                var color = backgroundImage.color;
+                backgroundImage.color = new Color(color.r, color.g, color.b, 1f);
+            }
+            
+            // Re-enable button interaction
+            if (button != null)
+            {
+                button.interactable = true;
+            }
+            
+            // Clear any lingering highlight border
+            if (highlightBorder != null)
+            {
+                highlightBorder.SetActive(false);
+            }
 
             inventoryController?.OnItemDragEnd();
 

@@ -36,7 +36,6 @@ namespace CyberPickle.UI.EquipmentHub
         [SerializeField] private float slotSpacing = 10f;
 
         [Header("Visual Settings")]
-        [SerializeField] private float fadeInDuration = 0.3f;
         [SerializeField] private Color emptySlotColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
         [SerializeField] private Color occupiedSlotColor = new Color(0.3f, 0.3f, 0.3f, 1f);
 
@@ -83,9 +82,6 @@ namespace CyberPickle.UI.EquipmentHub
         {
             if (isInitialized) return;
 
-            // Set DOTween capacity to handle inventory animations without auto-resizing
-            DOTween.SetTweensCapacity(500, 100);
-
             equipmentManager = EquipmentManager.Instance;
             profileManager = ProfileManager.Instance;
 
@@ -112,7 +108,7 @@ namespace CyberPickle.UI.EquipmentHub
                 tabController.Initialize(this);
             }
 
-            LoadInventory();
+            LoadInventory(false); // Don't animate during initialization  
             isInitialized = true;
         }
 
@@ -163,35 +159,9 @@ namespace CyberPickle.UI.EquipmentHub
 
                 slotController.Initialize(i, this);
                 inventorySlots.Add(slotController);
-
-                var canvasGroup = slotObj.GetComponent<CanvasGroup>();
-                if (canvasGroup == null)
-                {
-                    canvasGroup = slotObj.AddComponent<CanvasGroup>();
-                }
-                canvasGroup.alpha = 0f;
             }
-            
-            // Animate all slots with a single sequence for better performance
-            AnimateSlotFadeIn();
         }
 
-        private void AnimateSlotFadeIn()
-        {
-            var sequence = DOTween.Sequence();
-            
-            for (int i = 0; i < inventorySlots.Count; i++)
-            {
-                var slot = inventorySlots[i];
-                var canvasGroup = slot.GetComponent<CanvasGroup>();
-                if (canvasGroup != null)
-                {
-                    sequence.Insert(i * 0.01f, canvasGroup.DOFade(1f, fadeInDuration));
-                }
-            }
-            
-            sequence.Play();
-        }
 
         private void SetupSortDropdown()
         {
@@ -210,7 +180,12 @@ namespace CyberPickle.UI.EquipmentHub
 
         public void LoadInventory()
         {
-            if (!isInitialized) return;
+            LoadInventory(true);
+        }
+
+        public void LoadInventory(bool animate)
+        {
+            if (!isInitialized && animate) return; // Allow non-animated loading during initialization
 
             var profile = profileManager.ActiveProfile;
             if (profile == null)
@@ -251,15 +226,20 @@ namespace CyberPickle.UI.EquipmentHub
                 }
             }
 
-            RefreshDisplay();
+            RefreshDisplay(animate);
         }
 
         public void RefreshDisplay()
         {
+            RefreshDisplay(true);
+        }
+
+        public void RefreshDisplay(bool animate)
+        {
             // Clear all slots first
             foreach (var slot in inventorySlots)
             {
-                slot.ClearSlot();
+                slot.ClearSlot(animate);
             }
 
             // Assign items to slots based on their actual positions
