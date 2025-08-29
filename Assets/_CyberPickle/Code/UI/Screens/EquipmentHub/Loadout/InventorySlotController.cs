@@ -46,7 +46,6 @@ namespace CyberPickle.UI.EquipmentHub
 
         private void Awake()
         {
-            button = GetComponent<Button>();
             originalScale = transform.localScale;
             SetEmpty(false); // Don't animate during initialization
         }
@@ -64,7 +63,6 @@ namespace CyberPickle.UI.EquipmentHub
             SetEmpty(false); // Don't animate during initialization
 
             if (backgroundImage == null) backgroundImage = GetComponent<Image>();
-            if (button == null) button = GetComponent<Button>();
             originalScale = transform.localScale;
             if (highlightBorder != null) highlightBorder.SetActive(false);
         }
@@ -251,12 +249,6 @@ namespace CyberPickle.UI.EquipmentHub
             {
                 DestroyImmediate(canvasGroup);
                 canvasGroup = null;
-            }
-            
-            // Clear any lingering highlight border
-            if (highlightBorder != null)
-            {
-                highlightBorder.SetActive(false);
             }
 
             inventoryController?.OnItemDragEnd();

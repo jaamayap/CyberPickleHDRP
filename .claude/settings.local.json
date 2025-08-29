@@ -4,7 +4,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(grep:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(git stash show:*)",
+      "Bash(git stash pop:*)"
     ],
     "deny": [],
     "ask": []
