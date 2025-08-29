@@ -179,6 +179,12 @@ namespace CyberPickle.UI.EquipmentHub
                 rarityGlow.SetActive(false);
             }
 
+            // Clear highlight border when slot becomes empty
+            if (highlightBorder != null)
+            {
+                highlightBorder.SetActive(false);
+            }
+
             if (backgroundImage != null)
             {
                 if (animate)
