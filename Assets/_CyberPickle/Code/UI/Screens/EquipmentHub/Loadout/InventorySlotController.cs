@@ -16,7 +16,9 @@ namespace CyberPickle.UI.EquipmentHub
         [SerializeField] private Image backgroundImage;
         [SerializeField] private Image itemIcon;
         [SerializeField] private TextMeshProUGUI quantityText;
+        [SerializeField] private TextMeshProUGUI levelText;
         [SerializeField] private GameObject highlightBorder;
+        [SerializeField] private GameObject rarityGlow;
 
         [Header("Visual Settings")]
         [SerializeField] private float hoverScale = 1.05f;
@@ -30,9 +32,10 @@ namespace CyberPickle.UI.EquipmentHub
         private bool isOccupied;
         private bool isDragging;
         private Vector3 originalScale;
-        private CanvasGroup canvasGroup;
+        private Button button;
         private InventoryUIController inventoryController;
         private DragDropManager dragDropManager;
+        private CanvasGroup canvasGroup;
 
         public int SlotIndex => slotIndex;
         public EquipmentData CurrentEquipment => currentEquipment;
@@ -43,12 +46,8 @@ namespace CyberPickle.UI.EquipmentHub
 
         private void Awake()
         {
-            canvasGroup = GetComponent<CanvasGroup>();
-            if (canvasGroup == null)
-                canvasGroup = gameObject.AddComponent<CanvasGroup>();
-
             originalScale = transform.localScale;
-            SetEmpty();
+            SetEmpty(false); // Don't animate during initialization
         }
 
         private void Start()
@@ -61,12 +60,9 @@ namespace CyberPickle.UI.EquipmentHub
         {
             slotIndex = index;
             inventoryController = controller;
-            SetEmpty();
+            SetEmpty(false); // Don't animate during initialization
 
             if (backgroundImage == null) backgroundImage = GetComponent<Image>();
-            if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
-            if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
-
             originalScale = transform.localScale;
             if (highlightBorder != null) highlightBorder.SetActive(false);
         }
@@ -91,9 +87,14 @@ namespace CyberPickle.UI.EquipmentHub
 
         public void SetItem(EquipmentData equipment, int quantity = 1)
         {
+            SetItem(equipment, quantity, true);
+        }
+
+        public void SetItem(EquipmentData equipment, int quantity, bool animate)
+        {
             if (equipment == null)
             {
-                SetEmpty();
+                SetEmpty(animate);
                 return;
             }
 
@@ -105,7 +106,15 @@ namespace CyberPickle.UI.EquipmentHub
             {
                 itemIcon.sprite = equipment.equipmentIcon;
                 itemIcon.enabled = true;
-                itemIcon.DOFade(1f, 0.2f);
+                if (animate)
+                {
+                    itemIcon.DOFade(1f, 0.2f);
+                }
+                else
+                {
+                    var color = itemIcon.color;
+                    itemIcon.color = new Color(color.r, color.g, color.b, 1f);
+                }
             }
 
             if (quantityText != null)
@@ -113,14 +122,38 @@ namespace CyberPickle.UI.EquipmentHub
                 quantityText.text = quantity > 1 ? quantity.ToString() : "";
                 quantityText.enabled = quantity > 1;
             }
+            
+            if (levelText != null)
+            {
+                levelText.gameObject.SetActive(true);
+                levelText.text = $"Lv.{equipment.requiredPlayerLevel}";
+            }
+            
+            if (rarityGlow != null)
+            {
+                rarityGlow.SetActive(true);
+                // You can add rarity-based color logic here if needed
+            }
 
             if (backgroundImage != null)
             {
-                backgroundImage.DOColor(occupiedSlotColor, 0.2f);
+                if (animate)
+                {
+                    backgroundImage.DOColor(occupiedSlotColor, 0.2f);
+                }
+                else
+                {
+                    backgroundImage.color = occupiedSlotColor;
+                }
             }
         }
 
         public void SetEmpty()
+        {
+            SetEmpty(true);
+        }
+
+        public void SetEmpty(bool animate = true)
         {
             currentEquipment = null;
             currentQuantity = 0;
@@ -135,16 +168,44 @@ namespace CyberPickle.UI.EquipmentHub
             {
                 quantityText.enabled = false;
             }
+            
+            if (levelText != null)
+            {
+                levelText.gameObject.SetActive(false);
+            }
+            
+            if (rarityGlow != null)
+            {
+                rarityGlow.SetActive(false);
+            }
+
+            // Clear highlight border when slot becomes empty
+            if (highlightBorder != null)
+            {
+                highlightBorder.SetActive(false);
+            }
 
             if (backgroundImage != null)
             {
-                backgroundImage.DOColor(emptySlotColor, 0.2f);
+                if (animate)
+                {
+                    backgroundImage.DOColor(emptySlotColor, 0.2f);
+                }
+                else
+                {
+                    backgroundImage.color = emptySlotColor;
+                }
             }
         }
 
         public void ClearSlot()
         {
             SetEmpty();
+        }
+
+        public void ClearSlot(bool animate)
+        {
+            SetEmpty(animate);
         }
 
         #endregion
@@ -163,8 +224,16 @@ namespace CyberPickle.UI.EquipmentHub
             if (dragDropManager != null && dragDropManager.StartDrag(this, eventData.position))
             {
                 isDragging = true;
+                
+                // Create CanvasGroup only for drag visual feedback
+                canvasGroup = GetComponent<CanvasGroup>();
+                if (canvasGroup == null)
+                {
+                    canvasGroup = gameObject.AddComponent<CanvasGroup>();
+                }
                 canvasGroup.alpha = 0.6f;
                 canvasGroup.blocksRaycasts = false;
+                
                 inventoryController?.OnItemDragStart(this);
             }
         }
@@ -180,8 +249,13 @@ namespace CyberPickle.UI.EquipmentHub
             if (!isDragging) return;
 
             isDragging = false;
-            canvasGroup.alpha = 1f;
-            canvasGroup.blocksRaycasts = true;
+            
+            // Clean up CanvasGroup used for drag feedback
+            if (canvasGroup != null)
+            {
+                Destroy(canvasGroup);
+                canvasGroup = null;
+            }
 
             inventoryController?.OnItemDragEnd();
 
@@ -345,20 +419,35 @@ namespace CyberPickle.UI.EquipmentHub
 
             if (!isOccupied)
             {
-                // Unequipping to empty slot
+                // Unequipping to empty slot - update visual and data without refresh
                 SetItem(draggedEquipment, 1);
-                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                inventoryController?.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
                 return true;
             }
             else if (currentEquipment != null && draggedEquipment != null &&
                      currentEquipment.equipmentId == draggedEquipment.equipmentId)
             {
-                // Stacking same equipment
+                // Stacking same equipment - update visual and data without refresh
                 currentQuantity++;
                 quantityText.text = currentQuantity.ToString();
                 quantityText.enabled = true;
-                inventoryController?.OnItemAdded(draggedEquipment, 1);
+                inventoryController?.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
                 return true;
+            }
+            else
+            {
+                // Slot is occupied with different equipment - try to find an empty slot
+                if (inventoryController != null)
+                {
+                    var emptySlot = inventoryController.FindFirstEmptySlot();
+                    if (emptySlot != null && emptySlot != this)
+                    {
+                        // Place in the empty slot instead - update visual and data without refresh
+                        emptySlot.SetItem(draggedEquipment, 1);
+                        inventoryController.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
+                        return true;
+                    }
+                }
             }
 
             return false;

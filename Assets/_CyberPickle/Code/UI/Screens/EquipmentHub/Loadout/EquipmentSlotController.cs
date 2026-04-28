@@ -253,8 +253,27 @@ namespace CyberPickle.UI.EquipmentHub
             // Handle the source slot to correctly perform a move or swap.
             if (draggable.GetDragSourceType() == DragSourceType.Inventory && draggable is InventorySlotController sourceInventorySlot)
             {
-                // If the item came from inventory, place our old item (or nothing) back into that inventory slot.
-                sourceInventorySlot.SetItem(previousEquipment, previousEquipment != null ? 1 : 0);
+                // If the item came from inventory, remove it from inventory data without refreshing
+                var inventoryController = sourceInventorySlot.GetComponentInParent<InventoryUIController>();
+                if (inventoryController != null)
+                {
+                    inventoryController.OnItemRemoved(draggedEquipment.equipmentId, false); // Don't refresh display
+                }
+                
+                // Place our old item (or nothing) back into that inventory slot
+                if (previousEquipment != null)
+                {
+                    sourceInventorySlot.SetItem(previousEquipment, 1);
+                    // Add the old item back to inventory data without refreshing
+                    if (inventoryController != null)
+                    {
+                        inventoryController.OnItemAdded(previousEquipment, 1, false); // Don't refresh display
+                    }
+                }
+                else
+                {
+                    sourceInventorySlot.SetEmpty();
+                }
             }
             else if (draggable.GetDragSourceType() == DragSourceType.Equipment && draggable is EquipmentSlotController sourceEquipmentSlot)
             {

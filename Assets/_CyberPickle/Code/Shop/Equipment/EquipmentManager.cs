@@ -209,11 +209,13 @@ namespace CyberPickle.Shop.Equipment
 
             // Get active character's progression data
             string characterId = GetActiveCharacterId();
-            if (string.IsNullOrEmpty(characterId) || !profile.CharacterProgress.TryGetValue(characterId, out var characterData))
+            if (string.IsNullOrEmpty(characterId))
             {
-                Debug.LogError("[EquipmentManager] No active character or character progress not found!");
+                Debug.LogError("[EquipmentManager] No active character ID!");
                 return false;
             }
+
+            var characterData = EnsureCharacterDataWithDefaults(profile, characterId);
 
             // Equip the item based on type
             bool success = characterData.EquipItem(equipmentId, equipmentData.slotType);
@@ -267,11 +269,13 @@ namespace CyberPickle.Shop.Equipment
 
             // Get active character's progression data
             string characterId = GetActiveCharacterId();
-            if (string.IsNullOrEmpty(characterId) || !profile.CharacterProgress.TryGetValue(characterId, out var characterData))
+            if (string.IsNullOrEmpty(characterId))
             {
-                Debug.LogError("[EquipmentManager] No active character or character progress not found!");
+                Debug.LogError("[EquipmentManager] No active character ID!");
                 return false;
             }
+
+            var characterData = EnsureCharacterDataWithDefaults(profile, characterId);
 
             // Check if the item is equipped
             if (!characterData.IsEquipped(equipmentId))
@@ -366,9 +370,46 @@ namespace CyberPickle.Shop.Equipment
             if (profile == null)
                 return null;
 
-            // The active character ID would typically come from the profile
-            // This might need to be retrieved differently depending on your implementation
-            return profile.ProfileId; // Using profile ID as the character ID for now
+            // Return the last selected character ID, or fall back to profile ID if none selected
+            return !string.IsNullOrEmpty(profile.LastSelectedCharacterId) 
+                ? profile.LastSelectedCharacterId 
+                : profile.ProfileId;
+        }
+
+        /// <summary>
+        /// Ensures character data exists and has default equipment equipped
+        /// </summary>
+        private CharacterProgressionData EnsureCharacterDataWithDefaults(ProfileData profile, string characterId)
+        {
+            // Check if character data exists
+            if (profile.CharacterProgress.TryGetValue(characterId, out var existingData))
+            {
+                return existingData;
+            }
+
+            // Create new character data
+            Debug.Log($"[EquipmentManager] Creating new character data for {characterId} with default equipment");
+            var newCharacterData = new CharacterProgressionData(characterId);
+
+            // Equip default items (unlockedByDefault = true)
+            foreach (var equipment in equipmentDataLookup.Values)
+            {
+                if (equipment.unlockedByDefault)
+                {
+                    bool equipped = newCharacterData.EquipItem(equipment.equipmentId, equipment.slotType);
+                    Debug.Log($"[EquipmentManager] Auto-equipped default item: {equipment.displayName} ({equipment.equipmentId}) - Success: {equipped}");
+                }
+            }
+
+            // Add to profile
+            profile.UpdateCharacterProgress(characterId, newCharacterData);
+
+            // Save the profile
+            profileManager.UpdateProfileAsync(profile).ContinueWith(_ => {
+                Debug.Log("[EquipmentManager] Profile updated with new character data");
+            });
+
+            return newCharacterData;
         }
 
         /// <summary>
@@ -464,8 +505,11 @@ namespace CyberPickle.Shop.Equipment
                 return result;
 
             string characterId = GetActiveCharacterId();
-            if (string.IsNullOrEmpty(characterId) || !profile.CharacterProgress.TryGetValue(characterId, out var characterData))
+            if (string.IsNullOrEmpty(characterId))
                 return result;
+
+            // Ensure character data exists and has default equipment
+            CharacterProgressionData characterData = EnsureCharacterDataWithDefaults(profile, characterId);
 
             // Add hand weapons
             foreach (var weaponId in characterData.EquippedHandWeapons)

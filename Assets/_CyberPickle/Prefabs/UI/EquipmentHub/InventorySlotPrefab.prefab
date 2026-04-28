@@ -45,7 +45,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2493065472364998133}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &9085242941857649267
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -121,7 +121,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2653775894128266656}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &7792640244774181777
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -142,7 +142,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 3
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -169,7 +169,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 22.35
+  m_fontSize: 36
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -222,7 +222,6 @@ GameObject:
   - component: {fileID: 2818911284688714930}
   - component: {fileID: 2867515177761361546}
   - component: {fileID: 6271631307833866573}
-  - component: {fileID: 6178389142817435027}
   - component: {fileID: 4660341086598152015}
   m_Layer: 0
   m_Name: InventorySlotPrefab
@@ -263,7 +262,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5050228240229895419}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &6271631307833866573
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -308,18 +307,6 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
---- !u!225 &6178389142817435027
-CanvasGroup:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5050228240229895419}
-  m_Enabled: 1
-  m_Alpha: 1
-  m_Interactable: 1
-  m_BlocksRaycasts: 1
-  m_IgnoreParentGroups: 0
 --- !u!114 &4660341086598152015
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -335,13 +322,13 @@ MonoBehaviour:
   backgroundImage: {fileID: 7114185899080829978}
   itemIcon: {fileID: 5141668543987226430}
   quantityText: {fileID: 7792640244774181777}
+  levelText: {fileID: 8538958105675594149}
   highlightBorder: {fileID: 8335448406847922746}
-  canvasGroup: {fileID: 0}
+  rarityGlow: {fileID: 5742044900488040660}
+  hoverScale: 1.1
+  hoverColor: {r: 0.4, g: 0.4, b: 0.4, a: 1}
   emptySlotColor: {r: 0.2, g: 0.2, b: 0.2, a: 0.5}
   occupiedSlotColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
-  hoverColor: {r: 0.4, g: 0.4, b: 0.4, a: 1}
-  hoverScale: 1.1
-  clickScale: 0.95
 --- !u!1 &5742044900488040660
 GameObject:
   m_ObjectHideFlags: 0
@@ -386,7 +373,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5742044900488040660}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &7980160028568253972
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -461,7 +448,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5805482904678320352}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &5141668543987226430
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -536,7 +523,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8306718027360963688}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &7114185899080829978
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -551,7 +538,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 0
+  m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -611,7 +598,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8335448406847922746}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &8574402205906954453
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -686,7 +673,7 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8400041211724083294}
-  m_CullTransparentMesh: 1
+  m_CullTransparentMesh: 0
 --- !u!114 &8538958105675594149
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -707,7 +694,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 3
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -734,7 +721,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 21.45
+  m_fontSize: 36
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1

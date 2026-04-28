@@ -335,7 +335,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 35}
+  m_AnchoredPosition: {x: 0, y: 42.4}
   m_SizeDelta: {x: 0, y: -70}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2707142241979047966
@@ -890,21 +890,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 58252b91bd8321244b1300bfe8c62b45, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  slotFrame: {fileID: 1927349317671551632}
+  slotIcon: {fileID: 0}
+  equipmentIcon: {fileID: 6059758056134757651}
+  levelText: {fileID: 8677946956332592408}
+  equippedGlow: {fileID: 3238653879804217947}
+  highlightEffect: {fileID: 0}
+  canvasGroup: {fileID: 0}
   slotType: 0
   slotIndex: 0
-  slotBackground: {fileID: 879417527579120201}
-  slotFrame: {fileID: 1927349317671551632}
-  equipmentIcon: {fileID: 6059758056134757651}
-  emptySlotOverlay: {fileID: 8288392645611151802}
-  slotTypeText: {fileID: 5900774915003882500}
-  equippedGlow: {fileID: 3238653879804217947}
-  levelBadge: {fileID: 2544080002899582056}
-  levelText: {fileID: 8677946956332592408}
   emptySlotColor: {r: 0.2, g: 0.2, b: 0.2, a: 0.5}
   occupiedSlotColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  highlightColor: {r: 1, g: 0.8, b: 0.2, a: 1}
   validDropColor: {r: 0.2, g: 1, b: 0.2, a: 0.5}
   invalidDropColor: {r: 1, g: 0.2, b: 0.2, a: 0.5}
   hoverScale: 1.1
   clickScale: 0.95
-  dragAlpha: 0.6
-  dragCanvas: {fileID: 0}
