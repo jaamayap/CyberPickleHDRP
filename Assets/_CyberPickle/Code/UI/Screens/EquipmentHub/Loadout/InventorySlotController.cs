@@ -253,7 +253,7 @@ namespace CyberPickle.UI.EquipmentHub
             // Clean up CanvasGroup used for drag feedback
             if (canvasGroup != null)
             {
-                DestroyImmediate(canvasGroup);
+                Destroy(canvasGroup);
                 canvasGroup = null;
             }
 
