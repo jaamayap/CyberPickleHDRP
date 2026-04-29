@@ -19,7 +19,7 @@ using CyberPickle.Core.Pool;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Core.Services.Leaderboard;
 using CyberPickle.Core.Services.Steam;
-using CyberPickle.Core.Analytics;
+using CyberPickle.Analytics;
 using CyberPickle.Characters;
 using CyberPickle.Progression;
 using CyberPickle.Achievements;

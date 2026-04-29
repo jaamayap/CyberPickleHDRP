@@ -1,7 +1,7 @@
 using CyberPickle.Core.Management;
 using CyberPickle.Core.Interfaces;
 
-namespace CyberPickle.Core.Analytics
+namespace CyberPickle.Analytics
 {
     public class AnalyticsManager : Manager<AnalyticsManager>, IInitializable
     {
