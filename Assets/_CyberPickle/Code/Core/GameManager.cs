@@ -254,7 +254,17 @@ namespace CyberPickle.Core
                     break;
 
                 case GameState.LevelSelect:
-                    StartCoroutine(LoadSceneCoroutine(gameConfig.levelSelectSceneName));
+                    // Guard: only load if we're not already in the LevelSelect scene.
+                    // Without this, restoring state to LevelSelect after the scene loads
+                    // re-triggers the load and creates an infinite reload loop.
+                    if (SceneManager.GetActiveScene().name != gameConfig.levelSelectSceneName)
+                    {
+                        StartCoroutine(LoadSceneCoroutine(gameConfig.levelSelectSceneName));
+                    }
+                    else
+                    {
+                        Debug.Log($"[GameManager] Already in LevelSelect scene. No need to reload.");
+                    }
                     break;
 
                 case GameState.Playing:
