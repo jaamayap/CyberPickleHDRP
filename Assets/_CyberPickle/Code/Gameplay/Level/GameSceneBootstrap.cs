@@ -122,6 +122,23 @@ namespace CyberPickle.Gameplay.Level
             {
                 Debug.LogWarning($"[GameSceneBootstrap] Spawned '{player.name}' has no PlayerMotor — character will not move.");
             }
+
+            // Loadout loader: enable so it spawns equipped weapons at mount points.
+            // (Optional component — characters without weapon mounts simply skip this.)
+            var loadout = player.GetComponent<PlayerLoadoutLoader>();
+            if (loadout != null)
+            {
+                loadout.enabled = true;
+            }
+
+            // Player <-> ECS bridge: writes player position to a singleton entity
+            // every frame so DOTS systems (enemy AI, etc.) can read it. Optional —
+            // characters without the bridge just won't be visible to ECS systems.
+            var bridge = player.GetComponent<PlayerPositionBridge>();
+            if (bridge != null)
+            {
+                bridge.enabled = true;
+            }
         }
 
         private GameObject ResolveCharacterPrefab(out string source)
