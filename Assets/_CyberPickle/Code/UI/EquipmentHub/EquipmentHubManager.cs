@@ -234,9 +234,17 @@ namespace CyberPickle.UI.EquipmentHub
             // Create error handling for character instantiation
             try
             {
-                spawnedCharacter = Instantiate(currentCharacterData.characterPrefab, characterSpawnPoint);
+                // IMPORTANT: pass the rotation to Instantiate as an argument so the
+                // Animator's Awake captures 180° as its rotation baseline. If we set
+                // localRotation AFTER Instantiate, the Animator records the prefab's
+                // default rotation (0) as baseline and snaps the GameObject back to
+                // it on the next frame.
+                spawnedCharacter = Instantiate(
+                    currentCharacterData.characterPrefab,
+                    characterSpawnPoint.position,
+                    characterSpawnPoint.rotation * Quaternion.Euler(0, 180, 0),
+                    characterSpawnPoint);
                 spawnedCharacter.transform.localPosition = Vector3.zero;
-                spawnedCharacter.transform.localRotation = Quaternion.Euler(0, 180, 0); // Face camera
 
                 Animator animator = spawnedCharacter.GetComponent<Animator>();
                 if (animator != null && !string.IsNullOrEmpty(currentCharacterData.idleAnimationTrigger))
