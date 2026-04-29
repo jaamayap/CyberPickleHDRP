@@ -636,6 +636,7 @@ GameObject:
   - component: {fileID: 9085596002185385985}
   - component: {fileID: 3340321271615077410}
   - component: {fileID: 7222640665625742845}
+  - component: {fileID: 8779654762484682417}
   m_Layer: 8
   m_Name: CharacterPlaceHolder1
   m_TagString: Untagged
@@ -760,6 +761,20 @@ MonoBehaviour:
   rotateTowardMovement: 1
   rotationSpeed: 720
   rotationVelocityThreshold: 0.2
+--- !u!114 &8779654762484682417
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2158358189046981709}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b024b178b26e3840aad88346133cf51, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  speedParameter: Speed
+  speedDampTime: 0.1
 --- !u!1 &2178616569411961783
 GameObject:
   m_ObjectHideFlags: 0
