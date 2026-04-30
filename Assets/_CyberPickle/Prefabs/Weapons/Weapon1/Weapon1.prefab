@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6327817096770862439
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1874816583303769313}
+  m_Layer: 0
+  m_Name: Muzzle
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1874816583303769313
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6327817096770862439}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.01072, z: 0.00958}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7464057872884871474}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &6926272806602659545
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -95,6 +126,62 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1874816583303769313}
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 77e63eedfde4dd3478d264190e057869,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 632568883714449397}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 77e63eedfde4dd3478d264190e057869,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6416052667945427335}
   m_SourcePrefab: {fileID: 100100000, guid: 77e63eedfde4dd3478d264190e057869, type: 3}
+--- !u!4 &7464057872884871474 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
+    type: 3}
+  m_PrefabInstance: {fileID: 6926272806602659545}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &7844841441954294664 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 77e63eedfde4dd3478d264190e057869,
+    type: 3}
+  m_PrefabInstance: {fileID: 6926272806602659545}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &632568883714449397
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7844841441954294664}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc649602a945a5a428465996e4e7098a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  strategy: 0
+  range: 15
+  rotationSpeed: 720
+--- !u!114 &6416052667945427335
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7844841441954294664}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4f43298028cf4044a1e0d5211bef9d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  fireRate: 2
+  muzzle: {fileID: 1874816583303769313}
+  projectileSpeed: 20
+  projectileDamage: 5
+  projectileLifetime: 3

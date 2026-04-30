@@ -757,6 +757,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ce6d9b4a2e8ecb64e92fe7d7d6b38e01, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  allowFallbackForDirectPlay: 1
+  fallbackHandWeaponPrefab: {fileID: 7844841441954294664, guid: 4eb0f783e0419524481e2f6308d61ccc,
+    type: 3}
 --- !u!114 &5891917750237918186
 MonoBehaviour:
   m_ObjectHideFlags: 0

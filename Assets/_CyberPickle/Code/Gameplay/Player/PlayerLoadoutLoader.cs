@@ -24,6 +24,13 @@ namespace CyberPickle.Gameplay.Player
     [DisallowMultipleComponent]
     public class PlayerLoadoutLoader : MonoBehaviour
     {
+        [Header("Direct-Play Fallback (development only)")]
+        [Tooltip("If true and no equipped weapons can be loaded (e.g., you pressed Play directly in Game.unity without booting through Boot.unity), spawn the fallback prefabs at their respective mount points.")]
+        [SerializeField] private bool allowFallbackForDirectPlay = true;
+
+        [Tooltip("Weapon prefab spawned at the right-hand mount when no profile-equipped weapon is available.")]
+        [SerializeField] private GameObject fallbackHandWeaponPrefab;
+
         private WeaponMountPoints mounts;
         private readonly List<GameObject> spawnedItems = new List<GameObject>();
 
@@ -49,22 +56,41 @@ namespace CyberPickle.Gameplay.Player
         {
             ClearSpawnedItems();
 
+            int spawnedCount = 0;
+
             EquipmentManager equipmentManager = EquipmentManager.Instance;
-            if (equipmentManager == null)
+            if (equipmentManager != null)
             {
-                Debug.LogWarning("[PlayerLoadoutLoader] EquipmentManager.Instance is null — skipping loadout spawn. Did you press Play from Boot.unity?");
-                return;
+                // GetEquippedEquipment() resolves the active character's loadout via
+                // ProfileManager + CharacterProgressionData internally and returns
+                // EquipmentData references grouped by slot type.
+                Dictionary<EquipmentSlotType, List<EquipmentData>> equipped = equipmentManager.GetEquippedEquipment();
+                if (equipped != null && equipped.Count > 0)
+                {
+                    spawnedCount = SpawnFromEquipped(equipped);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[PlayerLoadoutLoader] EquipmentManager.Instance is null (likely direct-play in Game.unity).");
             }
 
-            // GetEquippedEquipment() resolves the active character's loadout via
-            // ProfileManager + CharacterProgressionData internally and returns
-            // EquipmentData references grouped by slot type.
-            Dictionary<EquipmentSlotType, List<EquipmentData>> equipped = equipmentManager.GetEquippedEquipment();
-            if (equipped == null || equipped.Count == 0)
+            // If nothing was loaded from the profile and a fallback is configured,
+            // spawn it so the Game scene is testable in isolation.
+            if (spawnedCount == 0 && allowFallbackForDirectPlay && fallbackHandWeaponPrefab != null && mounts.HandR != null)
             {
-                Debug.Log("[PlayerLoadoutLoader] No equipped items found for active character. Spawning empty loadout.");
-                return;
+                Debug.Log($"<color=yellow>[PlayerLoadoutLoader]</color> No profile-equipped weapons found — spawning fallback '{fallbackHandWeaponPrefab.name}' at HandR for direct-play.");
+                GameObject instance = Instantiate(fallbackHandWeaponPrefab, mounts.HandR);
+                instance.transform.localPosition = Vector3.zero;
+                instance.transform.localRotation = Quaternion.identity;
+                instance.name = $"{fallbackHandWeaponPrefab.name} (Fallback)";
+                spawnedItems.Add(instance);
             }
+        }
+
+        private int SpawnFromEquipped(Dictionary<EquipmentSlotType, List<EquipmentData>> equipped)
+        {
+            int count = 0;
 
             // Hand weapons (max 2 — slot 0 right, slot 1 left)
             if (equipped.TryGetValue(EquipmentSlotType.HandWeapon, out var handWeapons))
@@ -77,7 +103,7 @@ namespace CyberPickle.Gameplay.Player
                         Debug.LogWarning($"[PlayerLoadoutLoader] No hand mount available for slot {i} on '{name}'. Skipping '{handWeapons[i]?.displayName}'.");
                         continue;
                     }
-                    SpawnAtMount(handWeapons[i], mount);
+                    if (SpawnAtMount(handWeapons[i], mount)) count++;
                 }
             }
 
@@ -90,18 +116,19 @@ namespace CyberPickle.Gameplay.Player
                 }
                 else
                 {
-                    SpawnAtMount(bodyWeapons[0], mounts.Body);
+                    if (SpawnAtMount(bodyWeapons[0], mounts.Body)) count++;
                 }
             }
 
             // PowerUps / Armor / Amulet: visual representation deferred to later
             // milestones (those slots are currently stat-modifier-only and don't
             // necessarily need a 3D prefab attached to the character).
+            return count;
         }
 
-        private void SpawnAtMount(EquipmentData data, Transform mount)
+        private bool SpawnAtMount(EquipmentData data, Transform mount)
         {
-            if (data == null || data.equipmentPrefab == null) return;
+            if (data == null || data.equipmentPrefab == null) return false;
 
             GameObject instance = Instantiate(data.equipmentPrefab, mount);
             instance.transform.localPosition = Vector3.zero;
@@ -110,6 +137,7 @@ namespace CyberPickle.Gameplay.Player
             spawnedItems.Add(instance);
 
             Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> Spawned '{data.displayName}' at '{mount.name}'.");
+            return true;
         }
 
         private void ClearSpawnedItems()
