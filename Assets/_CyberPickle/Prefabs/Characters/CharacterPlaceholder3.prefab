@@ -425,6 +425,14 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 8160967364835455479}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a5e847397c0b4a44999c71ecd5fad89a,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4904580911212660189}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a5e847397c0b4a44999c71ecd5fad89a,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1956239596569726664}
   m_SourcePrefab: {fileID: 100100000, guid: a5e847397c0b4a44999c71ecd5fad89a, type: 3}
 --- !u!1 &4989332315425718118 stripped
 GameObject:
@@ -547,3 +555,32 @@ MonoBehaviour:
   deceleration: 50
   useCameraRelativeMovement: 1
   referenceCamera: {fileID: 0}
+  rotateTowardMovement: 1
+  rotationSpeed: 720
+  rotationVelocityThreshold: 0.2
+--- !u!114 &4904580911212660189
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4989332315425718118}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b024b178b26e3840aad88346133cf51, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  speedParameter: Speed
+  speedDampTime: 0.1
+--- !u!114 &1956239596569726664
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4989332315425718118}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c1cb80c37844caa4fa0876428503ae1d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

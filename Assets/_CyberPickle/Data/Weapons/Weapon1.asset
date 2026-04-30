@@ -35,7 +35,8 @@ MonoBehaviour:
   canCriticalHit: 1
   baseCriticalChance: 0.05
   criticalDamageMultiplier: 2
-  projectilePrefab: {fileID: 0}
+  projectilePrefab: {fileID: 1569979447995748, guid: de79adfa69af17a4a8392603753976a1,
+    type: 3}
   fireSound: {fileID: 0}
   hitSound: {fileID: 0}
   hitEffectPrefab: {fileID: 0}
