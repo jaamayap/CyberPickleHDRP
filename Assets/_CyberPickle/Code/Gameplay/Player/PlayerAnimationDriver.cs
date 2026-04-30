@@ -47,7 +47,7 @@ namespace CyberPickle.Gameplay.Player
         {
             // Use horizontal velocity only — vertical motion (gravity, jumps later)
             // shouldn't trigger the Run animation.
-            Vector3 vel = rb.velocity;
+            Vector3 vel = rb.linearVelocity;
             vel.y = 0f;
             float currentSpeed = vel.magnitude;
 

@@ -31,7 +31,7 @@ namespace CyberPickle.Core.Management
                     {
                         if (instance == null)
                         {
-                            instance = FindObjectOfType<T>();
+                            instance = FindFirstObjectByType<T>();
                             if (instance == null)
                             {
                                 GameObject go = new GameObject($"[{typeof(T).Name}]");

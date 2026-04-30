@@ -87,7 +87,7 @@ namespace CyberPickle.Characters.Logic
                 Debug.Log("[CharacterDisplayManager] Added PhysicsRaycaster to main camera");
             }
 
-            if (FindObjectOfType<EventSystem>() == null)
+            if (FindFirstObjectByType<EventSystem>() == null)
             {
                 var eventSystem = new GameObject("Event System");
                 eventSystem.AddComponent<EventSystem>();
@@ -239,7 +239,7 @@ namespace CyberPickle.Characters.Logic
                 return;
             }
 
-            // 1) Figure out if it’s truly locked
+            // 1) Figure out if itï¿½s truly locked
             string charId = character.name.Replace("Character_", "");
             bool isLocked = !CharacterSelectionManager.Instance.IsCharacterUnlocked(charId);
 

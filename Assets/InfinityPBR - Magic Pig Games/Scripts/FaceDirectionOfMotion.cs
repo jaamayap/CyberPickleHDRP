@@ -25,9 +25,9 @@ namespace MagicPigGames
         // If the object is moving, face the direction of motion.
         private void Update()
         {
-            if (GetComponent<Rigidbody>().velocity == Vector3.zero) return;
+            if (GetComponent<Rigidbody>().linearVelocity == Vector3.zero) return;
 
-            transform.forward = GetComponent<Rigidbody>().velocity.normalized;
+            transform.forward = GetComponent<Rigidbody>().linearVelocity.normalized;
         }
 
         private Rigidbody GetRigidBody()

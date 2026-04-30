@@ -44,7 +44,7 @@ namespace MagicPigGames.ProjectileFactory
             SetProjectile(projectile);
 
             // Set the velocity of the Rigidbody to launch the projectile
-            ProjectileRigidbody.velocity = projectileObject.transform.forward * Projectile.ProjectileData.Speed;
+            ProjectileRigidbody.linearVelocity = projectileObject.transform.forward * Projectile.ProjectileData.Speed;
         }
     }
 }

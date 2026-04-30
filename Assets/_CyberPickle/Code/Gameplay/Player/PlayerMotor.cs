@@ -111,13 +111,13 @@ namespace CyberPickle.Gameplay.Player
             float lerpRate = (cachedTargetVelocity.sqrMagnitude > 0.0001f) ? acceleration : deceleration;
 
             // Preserve vertical velocity (gravity, jumps, etc.) — only blend horizontal.
-            Vector3 currentVel = rb.velocity;
+            Vector3 currentVel = rb.linearVelocity;
             float verticalVel = currentVel.y;
             currentVel.y = 0f;
 
             Vector3 newHorizontal = Vector3.MoveTowards(currentVel, cachedTargetVelocity, lerpRate * Time.fixedDeltaTime);
 
-            rb.velocity = new Vector3(newHorizontal.x, verticalVel, newHorizontal.z);
+            rb.linearVelocity = new Vector3(newHorizontal.x, verticalVel, newHorizontal.z);
 
             // Rotate the character to face the direction of motion. Done via
             // Rigidbody.MoveRotation so it plays nicely with physics (and with

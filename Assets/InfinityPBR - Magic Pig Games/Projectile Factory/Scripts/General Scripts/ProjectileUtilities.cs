@@ -171,11 +171,11 @@ namespace MagicPigGames.ProjectileFactory
         {
             // If the Rigidbody is not moving, don't attempt to rotate it.
             // Vector3.magnitude is expensive, so we use Vector3.sqrMagnitude for comparison with zero.
-            if (rb.velocity.sqrMagnitude == 0)
+            if (rb.linearVelocity.sqrMagnitude == 0)
                 return;
 
             // Calculate the rotation for the object to face the direction of movement
-            var directionRotation = Quaternion.LookRotation(rb.velocity.normalized);
+            var directionRotation = Quaternion.LookRotation(rb.linearVelocity.normalized);
 
             // Smoothly rotate the object to the target rotation
             rb.rotation = Quaternion.Slerp(rb.rotation, directionRotation, rotationSpeed * Time.deltaTime);

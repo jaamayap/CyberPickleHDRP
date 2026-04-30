@@ -344,7 +344,7 @@ namespace MagicPigGames.ProjectileFactory
 
             if (Rigidbody != null && !Rigidbody.isKinematic)
             {
-                Rigidbody.velocity = Vector3.zero;
+                Rigidbody.linearVelocity = Vector3.zero;
                 Rigidbody.angularVelocity = Vector3.zero;
             }
 

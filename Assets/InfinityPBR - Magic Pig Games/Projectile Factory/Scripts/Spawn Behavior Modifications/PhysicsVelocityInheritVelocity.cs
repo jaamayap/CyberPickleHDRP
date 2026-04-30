@@ -18,8 +18,8 @@ namespace MagicPigGames.ProjectileFactory
             // Set the velocity of the Rigidbody to launch the projectile
             var spawnerVelocity = Projectile.ProjectileSpawner.Rigidbody == null
                 ? Vector3.zero
-                : Projectile.ProjectileSpawner.Rigidbody.velocity;
-            ProjectileRigidbody.velocity =
+                : Projectile.ProjectileSpawner.Rigidbody.linearVelocity;
+            ProjectileRigidbody.linearVelocity =
                 projectileObject.transform.forward * Projectile.ProjectileData.Speed + spawnerVelocity;
         }
     }
