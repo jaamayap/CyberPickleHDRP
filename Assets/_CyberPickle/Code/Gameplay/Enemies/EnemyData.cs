@@ -52,6 +52,9 @@ namespace CyberPickle.Gameplay.Enemies
         [Tooltip("GameObject prefab for the enemy. Carries the visual mesh, animator, EnemyAuthoring component, and any other authoring components. The Baker uses this prefab to populate the EnemyPrefabRegistry singleton.")]
         public GameObject visualPrefab;
 
+        [Tooltip("Visual type / size category. Drives Animator branching (which Walk/Run/Death states play) and any future per-size logic (drop scaling, knockback resistance defaults, etc.). Stored as an int on the entity so the Animator's EnemyType parameter can reference it directly.")]
+        public EnemyVisualType visualType = EnemyVisualType.StandardHumanoid;
+
 
         // =====================================================================
         // CORE STATS (M5 — used now)
@@ -276,6 +279,21 @@ namespace CyberPickle.Gameplay.Enemies
             energy = 1f,
             poison = 1f,
         };
+    }
+
+    /// <summary>
+    /// Visual classification — drives Animator branching (which walk / run
+    /// / death state plays for this enemy). Stored as an int on the entity
+    /// so the Animator's "EnemyType" parameter can match the value directly.
+    /// Extend with new entries as new visual archetypes ship.
+    /// </summary>
+    public enum EnemyVisualType
+    {
+        /// <summary>Default-sized humanoid (e.g. zombie, skeleton, cyborg trooper). Death variants 0–1.</summary>
+        StandardHumanoid = 0,
+        /// <summary>Larger humanoid (e.g. mutant, brute, ogre). Death variant 2.</summary>
+        BigHumanoid = 1,
+        // Future: Drone = 2, Quadruped = 3, Flyer = 4, etc.
     }
 
     /// <summary>

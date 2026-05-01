@@ -1,2 +1,12 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+/Assets/Wwise/API/Runtime/Plugins/Mac/Debug/AkSoundEngine.bundle.dSYM/Contents/Resources/DWARF/AkSoundEngine filter=lfs diff=lfs merge=lfs -text
+/Assets/Wwise/API/Runtime/Plugins/Mac/Profile/AkSoundEngine.bundle.dSYM/Contents/Resources/DWARF/AkSoundEngine filter=lfs diff=lfs merge=lfs -text
+/Assets/Wwise/API/Runtime/Plugins/Mac/Release/AkSoundEngine.bundle.dSYM/Contents/Resources/DWARF/AkSoundEngine filter=lfs diff=lfs merge=lfs -text
+/Assets/_CyberPickle/Art/Characters/Character2/Animations/Character2Dance.fbx filter=lfs diff=lfs merge=lfs -text
+/Assets/_CyberPickle/Art/Characters/Character2/Animations/Character2Idle.fbx filter=lfs diff=lfs merge=lfs -text
+/Assets/_CyberPickle/Art/Characters/Character2/Animations/Character2Selected.fbx filter=lfs diff=lfs merge=lfs -text
+/Assets/_CyberPickle/Art/Characters/Character2/Animations/Character2locked.fbx filter=lfs diff=lfs merge=lfs -text
+/Assets/_CyberPickle/Art/Enemies/Enemy[[:space:]]0/Model/Enemy[[:space:]]0.fbx filter=lfs diff=lfs merge=lfs -text
+/Assets/_CyberPickle/Art/Models/Characters/CharacterPlaceholder2.fbx filter=lfs diff=lfs merge=lfs -text
+/Assets/_CyberPickle/Art/Models/Enemies/Enemy[[:space:]]0/Ch10_nonPBR@Walking.fbx filter=lfs diff=lfs merge=lfs -text

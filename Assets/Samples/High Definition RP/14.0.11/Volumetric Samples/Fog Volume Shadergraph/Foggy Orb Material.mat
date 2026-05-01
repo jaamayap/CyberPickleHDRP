@@ -85,8 +85,9 @@ Material:
     - _FogVolumeAlphaBlendOp: 0
     - _FogVolumeBlendMode: 0
     - _FogVolumeColorBlendOp: 0
-    - _FogVolumeDstAlphaBlend: 1
-    - _FogVolumeDstColorBlend: 1
+    - _FogVolumeDstAlphaBlend: 0
+    - _FogVolumeDstColorBlend: 0
+    - _FogVolumeFogDistanceProperty: 10
     - _FogVolumeSrcAlphaBlend: 1
     - _FogVolumeSrcColorBlend: 1
     - _Intensity: 10
@@ -120,5 +121,8 @@ Material:
     - _Color: {r: 0.41509432, g: 0.41509432, b: 0.41509432, a: 0}
     - _DoubleSidedConstants: {r: 1, g: 1, b: -1, a: 0}
     - _EmissionColor: {r: 1, g: 1, b: 1, a: 1}
+    - _FogVolumeSingleScatteringAlbedo: {r: 1, g: 1, b: 1, a: 1}
     - _RotationAxis: {r: 0, g: 1, b: 0, a: 0}
+    - _Rotation_Axis: {r: 0, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

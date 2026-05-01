@@ -51,8 +51,10 @@ namespace CyberPickle.DOTS.Systems
             EntityCommandBuffer ecb = ecbSingleton.CreateCommandBuffer(state.WorldUnmanaged);
 
             // Snapshot enemies into temp arrays for inner-loop access.
+            // Exclude Dead so projectiles don't waste hits on corpses.
             EntityQuery enemyQuery = SystemAPI.QueryBuilder()
                 .WithAll<EnemyTag, Health, LocalTransform>()
+                .WithNone<Dead>()
                 .Build();
 
             NativeArray<Entity> enemyEntities = enemyQuery.ToEntityArray(Allocator.Temp);

@@ -65,10 +65,20 @@ namespace CyberPickle.Gameplay.Weapons
             if (world == null) return;
 
             entityManager = world.EntityManager;
-            enemyQuery = entityManager.CreateEntityQuery(
-                typeof(EnemyTag),
-                typeof(Health),
-                typeof(LocalTransform));
+            // Exclude Dead entities so weapons don't keep aiming at corpses.
+            // Without this filter, the closest "enemy" is often a body that
+            // just died at the player's feet, and the weapon locks onto it.
+            enemyQuery = entityManager.CreateEntityQuery(new EntityQueryDesc
+            {
+                All  = new[] {
+                    ComponentType.ReadOnly<EnemyTag>(),
+                    ComponentType.ReadOnly<Health>(),
+                    ComponentType.ReadOnly<LocalTransform>()
+                },
+                None = new[] {
+                    ComponentType.ReadOnly<Dead>()
+                }
+            });
             initialized = true;
         }
 

@@ -40,6 +40,9 @@ MonoBehaviour:
   cullingDistance:
     m_OverrideState: 0
     m_Value: 1000
+  minSolidAngle:
+    m_OverrideState: 0
+    m_Value: 4
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -69,7 +72,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   active: 1
   quality:
-    m_OverrideState: 1
+    m_OverrideState: 0
     m_Value: 3
   enabled:
     m_OverrideState: 0
@@ -85,7 +88,7 @@ MonoBehaviour:
     m_Value: 0
   m_SmoothnessFadeStart:
     m_OverrideState: 1
-    m_Value: 0
+    m_Value: 1
   reflectSky:
     m_OverrideState: 0
     m_Value: 1
@@ -153,12 +156,12 @@ MonoBehaviour:
     m_Value: 1
   m_DenoiserRadius:
     m_OverrideState: 1
-    m_Value: 8
-  m_AffectSmoothSurfaces:
+    m_Value: 1
+  m_DenoiserAntiFlickeringStrength:
     m_OverrideState: 0
-    m_Value: 0
+    m_Value: 1
   mode:
-    m_OverrideState: 1
+    m_OverrideState: 0
     m_Value: 1
   m_FullResolution:
     m_OverrideState: 1
@@ -172,3 +175,8 @@ MonoBehaviour:
   m_RayMaxIterationsRT:
     m_OverrideState: 0
     m_Value: 48
+  adaptiveProbeVolumesLayerMask:
+    m_OverrideState: 0
+    m_Value:
+      serializedVersion: 0
+      m_Bits: 1

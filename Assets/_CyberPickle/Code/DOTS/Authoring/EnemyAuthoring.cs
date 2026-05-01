@@ -80,6 +80,26 @@ namespace CyberPickle.DOTS.Authoring
                     AddComponent<BossTag>(entity);
                 }
 
+                // Visual prefab reference — read by EnemyVisualBindingSystem
+                // (SystemBase, managed) to instantiate the GameObject visual
+                // that follows this entity each frame. UnityObjectRef stores
+                // a stable handle; only the bridge dereferences it.
+                if (authoring.data.visualPrefab != null)
+                {
+                    AddComponent(entity, new VisualPrefabRef
+                    {
+                        Value = authoring.data.visualPrefab
+                    });
+                }
+
+                // Visual type classification — drives Animator EnemyType
+                // parameter on spawn (Walk/Run branch) and DeathVariant
+                // selection (script picks 2 for Big, random 0/1 for Standard).
+                AddComponent(entity, new EnemyVisualTypeId
+                {
+                    Value = (int)authoring.data.visualType
+                });
+
                 // ─── NOT baked yet (deferred to system-ship milestones): ───
                 // Defenses (armor, knockback/stun resistance, element mults) → M7
                 // AI behavior (aiPattern, aggroRange, attackRange, ...)       → M8

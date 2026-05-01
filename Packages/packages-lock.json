@@ -529,11 +529,12 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.services.cloud-diagnostics": {
-      "version": "1.0.10",
+      "version": "1.0.12",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.unity.services.core": "1.12.5"
+        "com.unity.services.core": "1.12.5",
+        "com.unity.modules.unityanalytics": "1.0.0"
       },
       "url": "https://packages.unity.com"
     },
