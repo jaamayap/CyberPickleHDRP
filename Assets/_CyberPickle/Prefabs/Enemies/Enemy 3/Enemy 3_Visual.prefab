@@ -63,6 +63,31 @@ PrefabInstance:
       propertyPath: m_Name
       value: Enemy 3_Visual
       objectReference: {fileID: 0}
+    - target: {fileID: 5613815499662603714, guid: 0460d33f9a626f246bbcf55ee32e7ae1,
+        type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613815499662603714, guid: 0460d33f9a626f246bbcf55ee32e7ae1,
+        type: 3}
+      propertyPath: m_RayTracingMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613815499662603714, guid: 0460d33f9a626f246bbcf55ee32e7ae1,
+        type: 3}
+      propertyPath: m_DynamicOccludee
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613815499662603714, guid: 0460d33f9a626f246bbcf55ee32e7ae1,
+        type: 3}
+      propertyPath: m_MeshLodSelectionBias
+      value: 1.08
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613815499662603714, guid: 0460d33f9a626f246bbcf55ee32e7ae1,
+        type: 3}
+      propertyPath: m_SkinnedMotionVectors
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 5866666021909216657, guid: 0460d33f9a626f246bbcf55ee32e7ae1, type: 3}
     m_RemovedGameObjects: []

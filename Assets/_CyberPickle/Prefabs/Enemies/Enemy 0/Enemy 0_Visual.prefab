@@ -63,6 +63,21 @@ PrefabInstance:
       propertyPath: m_Name
       value: Enemy 0_Visual
       objectReference: {fileID: 0}
+    - target: {fileID: 8804795166771358170, guid: 0311a453b19c77944ab5edcdfcdb9e61,
+        type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8804795166771358170, guid: 0311a453b19c77944ab5edcdfcdb9e61,
+        type: 3}
+      propertyPath: m_RayTracingMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8804795166771358170, guid: 0311a453b19c77944ab5edcdfcdb9e61,
+        type: 3}
+      propertyPath: m_SkinnedMotionVectors
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 5866666021909216657, guid: 0311a453b19c77944ab5edcdfcdb9e61, type: 3}
     m_RemovedGameObjects: []

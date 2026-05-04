@@ -24,6 +24,12 @@ MonoBehaviour:
   bodyRadius: 0.4
   neuralCreditsOnDeath: 1
   xpOnDeath: 4
+  xpDropTable:
+    tier1Chance: 1
+    tier2Chance: 0.15
+    tier3Chance: 0.05
+    tier4Chance: 0.01
+    bossMultiDropCount: 0
   rareDropChance: 0
   rareDropTable: []
   armor: 0

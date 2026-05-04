@@ -100,6 +100,29 @@ namespace CyberPickle.DOTS.Authoring
                     Value = (int)authoring.data.visualType
                 });
 
+                // XP drop probabilities — read by EnemyDeathSystem on kill
+                // to roll the cascade and pick which tier of XP gem spawns.
+                // Boss multi-drop count is also carried here so the death
+                // system has all the info it needs without re-querying the SO.
+                var drops = authoring.data.xpDropTable;
+                AddComponent(entity, new EnemyXPDropChances
+                {
+                    Tier1Chance        = drops.tier1Chance,
+                    Tier2Chance        = drops.tier2Chance,
+                    Tier3Chance        = drops.tier3Chance,
+                    Tier4Chance        = drops.tier4Chance,
+                    BossMultiDropCount = drops.bossMultiDropCount,
+                });
+
+                // Corpse cleanup timing — read by EnemyDeathSystem on kill to
+                // initialize the CorpseLifecycle component (which then drives
+                // CorpseLifecycleSystem's two-phase dissolve + destroy flow).
+                AddComponent(entity, new EnemyCorpseConfig
+                {
+                    DelayBeforeDissolve = authoring.data.corpseDelayBeforeDissolve,
+                    DissolveDuration    = authoring.data.corpseDissolveDuration,
+                });
+
                 // ─── NOT baked yet (deferred to system-ship milestones): ───
                 // Defenses (armor, knockback/stun resistance, element mults) → M7
                 // AI behavior (aiPattern, aggroRange, attackRange, ...)       → M8

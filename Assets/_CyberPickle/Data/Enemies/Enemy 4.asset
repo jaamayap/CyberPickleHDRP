@@ -22,8 +22,16 @@ MonoBehaviour:
   moveSpeed: 0.5
   contactDamage: 5
   bodyRadius: 0.3
+  corpseDelayBeforeDissolve: 3
+  corpseDissolveDuration: 1.5
   neuralCreditsOnDeath: 1
   xpOnDeath: 2
+  xpDropTable:
+    tier1Chance: 0.2
+    tier2Chance: 0.08
+    tier3Chance: 0.03
+    tier4Chance: 0
+    bossMultiDropCount: 0
   rareDropChance: 0
   rareDropTable: []
   armor: 0

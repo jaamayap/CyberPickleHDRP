@@ -82,14 +82,24 @@ namespace CyberPickle.Gameplay.Enemies
         // DROPS (M6 — currency / XP system)
         // =====================================================================
 
+        [Header("Corpse Lifecycle")]
+        [Tooltip("Seconds the corpse remains as a ragdolling body before the dissolve effect starts. Lower = quicker cleanup, higher = more ragdoll time. Designer-tunable per enemy.")]
+        [Range(0.1f, 30f)] public float corpseDelayBeforeDissolve = 3f;
+
+        [Tooltip("Length of the dissolve effect itself (the visual shrink + emissive flare). After this, entity + visual are destroyed.")]
+        [Range(0.1f, 5f)] public float corpseDissolveDuration = 1.5f;
+
         [Header("Drops on Death")]
-        [Tooltip("Neural Credits awarded to the player when this enemy dies. (M6)")]
+        [Tooltip("Neural Credits awarded to the player when this enemy dies. (Currency — M? when environment-mining ships)")]
         [Min(0)]
         public int neuralCreditsOnDeath = 1;
 
-        [Tooltip("Experience points awarded to the player when this enemy dies. (M6)")]
+        [Tooltip("[LEGACY — replaced by xpDropTable] Flat XP awarded on death. Kept for back-compat; new enemies should use the tier-based xpDropTable instead.")]
         [Min(0)]
         public int xpOnDeath = 1;
+
+        [Tooltip("Tiered XP drop probabilities — cascade roll picks one tier per kill. Bosses spawn a multi-drop burst on top.")]
+        public XPDropTable xpDropTable = XPDropTable.DefaultTrash;
 
         [Tooltip("Chance (0–100%) that a rare item drop fires on death. 0 = never. (M7+)")]
         [Range(0f, 100f)]
@@ -318,6 +328,76 @@ namespace CyberPickle.Gameplay.Enemies
         Flee,
         /// <summary>Custom AI handled by a dedicated system — used for unique bosses.</summary>
         Special,
+    }
+
+    /// <summary>
+    /// Per-enemy XP drop probabilities. The kill rolls a single random
+    /// number 0..1 and walks the cascade from highest tier down — first
+    /// threshold crossed wins. T0 (Data Fragment) is the implicit fallback
+    /// when no higher tier triggers, so something always drops.
+    ///
+    /// Bosses ignore the cascade and spawn `BossMultiDropCount` Tier 4 gems
+    /// in a circle around the body for spectacle.
+    /// </summary>
+    [Serializable]
+    public struct XPDropTable
+    {
+        [Tooltip("Chance (0–1) of dropping Tier 1 (Code Crystal, 3 XP).")]
+        [Range(0f, 1f)] public float tier1Chance;
+
+        [Tooltip("Chance (0–1) of dropping Tier 2 (Neural Shard, 10 XP).")]
+        [Range(0f, 1f)] public float tier2Chance;
+
+        [Tooltip("Chance (0–1) of dropping Tier 3 (Synth Spark, 30 XP).")]
+        [Range(0f, 1f)] public float tier3Chance;
+
+        [Tooltip("Chance (0–1) of dropping Tier 4 (Sentinel Core, 100 XP).")]
+        [Range(0f, 1f)] public float tier4Chance;
+
+        [Tooltip("Bosses spawn this many Tier 4 gems in a burst around their body, on top of the normal cascade. 0 = no burst (non-boss enemies).")]
+        [Min(0)] public int bossMultiDropCount;
+
+        // ─── Convenient defaults for designers to start from ───
+
+        /// <summary>Trash-mob baseline: 0 / 0 / 2% / 10% / 88%.</summary>
+        public static XPDropTable DefaultTrash => new XPDropTable
+        {
+            tier4Chance = 0f,
+            tier3Chance = 0.005f,
+            tier2Chance = 0.02f,
+            tier1Chance = 0.10f,
+            bossMultiDropCount = 0,
+        };
+
+        /// <summary>Mid-tier humanoid (skeleton / mutant): more upward bias.</summary>
+        public static XPDropTable DefaultMidTier => new XPDropTable
+        {
+            tier4Chance = 0f,
+            tier3Chance = 0.03f,
+            tier2Chance = 0.08f,
+            tier1Chance = 0.25f,
+            bossMultiDropCount = 0,
+        };
+
+        /// <summary>Big mutant / elite: occasional T4, lots of T2-T3.</summary>
+        public static XPDropTable DefaultElite => new XPDropTable
+        {
+            tier4Chance = 0.03f,
+            tier3Chance = 0.10f,
+            tier2Chance = 0.25f,
+            tier1Chance = 0.40f,
+            bossMultiDropCount = 0,
+        };
+
+        /// <summary>Boss: 100% T4 + multi-drop burst.</summary>
+        public static XPDropTable DefaultBoss => new XPDropTable
+        {
+            tier4Chance = 1f,
+            tier3Chance = 0f,
+            tier2Chance = 0f,
+            tier1Chance = 0f,
+            bossMultiDropCount = 8,
+        };
     }
 
     /// <summary>

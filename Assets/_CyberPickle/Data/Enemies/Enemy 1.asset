@@ -17,12 +17,21 @@ MonoBehaviour:
   isBoss: 0
   visualPrefab: {fileID: 6173932140380075369, guid: 96527116463bb0143b4557e53977a97c,
     type: 3}
+  visualType: 0
   maxHealth: 10
   moveSpeed: 2
   contactDamage: 5
   bodyRadius: 0.26
+  corpseDelayBeforeDissolve: 3
+  corpseDissolveDuration: 1.5
   neuralCreditsOnDeath: 1
   xpOnDeath: 2
+  xpDropTable:
+    tier1Chance: 0.2
+    tier2Chance: 0.05
+    tier3Chance: 0.01
+    tier4Chance: 0
+    bossMultiDropCount: 0
   rareDropChance: 0
   rareDropTable: []
   armor: 0

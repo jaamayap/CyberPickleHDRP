@@ -130,6 +130,7 @@ GameObject:
   - component: {fileID: 97404614}
   - component: {fileID: 97404613}
   - component: {fileID: 97404615}
+  - component: {fileID: 97404616}
   m_Layer: 0
   m_Name: EnemyPrefabRegistry
   m_TagString: Untagged
@@ -193,6 +194,44 @@ MonoBehaviour:
       type: 3}
   - data: {fileID: 11400000, guid: f557cf190250bca4fb4795ad8e177b82, type: 2}
     entityPrefab: {fileID: 6173932140380075369, guid: d72c48de6db9f2c43abd6f32075efac8,
+      type: 3}
+--- !u!114 &97404616
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 97404612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 933092ad184f5de458efcb09191692a6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.DOTS.Authoring.XPGemRegistryAuthoring
+  tiers:
+  - displayName: Tier 0
+    tierColor: {r: 0, g: 1, b: 0, a: 1}
+    xpValue: 1
+    gemPrefab: {fileID: 3261133153455466549, guid: 7b8ac453d80c91744b4511997f1cc6ff,
+      type: 3}
+  - displayName: Tier 1
+    tierColor: {r: 0, g: 1, b: 1, a: 1}
+    xpValue: 3
+    gemPrefab: {fileID: 4413795126497647924, guid: 25320c9b0189eaf4283626c8c5d9eb9f,
+      type: 3}
+  - displayName: Tier 2
+    tierColor: {r: 0, g: 0.003921569, b: 1, a: 1}
+    xpValue: 10
+    gemPrefab: {fileID: 4100328146784160852, guid: 56518892750bfc945ac2cdcc0444b936,
+      type: 3}
+  - displayName: Tier 3
+    tierColor: {r: 1, g: 0, b: 1, a: 1}
+    xpValue: 30
+    gemPrefab: {fileID: 1728639668279817213, guid: b2474a5810139424ebda9732b07616ac,
+      type: 3}
+  - displayName: Tier 4
+    tierColor: {r: 1, g: 0.45490196, b: 0, a: 1}
+    xpValue: 300
+    gemPrefab: {fileID: 8207263384490327573, guid: 90b0fe2099e8c364db1ea059d6f58fb3,
       type: 3}
 --- !u!1 &785783799
 GameObject:

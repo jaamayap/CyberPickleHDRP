@@ -34,6 +34,7 @@ using UnityEngine;
 using CyberPickle.DOTS.Bridge;
 using CyberPickle.DOTS.Components;
 using CyberPickle.DOTS.Visual;
+using URandom = UnityEngine.Random;
 
 namespace CyberPickle.DOTS.Systems
 {
@@ -167,12 +168,192 @@ namespace CyberPickle.DOTS.Systems
                     visual.name = $"Corpse_{entity.Index}";
                 }
 
+                // ─── 4.5. XP gem drops ───
+                // Currency drops are intentionally NOT spawned here. Currency
+                // (Neural Credits / Cybercoins) is awarded by environment
+                // destruction, not enemy kills, per the GDD economy split.
+                // When that environment-destruction system ships, it lives in
+                // its own destruction handler — not in this death path.
+                SpawnXPGemDrops(em, entity, entityPos);
+
                 // ─── 5. Mark entity Dead — movement system stops driving it ───
                 em.AddComponent<Dead>(entity);
+
+                // ─── 6. Start the corpse lifecycle clock ───
+                // CorpseLifecycleSystem ticks this and triggers the dissolve
+                // visual + entity destroy when the timeline expires. Per-enemy
+                // timing comes from EnemyCorpseConfig (baked from EnemyData).
+                float delay = 3f;
+                float dissolve = 1.5f;
+                if (em.HasComponent<EnemyCorpseConfig>(entity))
+                {
+                    var cfg = em.GetComponentData<EnemyCorpseConfig>(entity);
+                    delay = cfg.DelayBeforeDissolve;
+                    dissolve = cfg.DissolveDuration;
+                }
+                em.AddComponentData(entity, new CorpseLifecycle
+                {
+                    DeathTime           = SystemAPI.Time.ElapsedTime,
+                    DelayBeforeDissolve = delay,
+                    DissolveDuration    = dissolve,
+                    DissolveSignaled    = false,
+                });
 
                 // NOTE: Entity is NOT destroyed. It lives on as a corpse, simulated
                 // by Unity Physics. Cleanup (despawn timer / distance / scene unload)
                 // is a future system.
+            }
+        }
+
+        // ─── XP gem drop logic ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Rolls the cascade on EnemyXPDropChances and Instantiates one XP gem
+        /// (or a multi-drop burst for bosses) at the entity's position. The gem
+        /// gets its tier-appropriate XPGemValue stamped from the registry and
+        /// is offset by a small random vector so multi-drops don't overlap.
+        /// </summary>
+        private void SpawnXPGemDrops(EntityManager em, Entity dyingEntity, float3 spawnPos)
+        {
+            // No drop chances baked = enemy that doesn't drop XP. Skip silently.
+            if (!em.HasComponent<EnemyXPDropChances>(dyingEntity)) return;
+
+            var chances = em.GetComponentData<EnemyXPDropChances>(dyingEntity);
+
+            // Boss multi-drop: spawn N Tier 4 gems in a circle, then ALSO do the
+            // cascade roll for one bonus gem on top. Spectacular, designed to
+            // feel like the body explodes loot.
+            bool isBoss = em.HasComponent<BossTag>(dyingEntity);
+            if (isBoss && chances.BossMultiDropCount > 0)
+            {
+                SpawnBossGemBurst(em, spawnPos, chances.BossMultiDropCount);
+            }
+
+            // Cascade roll — one gem per kill regardless of size.
+            int tier = RollDropTier(chances);
+            SpawnGem(em, spawnPos, tier, jitter: 0.2f);
+        }
+
+        /// <summary>
+        /// Walks the cascade highest -> lowest. Returns tier 0 if nothing higher
+        /// triggers (so something always drops).
+        /// </summary>
+        private static int RollDropTier(EnemyXPDropChances c)
+        {
+            float roll = URandom.value; // 0..1
+            float threshold = c.Tier4Chance;
+            if (roll < threshold) return 4;
+            threshold += c.Tier3Chance;
+            if (roll < threshold) return 3;
+            threshold += c.Tier2Chance;
+            if (roll < threshold) return 2;
+            threshold += c.Tier1Chance;
+            if (roll < threshold) return 1;
+            return 0;
+        }
+
+        /// <summary>
+        /// Spawns N Tier 4 gems in a ring around the boss's death position.
+        /// Each gem gets a small random scatter so they don't perfectly stack.
+        /// </summary>
+        private void SpawnBossGemBurst(EntityManager em, float3 origin, int count)
+        {
+            float two_pi = 2f * math.PI;
+            for (int i = 0; i < count; i++)
+            {
+                float angle = (i / (float)count) * two_pi + URandom.Range(-0.1f, 0.1f);
+                float r = URandom.Range(1.0f, 2.5f);
+                float3 pos = new float3(
+                    origin.x + math.cos(angle) * r,
+                    origin.y,
+                    origin.z + math.sin(angle) * r);
+                SpawnGem(em, pos, tier: 4, jitter: 0f);
+            }
+        }
+
+        /// <summary>
+        /// Look up the gem registry, pick the tier prefab, Instantiate at pos.
+        /// Adds a small random XZ jitter so single drops don't perfectly stack
+        /// on the corpse and double-pickups visually.
+        /// </summary>
+        private void SpawnGem(EntityManager em, float3 pos, int tier, float jitter)
+        {
+            using var registryQuery = em.CreateEntityQuery(ComponentType.ReadOnly<XPGemPrefabBufferElement>());
+            if (registryQuery.CalculateEntityCount() == 0) return;
+
+            using var registries = registryQuery.ToEntityArray(Allocator.Temp);
+            for (int r = 0; r < registries.Length; r++)
+            {
+                var buffer = em.GetBuffer<XPGemPrefabBufferElement>(registries[r], isReadOnly: true);
+                for (int i = 0; i < buffer.Length; i++)
+                {
+                    if (buffer[i].Tier != tier) continue;
+                    if (buffer[i].Prefab == Entity.Null) return;
+
+                    Entity gem = em.Instantiate(buffer[i].Prefab);
+
+                    float3 jitteredPos = pos;
+                    if (jitter > 0f)
+                    {
+                        jitteredPos.x += URandom.Range(-jitter, jitter);
+                        jitteredPos.z += URandom.Range(-jitter, jitter);
+                    }
+
+                    // Preserve the prefab's authored rotation + scale. We only
+                    // want to replace position. Reading the existing transform
+                    // and mutating Position avoids accidentally clobbering any
+                    // designer-authored rotation / scale values.
+                    bool hasLT = em.HasComponent<LocalTransform>(gem);
+                    if (hasLT)
+                    {
+                        var t = em.GetComponentData<LocalTransform>(gem);
+                        t.Position = jitteredPos;
+                        em.SetComponentData(gem, t);
+                    }
+
+                    // Also force-write LocalToWorld immediately so first-frame
+                    // rendering doesn't show the gem at the prefab's bake-time
+                    // position before TransformSystemGroup runs.
+                    if (em.HasComponent<Unity.Transforms.LocalToWorld>(gem))
+                    {
+                        var t = em.GetComponentData<LocalTransform>(gem);
+                        em.SetComponentData(gem, new Unity.Transforms.LocalToWorld
+                        {
+                            Value = float4x4.TRS(t.Position, t.Rotation, t.Scale)
+                        });
+                    }
+
+                    // ALSO update child LocalToWorlds via the LinkedEntityGroup so
+                    // a parent-with-children gem prefab (empty parent + sphere child)
+                    // doesn't render the visible child at world origin while the
+                    // parent invisibly sits at the correct position. We compute each
+                    // child's LocalToWorld = parent's LocalToWorld × child's
+                    // LocalTransform, mirroring what TransformSystemGroup will do
+                    // next frame anyway.
+                    if (hasLT && em.HasBuffer<LinkedEntityGroup>(gem))
+                    {
+                        var parentLTW = em.GetComponentData<Unity.Transforms.LocalToWorld>(gem).Value;
+                        var group = em.GetBuffer<LinkedEntityGroup>(gem);
+                        for (int g = 0; g < group.Length; g++)
+                        {
+                            var child = group[g].Value;
+                            if (child == gem) continue;
+                            if (!em.HasComponent<Unity.Transforms.LocalToWorld>(child)) continue;
+                            if (!em.HasComponent<LocalTransform>(child)) continue;
+
+                            var childLT = em.GetComponentData<LocalTransform>(child);
+                            float4x4 childLocal = float4x4.TRS(childLT.Position, childLT.Rotation, childLT.Scale);
+                            em.SetComponentData(child, new Unity.Transforms.LocalToWorld
+                            {
+                                Value = math.mul(parentLTW, childLocal)
+                            });
+                        }
+                    }
+
+                    if (em.HasComponent<XPGemValue>(gem))
+                        em.SetComponentData(gem, new XPGemValue { Value = buffer[i].XPValue });
+                    return;
+                }
             }
         }
     }
