@@ -36,12 +36,19 @@ namespace CyberPickle.DOTS.Systems
         // when their LocalTransform positions are within this distance.
         private const float HitRadiusSq = 0.6f * 0.6f;
 
+        // RNG for crit rolls. Initialized in OnCreate; advanced each hit.
+        private Unity.Mathematics.Random _random;
+
         [BurstCompile]
         public void OnCreate(ref SystemState state)
         {
             state.RequireForUpdate<ProjectileTag>();
             state.RequireForUpdate<EnemyTag>();
             state.RequireForUpdate<EndSimulationEntityCommandBufferSystem.Singleton>();
+
+            // Seed from world time + a constant salt so different runs
+            // produce different crit sequences but a single run is stable.
+            _random = new Unity.Mathematics.Random((uint)System.Environment.TickCount | 1u);
         }
 
         [BurstCompile]
@@ -49,6 +56,24 @@ namespace CyberPickle.DOTS.Systems
         {
             var ecbSingleton = SystemAPI.GetSingleton<EndSimulationEntityCommandBufferSystem.Singleton>();
             EntityCommandBuffer ecb = ecbSingleton.CreateCommandBuffer(state.WorldUnmanaged);
+
+            // Read player damage modifiers from PlayerStatsData singleton.
+            // Power is treated as a percent bonus per GDD §2.4 — Power=10 → +10% damage,
+            // Power=100 → +100% (×2), Power=300 → +300% (×4).
+            // CritChance is a 0..1 probability; crits double damage (Mega Crit
+            // breakpoint at >= 100% would 4×, implemented in M8 with the
+            // breakpoint system).
+            // Falls back to neutral multipliers when the stats singleton hasn't
+            // been initialized yet.
+            float power = 0f;
+            float critChance = 0f;
+            if (SystemAPI.HasSingleton<PlayerStatsData>())
+            {
+                var s = SystemAPI.GetSingleton<PlayerStatsData>();
+                power = s.Power;
+                critChance = s.CritChance;
+            }
+            float powerMultiplier = 1f + power * 0.01f;
 
             // Snapshot enemies into temp arrays for inner-loop access.
             // Exclude Dead so projectiles don't waste hits on corpses.
@@ -86,7 +111,14 @@ namespace CyberPickle.DOTS.Systems
 
                     Entity enemyEntity = enemyEntities[i];
                     Health health = SystemAPI.GetComponent<Health>(enemyEntity);
-                    health.Current -= projDamage.ValueRO.Value;
+
+                    // Apply damage formula: base × (1 + Power%) × critMultiplier.
+                    // Element / weapon-upgrade / equipment / skill multipliers
+                    // slot in here as those systems land (M8 / M9).
+                    float critMultiplier = (_random.NextFloat() < critChance) ? 2f : 1f;
+                    float finalDamage = projDamage.ValueRO.Value * powerMultiplier * critMultiplier;
+
+                    health.Current -= finalDamage;
                     ecb.SetComponent(enemyEntity, health);
 
                     // Spawn hit VFX entity at the projectile's position. The VFX prefab

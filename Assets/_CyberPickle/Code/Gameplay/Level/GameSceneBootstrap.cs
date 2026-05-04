@@ -89,6 +89,13 @@ namespace CyberPickle.Gameplay.Level
                 : BaseStats.Defaults;
             InitializePlayerStats(SpawnedPlayer, startingStats);
 
+            // PlayerHealth must be reset AFTER PlayerStats.Initialize so MaxHealth
+            // reflects the spawned character's BaseStats (otherwise health resets
+            // to the Defaults value from BaseStats.Defaults). Also subscribes to
+            // OnPlayerDied to disable input on death — replaced by a proper
+            // RunStateManager in M7.2.
+            InitializePlayerHealth(SpawnedPlayer);
+
             Debug.Log($"<color=cyan>[GameSceneBootstrap]</color> Spawned '{prefabToSpawn.name}' at {pos}. Source: {source}.");
 
             // Notify both inspector-wired and code-wired listeners.
@@ -112,6 +119,41 @@ namespace CyberPickle.Gameplay.Level
             {
                 Debug.LogWarning($"[GameSceneBootstrap] Spawned '{player.name}' has no PlayerStats component — gameplay systems that read stats will see defaults.");
             }
+        }
+
+        /// <summary>
+        /// Resets PlayerHealth to full and wires the OnPlayerDied event so
+        /// player input is disabled when the player dies. The proper RunState
+        /// machine (M7.2) replaces this temporary input-disable hook.
+        /// </summary>
+        private void InitializePlayerHealth(GameObject player)
+        {
+            var health = player.GetComponent<PlayerHealth>();
+            if (health == null)
+            {
+                Debug.LogWarning($"[GameSceneBootstrap] Spawned '{player.name}' has no PlayerHealth component — player will be invulnerable.");
+                return;
+            }
+
+            health.ResetToFull();
+            health.OnPlayerDied += () => HandlePlayerDeath(player);
+        }
+
+        /// <summary>
+        /// Temporary death handler — disables input + motor so the dead
+        /// player stops responding to controls. Replaced by RunStateManager
+        /// in M7.2 which also pauses wave spawning, shows the results screen,
+        /// etc.
+        /// </summary>
+        private static void HandlePlayerDeath(GameObject player)
+        {
+            Debug.Log($"<color=red>[GameSceneBootstrap]</color> Player died.");
+
+            var input = player.GetComponent<PlayerInput>();
+            if (input != null) input.enabled = false;
+
+            var motor = player.GetComponent<PlayerMotor>();
+            if (motor != null) motor.enabled = false;
         }
 
         /// <summary>
@@ -180,6 +222,18 @@ namespace CyberPickle.Gameplay.Level
             if (statsBridge != null)
             {
                 statsBridge.enabled = true;
+            }
+
+            // Player Health <-> ECS bridge: mirrors CurrentHealth / MaxHealth /
+            // IsAlive to a PlayerHealthData singleton AND drains ECS-accumulated
+            // damage (from EnemyContactDamageSystem and future enemy-projectile
+            // systems) into PlayerHealth.TakeDamage each frame. Without this
+            // bridge, ECS damage sources can't reach the MonoBehaviour
+            // PlayerHealth.
+            var healthBridge = player.GetComponent<PlayerHealthBridge>();
+            if (healthBridge != null)
+            {
+                healthBridge.enabled = true;
             }
         }
 
