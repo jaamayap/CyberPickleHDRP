@@ -19,6 +19,7 @@ using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Characters;
 using CyberPickle.Characters.Data;
 using CyberPickle.Gameplay.Player;
+using CyberPickle.Gameplay.RunState;
 using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Gameplay.Level
@@ -52,6 +53,11 @@ namespace CyberPickle.Gameplay.Level
 
         private void Start()
         {
+            // Start the run in Loading phase. SpawnSelectedCharacter transitions
+            // to Running once the player is fully spawned + initialized.
+            if (RunStateManager.Instance != null)
+                RunStateManager.Instance.TransitionTo(RunStatePhase.Loading);
+
             SpawnSelectedCharacter();
         }
 
@@ -98,6 +104,12 @@ namespace CyberPickle.Gameplay.Level
 
             Debug.Log($"<color=cyan>[GameSceneBootstrap]</color> Spawned '{prefabToSpawn.name}' at {pos}. Source: {source}.");
 
+            // Player is fully set up — transition the run from Loading to
+            // Running. RunStateManager sets Time.timeScale = 1 and the
+            // RunTime timer starts ticking.
+            if (RunStateManager.Instance != null)
+                RunStateManager.Instance.TransitionTo(RunStatePhase.Running);
+
             // Notify both inspector-wired and code-wired listeners.
             OnPlayerSpawned?.Invoke(SpawnedPlayer);
             PlayerSpawned?.Invoke(SpawnedPlayer);
@@ -122,9 +134,10 @@ namespace CyberPickle.Gameplay.Level
         }
 
         /// <summary>
-        /// Resets PlayerHealth to full and wires the OnPlayerDied event so
-        /// player input is disabled when the player dies. The proper RunState
-        /// machine (M7.2) replaces this temporary input-disable hook.
+        /// Resets PlayerHealth to full and wires OnPlayerDied to transition
+        /// the run state to GameOver. RunStateManager handles Time.timeScale
+        /// and event dispatch from there — ResultsScreenController listens
+        /// for the GameOver phase to show the results panel.
         /// </summary>
         private void InitializePlayerHealth(GameObject player)
         {
@@ -136,24 +149,22 @@ namespace CyberPickle.Gameplay.Level
             }
 
             health.ResetToFull();
-            health.OnPlayerDied += () => HandlePlayerDeath(player);
+            health.OnPlayerDied += HandlePlayerDeath;
         }
 
         /// <summary>
-        /// Temporary death handler — disables input + motor so the dead
-        /// player stops responding to controls. Replaced by RunStateManager
-        /// in M7.2 which also pauses wave spawning, shows the results screen,
-        /// etc.
+        /// On player death, transition the run to GameOver. RunStateManager
+        /// freezes Time.timeScale; ResultsScreenController shows the results
+        /// panel with the final RunStats values.
         /// </summary>
-        private static void HandlePlayerDeath(GameObject player)
+        private static void HandlePlayerDeath()
         {
-            Debug.Log($"<color=red>[GameSceneBootstrap]</color> Player died.");
+            Debug.Log($"<color=red>[GameSceneBootstrap]</color> Player died — transitioning to GameOver.");
 
-            var input = player.GetComponent<PlayerInput>();
-            if (input != null) input.enabled = false;
-
-            var motor = player.GetComponent<PlayerMotor>();
-            if (motor != null) motor.enabled = false;
+            if (RunStateManager.Instance != null)
+                RunStateManager.Instance.TransitionTo(RunStatePhase.GameOver);
+            else
+                Debug.LogWarning("[GameSceneBootstrap] No RunStateManager — death will not show results screen.");
         }
 
         /// <summary>

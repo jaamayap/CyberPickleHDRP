@@ -34,6 +34,7 @@ using UnityEngine;
 using CyberPickle.DOTS.Bridge;
 using CyberPickle.DOTS.Components;
 using CyberPickle.DOTS.Visual;
+using CyberPickle.Gameplay.RunState;
 using URandom = UnityEngine.Random;
 
 namespace CyberPickle.DOTS.Systems
@@ -93,6 +94,15 @@ namespace CyberPickle.DOTS.Systems
                 {
                     dyingEntities.Add(entity);
                 }
+            }
+
+            // Notify the run-stats tracker of kills this frame. We do this
+            // ONCE with the count instead of per-entity in the loop below
+            // to keep the managed-call boundary minimal.
+            if (dyingEntities.Length > 0 && RunStatsTracker.Instance != null)
+            {
+                for (int i = 0; i < dyingEntities.Length; i++)
+                    RunStatsTracker.Instance.RecordEnemyKilled();
             }
 
             for (int i = 0; i < dyingEntities.Length; i++)
