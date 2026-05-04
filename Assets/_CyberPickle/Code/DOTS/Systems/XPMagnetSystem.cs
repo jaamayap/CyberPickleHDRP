@@ -30,16 +30,14 @@ namespace CyberPickle.DOTS.Systems
     public partial struct XPMagnetSystem : ISystem
     {
         // ─── Tunables ────────────────────────────────────────────────────────
-        // These are constants for now. When a player stats system lands
-        // (level-up upgrades scaling magnet radius / pull speed, gear effects,
-        // etc.), these constants are replaced by reads from a PlayerMagnetStats
-        // singleton component written by the player MonoBehaviour each frame.
-        // The query shape stays the same; only the source of values changes.
+        // BaseMagnetRadius is the design constant; the effective radius each
+        // frame is BaseMagnetRadius × PlayerStatsData.MagneticField (skill /
+        // equipment / breakpoint upgrades scale this naturally).
 
-        /// <summary>Distance from player at which gems start being pulled in. Player upgrades will scale this up.</summary>
-        private const float MagnetRadius = 4f;
+        /// <summary>Base magnet radius before the player's MagneticField multiplier. Effective radius = base × multiplier.</summary>
+        private const float BaseMagnetRadius = 4f;
 
-        /// <summary>Distance from player at which gems are auto-collected.</summary>
+        /// <summary>Distance from player at which gems are auto-collected. Doesn't scale with stats — represents physical pickup hitbox.</summary>
         private const float CollectRadius = 0.6f;
 
         /// <summary>Top horizontal speed a gem reaches when fully magnetized.</summary>
@@ -48,8 +46,7 @@ namespace CyberPickle.DOTS.Systems
         /// <summary>Exponential smoothing factor for velocity ramp-up. Higher = snappier acceleration.</summary>
         private const float PullSmoothing = 9f;
 
-        // Squared values cached for cheaper distance comparisons.
-        private const float MagnetRadiusSq = MagnetRadius * MagnetRadius;
+        /// <summary>Cached squared collection radius (collection radius is constant).</summary>
         private const float CollectRadiusSq = CollectRadius * CollectRadius;
 
         [BurstCompile]
@@ -66,6 +63,24 @@ namespace CyberPickle.DOTS.Systems
         {
             float dt = SystemAPI.Time.DeltaTime;
             float3 playerPos = SystemAPI.GetSingleton<PlayerPositionData>().Position;
+
+            // Read player's MagneticField + NeuralAdaptation multipliers from
+            // the ECS singleton. If the bridge hasn't created the singleton yet
+            // (player not spawned / bridge disabled), fall back to neutral
+            // multipliers so default magnet + XP behavior still works.
+            float magnetMultiplier = 1f;
+            float xpGainMultiplier = 1f;
+            if (SystemAPI.HasSingleton<PlayerStatsData>())
+            {
+                var s = SystemAPI.GetSingleton<PlayerStatsData>();
+                magnetMultiplier = s.MagneticField;
+                xpGainMultiplier = s.NeuralAdaptation;
+                if (magnetMultiplier <= 0.01f) magnetMultiplier = 1f; // safety: never collapse to 0
+                if (xpGainMultiplier <= 0.01f) xpGainMultiplier = 1f;
+            }
+
+            float effectiveMagnetRadius   = BaseMagnetRadius * magnetMultiplier;
+            float effectiveMagnetRadiusSq = effectiveMagnetRadius * effectiveMagnetRadius;
 
             // Pull-toward smoothing factor for this frame (frame-rate independent).
             float lerpT = 1f - math.exp(-PullSmoothing * dt);
@@ -88,16 +103,20 @@ namespace CyberPickle.DOTS.Systems
                 float distSq = math.lengthsq(toPlayer);
 
                 // Outside magnet radius — gem sits idle (just decay any residual velocity).
-                if (distSq > MagnetRadiusSq)
+                if (distSq > effectiveMagnetRadiusSq)
                 {
                     velocity.ValueRW.Value *= math.max(0f, 1f - dt * 2f); // gentle decay
                     continue;
                 }
 
-                // Within collect radius — pickup.
+                // Within collect radius — pickup. Apply NeuralAdaptation
+                // multiplier to scale per-gem XP. Round to int to keep
+                // PlayerXP.CurrentXP integer-clean.
                 if (distSq <= CollectRadiusSq)
                 {
-                    xpAwarded += value.ValueRO.Value;
+                    int scaledXp = (int)math.round(value.ValueRO.Value * xpGainMultiplier);
+                    if (scaledXp < 1) scaledXp = 1; // minimum 1 XP per gem (avoid total loss at extreme low multipliers)
+                    xpAwarded += scaledXp;
                     ecb.DestroyEntity(entity);
                     continue;
                 }
@@ -108,7 +127,7 @@ namespace CyberPickle.DOTS.Systems
 
                 // Speed scales linearly with proximity (closer = faster pull) for a
                 // gravitational feel without needing real 1/r² physics.
-                float t = 1f - (dist / MagnetRadius);
+                float t = 1f - (dist / effectiveMagnetRadius);
                 float desiredSpeed = MaxPullSpeed * math.lerp(0.4f, 1f, t);
                 float3 desiredVel = dir * desiredSpeed;
 
