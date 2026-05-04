@@ -19,15 +19,21 @@ MonoBehaviour:
   characterPrefab: {fileID: 0}
   characterIcon: {fileID: 0}
   lockedMaterial: {fileID: 0}
-  maxHealth: 100
-  healthRegeneration: 1
-  defense: 10
-  power: 10
-  speed: 5
-  magneticField: 1
-  dexterity: 10
-  luck: 1
-  areaOfEffect: 1
+  baseStats:
+    maxHealth: 100
+    healthRegen: 1
+    defense: 10
+    power: 10
+    critChance: 0.05
+    lifesteal: 0
+    speed: 5
+    magneticField: 1
+    areaOfEffect: 1
+    dexterity: 10
+    luck: 1
+    hack: 0
+    cooldownReduction: 0
+    neuralAdaptation: 1
   unlockedByDefault: 0
   requiredPlayerLevel: 10
   requiredAchievements: []

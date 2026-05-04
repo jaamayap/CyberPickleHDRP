@@ -15,7 +15,7 @@ namespace CyberPickle.Characters.UI
     /// <summary>
     /// Manages UI elements for character selection: hover panel, details panel,
     /// unlock requirements, and confirmation prompts.
-    /// Only responsible for UI feedback/animations—logic or selection rules
+    /// Only responsible for UI feedback/animationsï¿½logic or selection rules
     /// live in other managers.
     /// </summary>
     public class CharacterUIManager : Manager<CharacterUIManager>
@@ -259,13 +259,13 @@ namespace CyberPickle.Characters.UI
 
             if (character.requiredPlayerLevel > 1)
             {
-                requirements += $"• Level {character.requiredPlayerLevel}\n";
+                requirements += $"ï¿½ Level {character.requiredPlayerLevel}\n";
             }
             if (character.requiredAchievements != null && character.requiredAchievements.Length > 0)
             {
                 foreach (var ach in character.requiredAchievements)
                 {
-                    requirements += $"• {ach}\n";
+                    requirements += $"ï¿½ {ach}\n";
                 }
             }
 
@@ -452,13 +452,21 @@ namespace CyberPickle.Characters.UI
         {
             ClearStatsContainer();
 
-            // Example stats we show:
-            CreateStatRow("Health", baseData.maxHealth, progression);
-            CreateStatRow("Defense", baseData.defense, progression);
-            CreateStatRow("Power", baseData.power, progression);
-            CreateStatRow("Speed", baseData.speed, progression);
-            CreateStatRow("Dexterity", baseData.dexterity, progression);
-            CreateStatRow("Luck", baseData.luck, progression);
+            // Read base values from the unified BaseStats struct.
+            // The character-selection preview shows BASE values only â€” runtime
+            // modifiers (skills, equipment, implants) aren't relevant here;
+            // those are previewed in the Equipment Hub.
+            var stats = baseData.baseStats;
+            CreateStatRow("Health",    stats.maxHealth, progression);
+            CreateStatRow("Defense",   stats.defense,   progression);
+            CreateStatRow("Power",     stats.power,     progression);
+            CreateStatRow("Speed",     stats.speed,     progression);
+            CreateStatRow("Dexterity", stats.dexterity, progression);
+            CreateStatRow("Luck",      stats.luck,      progression);
+            // Additional stat rows (Hack, NeuralAdaptation, CritChance, Lifesteal,
+            // CooldownReduction, MagneticField, AreaOfEffect, HealthRegen) shipped
+            // when the character-select preview is redesigned to show the full
+            // 14-stat profile.
         }
 
         private void CreateStatRow(string statName, float baseValue, CharacterProgressionData progression)
