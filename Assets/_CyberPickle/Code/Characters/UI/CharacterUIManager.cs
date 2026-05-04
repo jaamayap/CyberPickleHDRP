@@ -476,6 +476,8 @@ namespace CyberPickle.Characters.UI
             var texts = row.GetComponentsInChildren<TextMeshProUGUI>();
             if (texts.Length < 2) return;
 
+            // Display the base value from CharacterData (the SO). Always live —
+            // designer SO changes show up immediately on the next selection.
             float baseValue = baseData.baseStats.Get(stat);
             texts[0].text = label;
             texts[1].text = baseValue.ToString("F1");
@@ -483,24 +485,11 @@ namespace CyberPickle.Characters.UI
             string statKey = $"{currentCharacterId}_{label}";
             statTextCache[statKey] = texts[1];
 
-            // If the profile has progressed values for this character (career
-            // XP applied via persistent stat modifiers — implemented when the
-            // skill tree ships), animate base → progressed. For now, the
-            // progressed value just equals the base value, so the tween is a
-            // no-op. The shape stays so the UI works once skills land.
-            if (progression != null)
-            {
-                float progressedValue = progression.Stats.Get(stat);
-                if (!Mathf.Approximately(progressedValue, baseValue))
-                {
-                    DOTween.To(
-                        () => baseValue,
-                        v => texts[1].text = v.ToString("F1"),
-                        progressedValue,
-                        statUpdateDuration
-                    );
-                }
-            }
+            // When the skill tree ships and we want a "with skills applied"
+            // preview, compute the progressed value live here from
+            //   baseValue + Σ skill modifiers (looked up by progression.UnlockedSkills)
+            // and animate base → progressed via DOTween. Until then, the row
+            // displays the base value as a static number.
         }
 
         private void ClearStatsContainer()

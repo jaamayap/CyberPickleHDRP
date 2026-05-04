@@ -2,12 +2,22 @@
 //
 // Purpose: Defines the base data structure for playable characters in Cyber Pickle.
 // This ScriptableObject stores character attributes, base stats, unlock
-// requirements, and visual references. Stats are stored in a BaseStats struct
-// shared with CharacterProgressionData and consumed by PlayerStats at run start.
+// requirements, and visual references.
+//
+// CharacterData.baseStats is the SINGLE SOURCE OF TRUTH for a character's
+// base stat values. It is consumed by:
+//   - CharacterUIManager (character selection preview, base values shown live)
+//   - PlayerStats.Initialize (run start, becomes the runtime base before
+//     skill / equipment / implant / run-upgrade modifiers stack on top)
+// No other file caches base stat values — designer SO changes show up
+// instantly without profile resets or migrations.
 //
 // Created: 2024-02-11
 // Updated: 2026-05-03 — migrated from loose stat fields to BaseStats struct
 //                       (canonical 14-stat list from PlayerStatType).
+// Updated: 2026-05-05 — removed the redundant per-character stats cache from
+//                       CharacterProgressionData. Base stats now live only
+//                       on the SO (this file).
 
 using UnityEngine;
 using System;

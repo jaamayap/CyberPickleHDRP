@@ -11,6 +11,14 @@
 //                       auto-stat-bump on level-up with skill-point award
 //                       (matches GDD §5 — skills are manually allocated,
 //                       not auto-applied).
+// Updated: 2026-05-05 — Removed the per-character `stats` cache. Base stats
+//                       live exclusively on CharacterData (the SO); runtime
+//                       modifiers (skills, equipment, implants) apply via
+//                       PlayerStats.AddModifier at runtime. Old profile JSONs
+//                       with a "stats" field still load — Newtonsoft ignores
+//                       unknown members by default. Eliminates the "stagnant
+//                       cache" class of bug where designer SO changes weren't
+//                       reflected because old saves overrode them.
 
 using Newtonsoft.Json;
 using System;
@@ -70,14 +78,18 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonProperty("experience")]
         private float experience;
 
-        [JsonProperty("stats")]
-        private BaseStats stats;
-
         [JsonProperty("availableSkillPoints")]
         private int availableSkillPoints;
 
         [JsonProperty("unlockedSkills")]
         private List<string> unlockedSkills;
+
+        // NOTE: Stats are NOT stored here. Base stats come from CharacterData
+        // (the SO, designer-authored, refreshed instantly when changed).
+        // Runtime modifiers (skills, equipment, implants, run upgrades) apply
+        // via PlayerStats.AddModifier at run start, with sourceIds derived
+        // from unlockedSkills + equipped items. No persistent stats snapshot
+        // means designer SO changes are always reflected immediately.
 
         // Keep existing properties
         [JsonProperty("equippedWeaponId")]
@@ -108,7 +120,6 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonIgnore] public string CharacterId => characterId;
         [JsonIgnore] public int CharacterLevel => characterLevel;
         [JsonIgnore] public float Experience => experience;
-        [JsonIgnore] public BaseStats Stats => stats;
         [JsonIgnore] public int AvailableSkillPoints => availableSkillPoints;
         [JsonIgnore] public IReadOnlyList<string> UnlockedSkills => unlockedSkills;
         [JsonIgnore] public string EquippedWeaponId => equippedWeaponId;
@@ -131,7 +142,6 @@ namespace CyberPickle.Core.Services.Authentication.Data
             characterLevel = 1;
             experience = 0f;
             availableSkillPoints = 0;
-            stats = BaseStats.Defaults;
             unlockedSkills = new List<string>();
             equippedPowerupIds = new List<string>();
 
