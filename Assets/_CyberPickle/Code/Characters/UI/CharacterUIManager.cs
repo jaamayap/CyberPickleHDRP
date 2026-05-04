@@ -8,6 +8,7 @@ using CyberPickle.Characters.Data;
 using DG.Tweening;
 using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.Events;
+using CyberPickle.Gameplay.Stats;
 using System.Threading.Tasks;
 
 namespace CyberPickle.Characters.UI
@@ -452,24 +453,22 @@ namespace CyberPickle.Characters.UI
         {
             ClearStatsContainer();
 
-            // Read base values from the unified BaseStats struct.
-            // The character-selection preview shows BASE values only — runtime
-            // modifiers (skills, equipment, implants) aren't relevant here;
-            // those are previewed in the Equipment Hub.
-            var stats = baseData.baseStats;
-            CreateStatRow("Health",    stats.maxHealth, progression);
-            CreateStatRow("Defense",   stats.defense,   progression);
-            CreateStatRow("Power",     stats.power,     progression);
-            CreateStatRow("Speed",     stats.speed,     progression);
-            CreateStatRow("Dexterity", stats.dexterity, progression);
-            CreateStatRow("Luck",      stats.luck,      progression);
+            // The character-selection preview shows BASE values, animated to
+            // any progressed value (career-XP-driven) stored on the profile.
+            // Both come from the unified BaseStats / PlayerStatType API.
+            CreateStatRow("Health",    PlayerStatType.MaxHealth, baseData, progression);
+            CreateStatRow("Defense",   PlayerStatType.Defense,   baseData, progression);
+            CreateStatRow("Power",     PlayerStatType.Power,     baseData, progression);
+            CreateStatRow("Speed",     PlayerStatType.Speed,     baseData, progression);
+            CreateStatRow("Dexterity", PlayerStatType.Dexterity, baseData, progression);
+            CreateStatRow("Luck",      PlayerStatType.Luck,      baseData, progression);
             // Additional stat rows (Hack, NeuralAdaptation, CritChance, Lifesteal,
-            // CooldownReduction, MagneticField, AreaOfEffect, HealthRegen) shipped
+            // CooldownReduction, MagneticField, AreaOfEffect, HealthRegen) ship
             // when the character-select preview is redesigned to show the full
             // 14-stat profile.
         }
 
-        private void CreateStatRow(string statName, float baseValue, CharacterProgressionData progression)
+        private void CreateStatRow(string label, PlayerStatType stat, CharacterData baseData, CharacterProgressionData progression)
         {
             if (!statRowPrefab || !statsContainer) return;
 
@@ -477,21 +476,30 @@ namespace CyberPickle.Characters.UI
             var texts = row.GetComponentsInChildren<TextMeshProUGUI>();
             if (texts.Length < 2) return;
 
-            texts[0].text = statName;
+            float baseValue = baseData.baseStats.Get(stat);
+            texts[0].text = label;
             texts[1].text = baseValue.ToString("F1");
 
-            string statKey = $"{currentCharacterId}_{statName}";
+            string statKey = $"{currentCharacterId}_{label}";
             statTextCache[statKey] = texts[1];
 
-            if (progression?.Stats != null && progression.Stats.TryGetValue(statName, out float progressedValue))
+            // If the profile has progressed values for this character (career
+            // XP applied via persistent stat modifiers — implemented when the
+            // skill tree ships), animate base → progressed. For now, the
+            // progressed value just equals the base value, so the tween is a
+            // no-op. The shape stays so the UI works once skills land.
+            if (progression != null)
             {
-                // Animate from baseValue to progressedValue
-                DOTween.To(
-                    () => baseValue,
-                    v => texts[1].text = v.ToString("F1"),
-                    progressedValue,
-                    statUpdateDuration
-                );
+                float progressedValue = progression.Stats.Get(stat);
+                if (!Mathf.Approximately(progressedValue, baseValue))
+                {
+                    DOTween.To(
+                        () => baseValue,
+                        v => texts[1].text = v.ToString("F1"),
+                        progressedValue,
+                        statUpdateDuration
+                    );
+                }
             }
         }
 
