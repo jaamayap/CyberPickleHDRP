@@ -46,9 +46,16 @@ namespace CyberPickle.DOTS.Systems
             state.RequireForUpdate<EnemyTag>();
             state.RequireForUpdate<EndSimulationEntityCommandBufferSystem.Singleton>();
 
-            // Seed from world time + a constant salt so different runs
-            // produce different crit sequences but a single run is stable.
-            _random = new Unity.Mathematics.Random((uint)System.Environment.TickCount | 1u);
+            // Burst-safe seed. System.Environment.TickCount is a managed BCL
+            // property; calling it from a [BurstCompile] context works in the
+            // Editor (Burst falls back to managed execution in some modes)
+            // but CRASHES the player build with an access violation in
+            // ProjectileCollisionSystem.__codegen__OnCreate before the first
+            // frame renders. Random.CreateFromIndex hashes its input so any
+            // uint is safe (including 0). state.GlobalSystemVersion is
+            // available in Burst, non-zero, and varies enough across runs
+            // to give different crit sequences without touching managed APIs.
+            _random = Unity.Mathematics.Random.CreateFromIndex(state.GlobalSystemVersion);
         }
 
         [BurstCompile]
