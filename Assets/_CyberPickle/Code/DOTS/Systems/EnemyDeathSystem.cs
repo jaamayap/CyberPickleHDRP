@@ -34,6 +34,7 @@ using UnityEngine;
 using CyberPickle.DOTS.Bridge;
 using CyberPickle.DOTS.Components;
 using CyberPickle.DOTS.Visual;
+using CyberPickle.Gameplay.Audio;
 using CyberPickle.Gameplay.RunState;
 using URandom = UnityEngine.Random;
 
@@ -103,6 +104,17 @@ namespace CyberPickle.DOTS.Systems
             {
                 for (int i = 0; i < dyingEntities.Length; i++)
                     RunStatsTracker.Instance.RecordEnemyKilled();
+            }
+
+            // Music event broadcast — one per death. EnemyDeathSystem is
+            // SystemBase (managed), so calling MusicEventBus.Fire from here
+            // is safe; ISystem / Burst systems would need an event-entity
+            // bridge instead. Stage 0: Debug.Log. Stage 2 (Wwise): per-kill
+            // particle / stinger trigger; aggregated kills drive the
+            // CombatIntensity RTPC.
+            for (int i = 0; i < dyingEntities.Length; i++)
+            {
+                MusicEventBus.Fire(MusicEvent.EnemyDeath);
             }
 
             for (int i = 0; i < dyingEntities.Length; i++)
