@@ -7,8 +7,13 @@
 // interpolation so the rendered position is smooth between physics steps.
 // Movement is camera-relative so the angled HDRP camera's "up" matches
 // the player's intuition.
+//
+// Maximum speed is read from a sibling PlayerStats component each frame
+// (Speed stat). If no PlayerStats is present (e.g., direct-play testing
+// without character init), falls back to fallbackMaxSpeed.
 
 using UnityEngine;
+using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Gameplay.Player
 {
@@ -18,13 +23,13 @@ namespace CyberPickle.Gameplay.Player
     public class PlayerMotor : MonoBehaviour
     {
         [Header("Speeds")]
-        [Tooltip("Maximum movement speed in units/second when input is fully held.")]
-        [SerializeField] private float maxSpeed = 6f;
+        [Tooltip("Fallback maximum speed used when no sibling PlayerStats is present (e.g., direct-play testing without character init). At runtime, PlayerStats.Get(Speed) is the source of truth.")]
+        [SerializeField] private float fallbackMaxSpeed = 6f;
 
-        [Tooltip("Acceleration in units/second² while input is held. Higher = snappier.")]
+        [Tooltip("Acceleration in units/second² while input is held. Higher = snappier. Tuning constant — not scaled by player stats; this is movement feel, not character power.")]
         [SerializeField] private float acceleration = 40f;
 
-        [Tooltip("Deceleration in units/second² when input is released. Higher = stops sooner.")]
+        [Tooltip("Deceleration in units/second² when input is released. Higher = stops sooner. Tuning constant — not scaled by player stats.")]
         [SerializeField] private float deceleration = 50f;
 
         [Header("Camera")]
@@ -46,12 +51,23 @@ namespace CyberPickle.Gameplay.Player
 
         private Rigidbody rb;
         private PlayerInput input;
+        private PlayerStats playerStats;  // optional — null = fallback to fallbackMaxSpeed
         private Vector3 cachedTargetVelocity;
+
+        /// <summary>
+        /// Effective max speed for this frame. Reads from PlayerStats when
+        /// available so skill / equipment / implant / run-upgrade modifiers
+        /// take effect; falls back to the inspector value for testing.
+        /// </summary>
+        private float CurrentMaxSpeed => playerStats != null
+            ? playerStats.Get(PlayerStatType.Speed)
+            : fallbackMaxSpeed;
 
         private void Awake()
         {
             rb = GetComponent<Rigidbody>();
             input = GetComponent<PlayerInput>();
+            playerStats = GetComponent<PlayerStats>();  // optional
 
             // Sensible Rigidbody defaults for a top-down character controller.
             rb.useGravity = true;
@@ -101,7 +117,7 @@ namespace CyberPickle.Gameplay.Player
             // Clamp so diagonal isn't 1.41× faster than axis-aligned.
             if (worldDir.sqrMagnitude > 1f) worldDir.Normalize();
 
-            cachedTargetVelocity = worldDir * maxSpeed;
+            cachedTargetVelocity = worldDir * CurrentMaxSpeed;
         }
 
         private void FixedUpdate()
@@ -111,13 +127,13 @@ namespace CyberPickle.Gameplay.Player
             float lerpRate = (cachedTargetVelocity.sqrMagnitude > 0.0001f) ? acceleration : deceleration;
 
             // Preserve vertical velocity (gravity, jumps, etc.) — only blend horizontal.
-            Vector3 currentVel = rb.velocity;
+            Vector3 currentVel = rb.linearVelocity;
             float verticalVel = currentVel.y;
             currentVel.y = 0f;
 
             Vector3 newHorizontal = Vector3.MoveTowards(currentVel, cachedTargetVelocity, lerpRate * Time.fixedDeltaTime);
 
-            rb.velocity = new Vector3(newHorizontal.x, verticalVel, newHorizontal.z);
+            rb.linearVelocity = new Vector3(newHorizontal.x, verticalVel, newHorizontal.z);
 
             // Rotate the character to face the direction of motion. Done via
             // Rigidbody.MoveRotation so it plays nicely with physics (and with

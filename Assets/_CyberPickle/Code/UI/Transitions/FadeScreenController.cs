@@ -106,8 +106,11 @@ namespace CyberPickle.UI.Transitions
             if (currentFadeSequence != null && currentFadeSequence.IsActive())
                 currentFadeSequence.Kill();
 
-            // Create fade sequence
-            currentFadeSequence = DOTween.Sequence();
+            // Create fade sequence. SetUpdate(true) means "use unscaled time"
+            // so the fade still animates when Time.timeScale is 0 (game paused,
+            // GameOver phase, level-up overlay, etc.). UI transitions must
+            // never freeze just because gameplay is paused.
+            currentFadeSequence = DOTween.Sequence().SetUpdate(true);
             currentFadeSequence.Append(fadeImage.DOFade(1f, fadeDuration).SetEase(fadeEase));
 
             if (loadingIndicator != null)
@@ -134,8 +137,8 @@ namespace CyberPickle.UI.Transitions
             if (loadingIndicator != null)
                 loadingIndicator.SetActive(false);
 
-            // Create fade sequence
-            currentFadeSequence = DOTween.Sequence();
+            // Create fade sequence (unscaled — see FadeToBlack for rationale).
+            currentFadeSequence = DOTween.Sequence().SetUpdate(true);
             currentFadeSequence.Append(fadeImage.DOFade(0f, fadeDuration).SetEase(fadeEase));
             currentFadeSequence.AppendCallback(() => {
                 fadeImage.gameObject.SetActive(false);
@@ -154,27 +157,29 @@ namespace CyberPickle.UI.Transitions
         }
 
         /// <summary>
-        /// Performs a full fade cycle (transparent to black and back)
+        /// Performs a full fade cycle (transparent to black and back).
+        /// Uses unscaled time so the cycle completes during pause states.
         /// </summary>
         public IEnumerator FadeCycle(float holdDuration = 0.2f)
         {
             FadeToBlack();
-            yield return new WaitForSeconds(fadeDuration + holdDuration);
+            yield return new WaitForSecondsRealtime(fadeDuration + holdDuration);
             FadeFromBlack();
         }
 
         /// <summary>
-        /// Fades to black, executes an action, then fades back
+        /// Fades to black, executes an action, then fades back.
+        /// Uses unscaled time so the action runs even during pause states.
         /// </summary>
         public IEnumerator FadeAction(System.Action action, float holdDuration = 0.2f)
         {
             FadeToBlack();
-            yield return new WaitForSeconds(fadeDuration);
+            yield return new WaitForSecondsRealtime(fadeDuration);
 
             if (action != null)
                 action();
 
-            yield return new WaitForSeconds(holdDuration);
+            yield return new WaitForSecondsRealtime(holdDuration);
             FadeFromBlack();
         }
 

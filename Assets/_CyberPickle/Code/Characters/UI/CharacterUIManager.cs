@@ -8,6 +8,7 @@ using CyberPickle.Characters.Data;
 using DG.Tweening;
 using CyberPickle.Core.Services.Authentication.Data;
 using CyberPickle.Core.Events;
+using CyberPickle.Gameplay.Stats;
 using System.Threading.Tasks;
 
 namespace CyberPickle.Characters.UI
@@ -15,11 +16,17 @@ namespace CyberPickle.Characters.UI
     /// <summary>
     /// Manages UI elements for character selection: hover panel, details panel,
     /// unlock requirements, and confirmation prompts.
-    /// Only responsible for UI feedback/animations—logic or selection rules
+    /// Only responsible for UI feedback/animationsï¿½logic or selection rules
     /// live in other managers.
     /// </summary>
     public class CharacterUIManager : Manager<CharacterUIManager>
     {
+        // Scene-bound: every panel CanvasGroup, TextMeshPro, and Transform
+        // below is a MainMenu scene object. Persisting this manager when
+        // MainMenu unloads would leave it holding destroyed UI references and
+        // crash the next time the character-select panels are populated.
+        protected override bool PersistAcrossScenes => false;
+
         [Header("Details Panel")]
         [SerializeField] private CanvasGroup detailsPanel;
         [SerializeField] private TextMeshProUGUI detailsCharacterNameText;
@@ -259,13 +266,13 @@ namespace CyberPickle.Characters.UI
 
             if (character.requiredPlayerLevel > 1)
             {
-                requirements += $"• Level {character.requiredPlayerLevel}\n";
+                requirements += $"ï¿½ Level {character.requiredPlayerLevel}\n";
             }
             if (character.requiredAchievements != null && character.requiredAchievements.Length > 0)
             {
                 foreach (var ach in character.requiredAchievements)
                 {
-                    requirements += $"• {ach}\n";
+                    requirements += $"ï¿½ {ach}\n";
                 }
             }
 
@@ -452,16 +459,22 @@ namespace CyberPickle.Characters.UI
         {
             ClearStatsContainer();
 
-            // Example stats we show:
-            CreateStatRow("Health", baseData.maxHealth, progression);
-            CreateStatRow("Defense", baseData.defense, progression);
-            CreateStatRow("Power", baseData.power, progression);
-            CreateStatRow("Speed", baseData.speed, progression);
-            CreateStatRow("Dexterity", baseData.dexterity, progression);
-            CreateStatRow("Luck", baseData.luck, progression);
+            // The character-selection preview shows BASE values, animated to
+            // any progressed value (career-XP-driven) stored on the profile.
+            // Both come from the unified BaseStats / PlayerStatType API.
+            CreateStatRow("Health",    PlayerStatType.MaxHealth, baseData, progression);
+            CreateStatRow("Defense",   PlayerStatType.Defense,   baseData, progression);
+            CreateStatRow("Power",     PlayerStatType.Power,     baseData, progression);
+            CreateStatRow("Speed",     PlayerStatType.Speed,     baseData, progression);
+            CreateStatRow("Dexterity", PlayerStatType.Dexterity, baseData, progression);
+            CreateStatRow("Luck",      PlayerStatType.Luck,      baseData, progression);
+            // Additional stat rows (Hack, NeuralAdaptation, CritChance, Lifesteal,
+            // CooldownReduction, MagneticField, AreaOfEffect, HealthRegen) ship
+            // when the character-select preview is redesigned to show the full
+            // 14-stat profile.
         }
 
-        private void CreateStatRow(string statName, float baseValue, CharacterProgressionData progression)
+        private void CreateStatRow(string label, PlayerStatType stat, CharacterData baseData, CharacterProgressionData progression)
         {
             if (!statRowPrefab || !statsContainer) return;
 
@@ -469,22 +482,20 @@ namespace CyberPickle.Characters.UI
             var texts = row.GetComponentsInChildren<TextMeshProUGUI>();
             if (texts.Length < 2) return;
 
-            texts[0].text = statName;
+            // Display the base value from CharacterData (the SO). Always live â€”
+            // designer SO changes show up immediately on the next selection.
+            float baseValue = baseData.baseStats.Get(stat);
+            texts[0].text = label;
             texts[1].text = baseValue.ToString("F1");
 
-            string statKey = $"{currentCharacterId}_{statName}";
+            string statKey = $"{currentCharacterId}_{label}";
             statTextCache[statKey] = texts[1];
 
-            if (progression?.Stats != null && progression.Stats.TryGetValue(statName, out float progressedValue))
-            {
-                // Animate from baseValue to progressedValue
-                DOTween.To(
-                    () => baseValue,
-                    v => texts[1].text = v.ToString("F1"),
-                    progressedValue,
-                    statUpdateDuration
-                );
-            }
+            // When the skill tree ships and we want a "with skills applied"
+            // preview, compute the progressed value live here from
+            //   baseValue + Î£ skill modifiers (looked up by progression.UnlockedSkills)
+            // and animate base â†’ progressed via DOTween. Until then, the row
+            // displays the base value as a static number.
         }
 
         private void ClearStatsContainer()

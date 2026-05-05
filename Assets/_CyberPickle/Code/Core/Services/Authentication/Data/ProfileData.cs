@@ -5,12 +5,26 @@
 // equipment systems.
 //
 // Created: 2024-02-11
-// Updated: 2024-02-24
+// Updated: 2026-05-03 — Migrated CharacterProgressionData.stats from
+//                       Dictionary<string, float> to the canonical BaseStats
+//                       struct (PlayerStatType-keyed). Replaced the
+//                       auto-stat-bump on level-up with skill-point award
+//                       (matches GDD §5 — skills are manually allocated,
+//                       not auto-applied).
+// Updated: 2026-05-05 — Removed the per-character `stats` cache. Base stats
+//                       live exclusively on CharacterData (the SO); runtime
+//                       modifiers (skills, equipment, implants) apply via
+//                       PlayerStats.AddModifier at runtime. Old profile JSONs
+//                       with a "stats" field still load — Newtonsoft ignores
+//                       unknown members by default. Eliminates the "stagnant
+//                       cache" class of bug where designer SO changes weren't
+//                       reflected because old saves overrode them.
 
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Core.Services.Authentication.Data
 {
@@ -64,11 +78,18 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonProperty("experience")]
         private float experience;
 
-        [JsonProperty("stats")]
-        private Dictionary<string, float> stats;
+        [JsonProperty("availableSkillPoints")]
+        private int availableSkillPoints;
 
         [JsonProperty("unlockedSkills")]
         private List<string> unlockedSkills;
+
+        // NOTE: Stats are NOT stored here. Base stats come from CharacterData
+        // (the SO, designer-authored, refreshed instantly when changed).
+        // Runtime modifiers (skills, equipment, implants, run upgrades) apply
+        // via PlayerStats.AddModifier at run start, with sourceIds derived
+        // from unlockedSkills + equipped items. No persistent stats snapshot
+        // means designer SO changes are always reflected immediately.
 
         // Keep existing properties
         [JsonProperty("equippedWeaponId")]
@@ -99,7 +120,7 @@ namespace CyberPickle.Core.Services.Authentication.Data
         [JsonIgnore] public string CharacterId => characterId;
         [JsonIgnore] public int CharacterLevel => characterLevel;
         [JsonIgnore] public float Experience => experience;
-        [JsonIgnore] public IReadOnlyDictionary<string, float> Stats => stats;
+        [JsonIgnore] public int AvailableSkillPoints => availableSkillPoints;
         [JsonIgnore] public IReadOnlyList<string> UnlockedSkills => unlockedSkills;
         [JsonIgnore] public string EquippedWeaponId => equippedWeaponId;
         [JsonIgnore] public IReadOnlyList<string> EquippedPowerupIds => equippedPowerupIds;
@@ -120,46 +141,27 @@ namespace CyberPickle.Core.Services.Authentication.Data
         {
             characterLevel = 1;
             experience = 0f;
-            stats = new Dictionary<string, float>();
+            availableSkillPoints = 0;
             unlockedSkills = new List<string>();
             equippedPowerupIds = new List<string>();
 
-            // Initialize new collections
+            // Initialize equipment slot collections
             equippedHandWeapons = new List<string>(MAX_HAND_WEAPONS);
             equippedBodyWeapon = string.Empty;
             equippedArmor = string.Empty;
             equippedAmulet = string.Empty;
-
-            // Set default stats
-            InitializeDefaultStats();
-        }
-
-        /// <summary>
-        /// Sets up default stats for a new character
-        /// </summary>
-        private void InitializeDefaultStats()
-        {
-            // Initialize with basic stats if stats dictionary is empty
-            if (stats.Count == 0)
-            {
-                stats["Health"] = 100f;
-                stats["Defense"] = 10f;
-                stats["Power"] = 10f;
-                stats["Speed"] = 5f;
-                stats["MagneticField"] = 1f;
-                stats["Dexterity"] = 10f;
-                stats["Luck"] = 1f;
-                stats["AreaOfEffect"] = 1f;
-            }
         }
 
         #region Experience and Leveling
 
         /// <summary>
-        /// Adds experience points to the character
+        /// Adds career experience to the character. Career XP is the
+        /// per-character meta-progression value (persistent across runs),
+        /// distinct from per-run XP that drives the in-run level-up choice
+        /// screen.
         /// </summary>
-        /// <param name="amount">Amount of experience to add</param>
-        /// <returns>True if the character leveled up, false otherwise</returns>
+        /// <param name="amount">Amount of career XP to add.</param>
+        /// <returns>True if the character leveled up, false otherwise.</returns>
         public bool AddExperience(float amount)
         {
             if (amount <= 0) return false;
@@ -167,33 +169,38 @@ namespace CyberPickle.Core.Services.Authentication.Data
             int oldLevel = characterLevel;
             experience += amount;
 
-            // Calculate new level based on experience
-            // XP needed for next level = level * 1000
+            // Career level threshold: XP needed for next level = level × 1000
             while (experience >= characterLevel * 1000)
             {
                 experience -= characterLevel * 1000;
                 characterLevel++;
 
-                // When leveling up, increase stats automatically
-                IncreaseLevelStats();
+                // GDD §5: skill points are MANUALLY allocated in the skill tree,
+                // NOT auto-applied as stat bumps. Each level-up grants one point
+                // for the player to spend.
+                availableSkillPoints += SkillPointsPerLevel;
             }
 
-            Debug.Log($"[CharacterProgressionData] Added {amount} XP to {characterId}. Level: {characterLevel}, XP: {experience}");
+            Debug.Log($"[CharacterProgressionData] Added {amount} XP to {characterId}. Level: {characterLevel}, XP: {experience}, SkillPoints: {availableSkillPoints}");
             return characterLevel > oldLevel;
         }
 
         /// <summary>
-        /// Increases character stats when leveling up
+        /// Spends one skill point (called by the skill tree UI when the
+        /// player allocates a point). Returns false if no points are available.
         /// </summary>
-        private void IncreaseLevelStats()
+        public bool SpendSkillPoint()
         {
-            // Apply stat increases on level up
-            if (stats.ContainsKey("Health")) stats["Health"] += 10f;
-            if (stats.ContainsKey("Defense")) stats["Defense"] += 1f;
-            if (stats.ContainsKey("Power")) stats["Power"] += 1f;
-
-            Debug.Log($"[CharacterProgressionData] {characterId} leveled up to level {characterLevel}");
+            if (availableSkillPoints <= 0) return false;
+            availableSkillPoints--;
+            return true;
         }
+
+        /// <summary>
+        /// Number of skill points awarded per character level. Tunable as
+        /// the skill-tree balance settles.
+        /// </summary>
+        private const int SkillPointsPerLevel = 1;
 
         #endregion
 

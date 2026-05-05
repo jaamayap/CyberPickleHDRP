@@ -191,7 +191,7 @@ namespace MagicPigGames.ProjectileFactory
                 // If the initial angle exceeds the maximum allowed angle delta, fire the projectile forward with the default angle
                 var launchDirectionEarly =
                     Quaternion.AngleAxis(defaultAngle, Vector3.Cross(Vector3.up, initialDirection)) * initialDirection;
-                ProjectileRigidbody.velocity = launchDirectionEarly * Projectile.ProjectileData.Speed;
+                ProjectileRigidbody.linearVelocity = launchDirectionEarly * Projectile.ProjectileData.Speed;
 
                 // Set the alt target position to a position that is in front of the trajectory
                 var altTargetPosition = spawnPosition + launchDirectionEarly * 4f;
@@ -217,7 +217,7 @@ namespace MagicPigGames.ProjectileFactory
                 return;
 
             // Set the velocity of the Rigidbody to launch the projectile
-            ProjectileRigidbody.velocity = launchDirection * Projectile.ProjectileData.Speed;
+            ProjectileRigidbody.linearVelocity = launchDirection * Projectile.ProjectileData.Speed;
         }
 
         protected virtual Vector3 LaunchDirection(Vector3 initialDirection, Vector3 targetPosition,

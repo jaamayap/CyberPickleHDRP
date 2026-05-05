@@ -21,6 +21,17 @@ namespace CyberPickle.Core
         public GameState CurrentState => currentState;
         public bool IsPaused => isPaused;
 
+        /// <summary>
+        /// While a scene-loading transition is in flight, the state we are
+        /// transitioning TO. Equals GameState.None when no load is pending.
+        /// New scene MonoBehaviours can read this in their Awake to
+        /// pre-configure themselves for the incoming state — e.g.,
+        /// CameraManager positioning the camera at the character-select pose
+        /// instead of the menu pose when returning from EquipmentHub, so the
+        /// first rendered frame is already correct (no menu-pose flash).
+        /// </summary>
+        public GameState PendingTargetState { get; private set; } = GameState.None;
+
         #region Initialization
 
         public void Initialize()
@@ -341,6 +352,12 @@ namespace CyberPickle.Core
             // Remember target state instead of previous state
             GameState targetState = currentState;
 
+            // Expose for new-scene MonoBehaviours that need to pre-configure
+            // themselves for the incoming state during their own Awake/Start
+            // (CameraManager pre-positions the camera at the right pose to
+            // avoid a wrong-pose first frame on return).
+            PendingTargetState = targetState;
+
             // Set loading state
             if (currentState != GameState.Loading)
                 ChangeState(GameState.Loading);
@@ -371,7 +388,27 @@ namespace CyberPickle.Core
             {
                 Debug.Log($"[GameManager] Restoring target state: {targetState} after loading {sceneName}");
                 ChangeState(targetState);
+
+                // Re-broadcast so listeners that subscribed AFTER the original
+                // event (i.e., everything in the freshly-loaded scene) hear
+                // the state and initialize correctly. Without this, the
+                // original OnGameStateChanged event fires while the previous
+                // scene is still active; the new scene's MonoBehaviours
+                // subscribe in their Awake/Start AFTER that and miss it,
+                // landing the user in the default "press-any-button" /
+                // "menu-camera" state instead of the requested target state.
+                //
+                // ChangeState itself doesn't broadcast (see comment above)
+                // so we fire here at the only point where new listeners exist.
+                // The persistent GameManager will re-hear this via
+                // OnExternalGameStateChangeRequest, but ChangeState's same-
+                // state guard makes it a benign no-op log.
+                GameEvents.OnGameStateChanged.Invoke(targetState);
             }
+
+            // Clear so subsequent code (e.g., a future state change without
+            // a scene load) doesn't see a stale target.
+            PendingTargetState = GameState.None;
         }
 
         #endregion

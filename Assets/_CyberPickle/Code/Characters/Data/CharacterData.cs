@@ -1,15 +1,27 @@
-// File: Assets/Code/Characters/Data/CharacterData.cs
+// File: Assets/_CyberPickle/Code/Characters/Data/CharacterData.cs
 //
 // Purpose: Defines the base data structure for playable characters in Cyber Pickle.
-// This ScriptableObject stores character attributes, stats, unlock requirements,
-// and visual references. Stats are aligned with the core gameplay design and 
-// character progression systems.
+// This ScriptableObject stores character attributes, base stats, unlock
+// requirements, and visual references.
+//
+// CharacterData.baseStats is the SINGLE SOURCE OF TRUTH for a character's
+// base stat values. It is consumed by:
+//   - CharacterUIManager (character selection preview, base values shown live)
+//   - PlayerStats.Initialize (run start, becomes the runtime base before
+//     skill / equipment / implant / run-upgrade modifiers stack on top)
+// No other file caches base stat values — designer SO changes show up
+// instantly without profile resets or migrations.
 //
 // Created: 2024-02-11
-// Updated: 2024-02-11
+// Updated: 2026-05-03 — migrated from loose stat fields to BaseStats struct
+//                       (canonical 14-stat list from PlayerStatType).
+// Updated: 2026-05-05 — removed the redundant per-character stats cache from
+//                       CharacterProgressionData. Base stats now live only
+//                       on the SO (this file).
 
 using UnityEngine;
 using System;
+using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Characters.Data
 {
@@ -48,32 +60,10 @@ namespace CyberPickle.Characters.Data
         public Material lockedMaterial;
 
         [Header("Base Stats")]
-        [Tooltip("Maximum health points")]
-        public float maxHealth = 100f;
-
-        [Tooltip("Rate of health recovery over time")]
-        public float healthRegeneration = 1f;
-
-        [Tooltip("Reduces incoming damage")]
-        public float defense = 10f;
-
-        [Tooltip("Enhances weapon damage")]
-        public float power = 10f;
-
-        [Tooltip("Affects movement speed")]
-        public float speed = 5f;
-
-        [Tooltip("Increases item attraction radius")]
-        public float magneticField = 1f;
-
-        [Tooltip("Influences rate of fire")]
-        public float dexterity = 10f;
-
-        [Tooltip("Affects drop rates and item rarity")]
-        public float luck = 1f;
-
-        [Tooltip("Increases explosion radius and effect areas")]
-        public float areaOfEffect = 1f;
+        [Tooltip("Per-character base values for the canonical 14 player stats. " +
+                 "Read by PlayerStats at run start; applied as the baseline " +
+                 "before skill / equipment / implant / run-upgrade modifiers stack on top.")]
+        public BaseStats baseStats = BaseStats.Defaults;
 
         [Header("Unlock Requirements")]
         [Tooltip("If true, character is available from the start")]
@@ -100,7 +90,8 @@ namespace CyberPickle.Characters.Data
 
         /// <summary>
         /// Validates the CharacterData when it's created or modified in the editor.
-        /// Automatically generates a characterId if none is provided.
+        /// Automatically generates a characterId if none is provided. Stat-range
+        /// clamping is handled by [Min] / [Range] attributes on BaseStats fields.
         /// </summary>
         private void OnValidate()
         {
@@ -109,24 +100,6 @@ namespace CyberPickle.Characters.Data
                 characterId = displayName?.ToLower().Replace(" ", "_") ?? "undefined";
                 Debug.Log($"[CharacterData] Auto-generated characterId: {characterId}");
             }
-
-            ValidateStats();
-        }
-
-        /// <summary>
-        /// Ensures all stats are within valid ranges
-        /// </summary>
-        private void ValidateStats()
-        {
-            maxHealth = Mathf.Max(1f, maxHealth);
-            healthRegeneration = Mathf.Max(0f, healthRegeneration);
-            defense = Mathf.Max(0f, defense);
-            power = Mathf.Max(0f, power);
-            speed = Mathf.Max(0.1f, speed);
-            magneticField = Mathf.Max(0.1f, magneticField);
-            dexterity = Mathf.Max(0f, dexterity);
-            luck = Mathf.Max(0f, luck);
-            areaOfEffect = Mathf.Max(0.1f, areaOfEffect);
         }
 
 #if UNITY_EDITOR

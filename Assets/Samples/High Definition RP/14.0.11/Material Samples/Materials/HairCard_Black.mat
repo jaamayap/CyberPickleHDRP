@@ -119,6 +119,7 @@ Material:
     - _DoubleSidedGIMode: 0
     - _DoubleSidedNormalMode: 2
     - _DstBlend: 10
+    - _DstBlend2: 10
     - _EnableBlendModePreserveSpecularLighting: 1
     - _EnableFogOnTransparent: 1
     - _ExcludeFromTUAndAA: 0
@@ -135,6 +136,7 @@ Material:
     - _Opacity_Fading: 0.1
     - _Opacity_Threshold: 0.75
     - _OpaqueCullMode: 2
+    - _PerPixelSorting: 0
     - _Per_Strand_Hue_Variation: 0.05
     - _Per_Strand_Smoothness_Variation: 0.147
     - _RECALCULATE_CARD_NORMALS: 1
@@ -194,3 +196,4 @@ Material:
     - _Tiling: {r: 1, g: 10, b: 0, a: 0}
     - _Tip_Color: {r: 0.20784315, g: 0.08627451, b: 0.07058824, a: 1}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

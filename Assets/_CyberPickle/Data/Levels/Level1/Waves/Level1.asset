@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2685136a2b97ed64ebf39f314ea842c7, type: 3}
+  m_Name: Level1
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Waves.WavePlan
+  directives:
+  - label: Zombies start
+    enemyType: {fileID: 11400000, guid: e055186bb65fc5146887954811468fb2, type: 2}
+    spawnsPerSecond: 0.5
+    startTime: 0
+    endTime: 9999
+    oneShotBurst: 0
+    spawnRadius: 30
+    radialJitter: 1.23
+    speedJitter: 0.199
+  - label: Quick Zombie
+    enemyType: {fileID: 11400000, guid: 6dd9eab946b23ed468b9324b2b634c7c, type: 2}
+    spawnsPerSecond: 0.5
+    startTime: 60
+    endTime: 9999
+    oneShotBurst: 0
+    spawnRadius: 30
+    radialJitter: 0
+    speedJitter: 0.28
+  - label: Slow Big
+    enemyType: {fileID: 11400000, guid: a49ced813c94afd47b0cf154e9769e5a, type: 2}
+    spawnsPerSecond: 0.5
+    startTime: 120
+    endTime: 999
+    oneShotBurst: 0
+    spawnRadius: 30
+    radialJitter: 0
+    speedJitter: 0.224
+  - label: Zombie Reinforcements
+    enemyType: {fileID: 11400000, guid: e055186bb65fc5146887954811468fb2, type: 2}
+    spawnsPerSecond: 0.5
+    startTime: 90
+    endTime: 9999
+    oneShotBurst: 0
+    spawnRadius: 30
+    radialJitter: 0
+    speedJitter: 0.252
+  - label: Monster Quick
+    enemyType: {fileID: 11400000, guid: 000fb3b152eb927469455465c52b00fb, type: 2}
+    spawnsPerSecond: 0.2
+    startTime: 180
+    endTime: 0
+    oneShotBurst: 0
+    spawnRadius: 30
+    radialJitter: 1.26
+    speedJitter: 0.292
+  - label: Monster Quick
+    enemyType: {fileID: 11400000, guid: f557cf190250bca4fb4795ad8e177b82, type: 2}
+    spawnsPerSecond: 0.3
+    startTime: 290
+    endTime: 999
+    oneShotBurst: 0
+    spawnRadius: 30
+    radialJitter: 1.45
+    speedJitter: 0.202
+  planDuration: 300
+  loop: 0

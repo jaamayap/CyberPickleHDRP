@@ -52,6 +52,14 @@ namespace CyberPickle.UI.EquipmentHub
         [Header("Loadout Display")]
         [SerializeField] private LoadoutDisplayController loadoutDisplay;
 
+        // Scene-bound: every serialized field above (spawn point, fade
+        // controller, UI sections, buttons, inventory, loadout) points at
+        // GameObjects authored inside the EquipmentHub scene. When the scene
+        // unloads those references die. Persisting the manager across scenes
+        // would leave a zombie holding dead refs and reject every fresh
+        // re-entry as a "duplicate". Always re-create per scene load.
+        protected override bool PersistAcrossScenes => false;
+
         // Manager dependencies
         private ProfileManager profileManager;
 
@@ -357,7 +365,12 @@ namespace CyberPickle.UI.EquipmentHub
             if (fadeController != null)
             {
                 fadeController.FadeToBlack();
-                yield return new WaitForSeconds(fadeController.FadeDuration);
+                // Use unscaled time so the transition still completes if a
+                // previous scene left Time.timeScale at 0 (e.g., the GameOver
+                // phase before our PersistAcrossScenes fix made RunStateManager
+                // restore the time scale on unload). UI navigation must never
+                // depend on Time.timeScale.
+                yield return new WaitForSecondsRealtime(fadeController.FadeDuration);
             }
 
             GameEvents.OnGameStateChanged.Invoke(targetState);
@@ -374,7 +387,7 @@ namespace CyberPickle.UI.EquipmentHub
             if (fadeController != null)
             {
                 fadeController.FadeToBlack();
-                yield return new WaitForSeconds(fadeController.FadeDuration);
+                yield return new WaitForSecondsRealtime(fadeController.FadeDuration);
             }
 
             // Change game state

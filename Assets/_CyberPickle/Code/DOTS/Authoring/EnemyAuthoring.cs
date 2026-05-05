@@ -80,6 +80,49 @@ namespace CyberPickle.DOTS.Authoring
                     AddComponent<BossTag>(entity);
                 }
 
+                // Visual prefab reference — read by EnemyVisualBindingSystem
+                // (SystemBase, managed) to instantiate the GameObject visual
+                // that follows this entity each frame. UnityObjectRef stores
+                // a stable handle; only the bridge dereferences it.
+                if (authoring.data.visualPrefab != null)
+                {
+                    AddComponent(entity, new VisualPrefabRef
+                    {
+                        Value = authoring.data.visualPrefab
+                    });
+                }
+
+                // Visual type classification — drives Animator EnemyType
+                // parameter on spawn (Walk/Run branch) and DeathVariant
+                // selection (script picks 2 for Big, random 0/1 for Standard).
+                AddComponent(entity, new EnemyVisualTypeId
+                {
+                    Value = (int)authoring.data.visualType
+                });
+
+                // XP drop probabilities — read by EnemyDeathSystem on kill
+                // to roll the cascade and pick which tier of XP gem spawns.
+                // Boss multi-drop count is also carried here so the death
+                // system has all the info it needs without re-querying the SO.
+                var drops = authoring.data.xpDropTable;
+                AddComponent(entity, new EnemyXPDropChances
+                {
+                    Tier1Chance        = drops.tier1Chance,
+                    Tier2Chance        = drops.tier2Chance,
+                    Tier3Chance        = drops.tier3Chance,
+                    Tier4Chance        = drops.tier4Chance,
+                    BossMultiDropCount = drops.bossMultiDropCount,
+                });
+
+                // Corpse cleanup timing — read by EnemyDeathSystem on kill to
+                // initialize the CorpseLifecycle component (which then drives
+                // CorpseLifecycleSystem's two-phase dissolve + destroy flow).
+                AddComponent(entity, new EnemyCorpseConfig
+                {
+                    DelayBeforeDissolve = authoring.data.corpseDelayBeforeDissolve,
+                    DissolveDuration    = authoring.data.corpseDissolveDuration,
+                });
+
                 // ─── NOT baked yet (deferred to system-ship milestones): ───
                 // Defenses (armor, knockback/stun resistance, element mults) → M7
                 // AI behavior (aiPattern, aggroRange, attackRange, ...)       → M8

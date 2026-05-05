@@ -17,7 +17,10 @@ using UnityEngine;
 using UnityEngine.Events;
 using CyberPickle.Core.Services.Authentication;
 using CyberPickle.Characters;
+using CyberPickle.Characters.Data;
 using CyberPickle.Gameplay.Player;
+using CyberPickle.Gameplay.RunState;
+using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Gameplay.Level
 {
@@ -50,12 +53,20 @@ namespace CyberPickle.Gameplay.Level
 
         private void Start()
         {
+            // Start the run in Loading phase. SpawnSelectedCharacter transitions
+            // to Running once the player is fully spawned + initialized.
+            if (RunStateManager.Instance != null)
+                RunStateManager.Instance.TransitionTo(RunStatePhase.Loading);
+
             SpawnSelectedCharacter();
         }
 
         private void SpawnSelectedCharacter()
         {
-            GameObject prefabToSpawn = ResolveCharacterPrefab(out string source);
+            CharacterData characterData = ResolveCharacterData(out string source);
+            GameObject prefabToSpawn = characterData != null
+                ? characterData.characterPrefab
+                : fallbackCharacterPrefab;
 
             if (prefabToSpawn == null)
             {
@@ -76,11 +87,84 @@ namespace CyberPickle.Gameplay.Level
             // those preview contexts. The Game scene activates them here.
             ActivateGameplayComponents(SpawnedPlayer);
 
+            // Initialize PlayerStats from the selected character's BaseStats.
+            // If we took the fallback (no CharacterData), use BaseStats.Defaults
+            // so the player still has sane stats for direct-play testing.
+            BaseStats startingStats = characterData != null
+                ? characterData.baseStats
+                : BaseStats.Defaults;
+            InitializePlayerStats(SpawnedPlayer, startingStats);
+
+            // PlayerHealth must be reset AFTER PlayerStats.Initialize so MaxHealth
+            // reflects the spawned character's BaseStats (otherwise health resets
+            // to the Defaults value from BaseStats.Defaults). Also subscribes to
+            // OnPlayerDied to disable input on death — replaced by a proper
+            // RunStateManager in M7.2.
+            InitializePlayerHealth(SpawnedPlayer);
+
             Debug.Log($"<color=cyan>[GameSceneBootstrap]</color> Spawned '{prefabToSpawn.name}' at {pos}. Source: {source}.");
+
+            // Player is fully set up — transition the run from Loading to
+            // Running. RunStateManager sets Time.timeScale = 1 and the
+            // RunTime timer starts ticking.
+            if (RunStateManager.Instance != null)
+                RunStateManager.Instance.TransitionTo(RunStatePhase.Running);
 
             // Notify both inspector-wired and code-wired listeners.
             OnPlayerSpawned?.Invoke(SpawnedPlayer);
             PlayerSpawned?.Invoke(SpawnedPlayer);
+        }
+
+        /// <summary>
+        /// Initializes PlayerStats with the spawned character's base stats.
+        /// PlayerStats clears any existing modifiers, so this is safe to call
+        /// even if equipped-item modifiers will be applied immediately after.
+        /// </summary>
+        private static void InitializePlayerStats(GameObject player, BaseStats baseStats)
+        {
+            var stats = player.GetComponent<PlayerStats>();
+            if (stats != null)
+            {
+                stats.Initialize(baseStats);
+            }
+            else
+            {
+                Debug.LogWarning($"[GameSceneBootstrap] Spawned '{player.name}' has no PlayerStats component — gameplay systems that read stats will see defaults.");
+            }
+        }
+
+        /// <summary>
+        /// Resets PlayerHealth to full and wires OnPlayerDied to transition
+        /// the run state to GameOver. RunStateManager handles Time.timeScale
+        /// and event dispatch from there — ResultsScreenController listens
+        /// for the GameOver phase to show the results panel.
+        /// </summary>
+        private void InitializePlayerHealth(GameObject player)
+        {
+            var health = player.GetComponent<PlayerHealth>();
+            if (health == null)
+            {
+                Debug.LogWarning($"[GameSceneBootstrap] Spawned '{player.name}' has no PlayerHealth component — player will be invulnerable.");
+                return;
+            }
+
+            health.ResetToFull();
+            health.OnPlayerDied += HandlePlayerDeath;
+        }
+
+        /// <summary>
+        /// On player death, transition the run to GameOver. RunStateManager
+        /// freezes Time.timeScale; ResultsScreenController shows the results
+        /// panel with the final RunStats values.
+        /// </summary>
+        private static void HandlePlayerDeath()
+        {
+            Debug.Log($"<color=red>[GameSceneBootstrap]</color> Player died — transitioning to GameOver.");
+
+            if (RunStateManager.Instance != null)
+                RunStateManager.Instance.TransitionTo(RunStatePhase.GameOver);
+            else
+                Debug.LogWarning("[GameSceneBootstrap] No RunStateManager — death will not show results screen.");
         }
 
         /// <summary>
@@ -134,14 +218,42 @@ namespace CyberPickle.Gameplay.Level
             // Player <-> ECS bridge: writes player position to a singleton entity
             // every frame so DOTS systems (enemy AI, etc.) can read it. Optional —
             // characters without the bridge just won't be visible to ECS systems.
-            var bridge = player.GetComponent<PlayerPositionBridge>();
-            if (bridge != null)
+            var positionBridge = player.GetComponent<PlayerPositionBridge>();
+            if (positionBridge != null)
             {
-                bridge.enabled = true;
+                positionBridge.enabled = true;
+            }
+
+            // Player Stats <-> ECS bridge: mirrors PlayerStats values into a
+            // PlayerStatsData singleton each frame for Burst-side reads (XP magnet
+            // radius, damage pipeline Power/Crit, etc.). Optional — characters
+            // without the bridge fall back to whatever the singleton currently
+            // holds (BaseStats.Defaults if never written).
+            var statsBridge = player.GetComponent<PlayerStatsBridge>();
+            if (statsBridge != null)
+            {
+                statsBridge.enabled = true;
+            }
+
+            // Player Health <-> ECS bridge: mirrors CurrentHealth / MaxHealth /
+            // IsAlive to a PlayerHealthData singleton AND drains ECS-accumulated
+            // damage (from EnemyContactDamageSystem and future enemy-projectile
+            // systems) into PlayerHealth.TakeDamage each frame. Without this
+            // bridge, ECS damage sources can't reach the MonoBehaviour
+            // PlayerHealth.
+            var healthBridge = player.GetComponent<PlayerHealthBridge>();
+            if (healthBridge != null)
+            {
+                healthBridge.enabled = true;
             }
         }
 
-        private GameObject ResolveCharacterPrefab(out string source)
+        /// <summary>
+        /// Returns the CharacterData for the active profile's selected character,
+        /// or null if none can be resolved. The fallback prefab path is handled
+        /// by the caller (it has no CharacterData).
+        /// </summary>
+        private CharacterData ResolveCharacterData(out string source)
         {
             source = "unresolved";
 
@@ -158,7 +270,7 @@ namespace CyberPickle.Gameplay.Level
                     if (characterData != null && characterData.characterPrefab != null)
                     {
                         source = $"ActiveProfile.LastSelectedCharacterId='{characterId}'";
-                        return characterData.characterPrefab;
+                        return characterData;
                     }
 
                     Debug.LogWarning($"[GameSceneBootstrap] No CharacterData / prefab found for id '{characterId}'.");
@@ -169,11 +281,11 @@ namespace CyberPickle.Gameplay.Level
                 }
             }
 
-            // Fallback for direct-play testing (skips the boot flow).
+            // Fallback path is handled by the caller — it uses
+            // fallbackCharacterPrefab (a plain GameObject) and BaseStats.Defaults.
             if (allowFallbackForDirectPlay && fallbackCharacterPrefab != null)
             {
-                source = "fallback (direct-play)";
-                return fallbackCharacterPrefab;
+                source = "fallback (direct-play, no CharacterData)";
             }
 
             return null;

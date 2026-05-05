@@ -50,6 +50,24 @@ namespace CyberPickle.Characters.Logic
         public void SetInteractable(bool interactable, bool allowHover = true)
         {
             isInteractable = interactable;
+
+            // Lazy-resolve the collider. AddComponent on an inactive GameObject
+            // defers Awake until SetActive(true), so callers that invoke
+            // SetInteractable before activation would NRE on pointerCollider.
+            // Resolving here mirrors what Awake does and makes the call safe
+            // regardless of activation order.
+            if (pointerCollider == null)
+            {
+                pointerCollider = GetComponent<BoxCollider>();
+                if (pointerCollider == null)
+                {
+                    pointerCollider = gameObject.AddComponent<BoxCollider>();
+                    pointerCollider.size = new Vector3(2f, 4f, 2f);
+                    pointerCollider.center = new Vector3(0f, 2f, 0f);
+                    pointerCollider.isTrigger = true;
+                }
+            }
+
             // If we only want hover, we keep the collider as a trigger but block clicks
             pointerCollider.isTrigger = !interactable || allowHover;
             Debug.Log($"[CharacterPointerHandler] Interactable set to {interactable}, AllowHover: {allowHover}");

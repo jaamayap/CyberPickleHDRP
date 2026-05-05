@@ -59,7 +59,7 @@ namespace CyberPickle.UI.Components.ProfileCard
             if (expandedCardPrefab == null)
                 Debug.LogError("[ProfileCardManager] Expanded card prefab is not assigned!");
             if (mainCanvas == null)
-                mainCanvas = FindObjectOfType<Canvas>();
+                mainCanvas = FindFirstObjectByType<Canvas>();
             if (mainCanvas == null)
                 Debug.LogError("[ProfileCardManager] No main canvas found in scene!");
         }

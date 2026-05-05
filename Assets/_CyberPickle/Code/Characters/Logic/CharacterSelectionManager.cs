@@ -22,6 +22,14 @@ namespace CyberPickle.Characters.Logic
     /// </summary>
     public class CharacterSelectionManager : Manager<CharacterSelectionManager>
     {
+        // Scene-bound: characterPositions, spotLight, displayManager, uiManager
+        // are all serialized refs to MainMenu scene objects. When MainMenu
+        // unloads (e.g., the user enters EquipmentHub), persisting this manager
+        // leaves it pointing at destroyed Transforms, and the next
+        // OnGameStateChanged.CharacterSelect throws MissingReferenceException
+        // at characterPositions[i].position inside InitializeCharacterSelection.
+        protected override bool PersistAcrossScenes => false;
+
         [Header("Scene References")]
         [SerializeField] private Transform[] characterPositions;
         [SerializeField] private Light spotLight;
@@ -55,6 +63,15 @@ namespace CyberPickle.Characters.Logic
         private bool isTransitioning;
         private bool cameraFocused;
         private GameConfig gameConfig;
+
+        // Pre-spawn cache: characters are Instantiated as soon as we know the
+        // active profile (i.e., right after profile selection or, on a
+        // returning-MainMenu load, in OnManagerAwake when ActiveProfile is
+        // already set). They sit hidden (SetActive(false)) until the user
+        // clicks Start, at which point InitializeCharacterSelection just
+        // reveals them — no Instantiate cost during the camera animation.
+        private bool charactersPreSpawned;
+        private Task preSpawnTask;
         #region Manager Overrides
 
         protected override void OnManagerAwake()
@@ -76,6 +93,13 @@ namespace CyberPickle.Characters.Logic
             }
             displayManager.Initialize();
             InitializeEvents();
+
+            // If we're awakening into a scene that already has an active
+            // profile (return-from-Hub case — ProfileManager is persistent
+            // and carries ActiveProfile across scene loads), kick off a
+            // pre-spawn immediately so the user lands on a populated
+            // character-select view.
+            TryStartPreSpawn();
         }
 
         protected override void OnManagerDestroyed()
@@ -121,6 +145,14 @@ namespace CyberPickle.Characters.Logic
             GameEvents.OnCharacterDetailsRequested.AddListener(HandleCharacterDetails);
             GameEvents.OnCharacterSelectionCancelled.AddListener(HandleSelectionCancelled);
             GameEvents.OnCharacterConfirmed.AddListener(HandleCharacterConfirmed);
+            // Profile-switched is the primary trigger for pre-spawn on the
+            // fresh-boot path: as soon as the user picks a profile, lock states
+            // are knowable, and we can spawn the character cache while the
+            // user is still looking at MainMenu's panel transitions.
+            if (profileManager != null)
+            {
+                profileManager.SubscribeToProfileSwitched(HandleProfileSwitchedForPreSpawn);
+            }
             Debug.Log("[CharacterSelectionManager] Events subscribed.");
         }
 
@@ -133,7 +165,145 @@ namespace CyberPickle.Characters.Logic
             GameEvents.OnCharacterDetailsRequested.RemoveListener(HandleCharacterDetails);
             GameEvents.OnCharacterSelectionCancelled.RemoveListener(HandleSelectionCancelled);
             GameEvents.OnCharacterConfirmed.RemoveListener(HandleCharacterConfirmed);
+            if (profileManager != null)
+            {
+                profileManager.UnsubscribeFromProfileSwitched(HandleProfileSwitchedForPreSpawn);
+            }
             Debug.Log("[CharacterSelectionManager] Events unsubscribed.");
+        }
+
+        #endregion
+
+        #region Pre-Spawn
+
+        /// <summary>
+        /// Fires when ProfileManager.ActiveProfile changes (i.e., the user
+        /// picked / created a profile). Re-spawn the cache to reflect the
+        /// new profile's lock states.
+        /// </summary>
+        private void HandleProfileSwitchedForPreSpawn(string profileId)
+        {
+            Debug.Log($"[CharacterSelectionManager] Profile switched to '{profileId}' — re-pre-spawning characters for new lock states.");
+            charactersPreSpawned = false;
+            preSpawnTask = PreSpawnCharactersAsync();
+        }
+
+        /// <summary>
+        /// Kicks off pre-spawn if (a) we have an active profile, (b) we
+        /// haven't already pre-spawned, and (c) no pre-spawn is currently
+        /// in flight. Idempotent — safe to call from anywhere.
+        /// </summary>
+        private void TryStartPreSpawn()
+        {
+            if (profileManager?.ActiveProfile == null) return;
+            if (charactersPreSpawned) return;
+            if (preSpawnTask != null && !preSpawnTask.IsCompleted) return;
+
+            Debug.Log($"[CharacterSelectionManager] Active profile present ('{profileManager.ActiveProfile.ProfileId}') — kicking off pre-spawn.");
+            preSpawnTask = PreSpawnCharactersAsync();
+        }
+
+        /// <summary>
+        /// Instantiates every available character at its authored position
+        /// and immediately hides it (SetActive(false)). Lock states are
+        /// applied so the eventual reveal is just a visibility flip.
+        /// Runs once per active profile; called again when the profile
+        /// switches to refresh lock states.
+        ///
+        /// Why hidden: SetActive(false) gates Update, Animator, rendering,
+        /// and lights. If menuCameraPosition's view happens to include the
+        /// character spawn area, hidden characters won't appear during the
+        /// menu phase. The first SetActive(true) at reveal time triggers
+        /// HDRP shader-variant compilation as a one-shot per session — but
+        /// that single hitch is concentrated to one frame at the start of
+        /// the camera's slow-start curve, where it's least visible.
+        /// </summary>
+        private async Task PreSpawnCharactersAsync()
+        {
+            if (profileManager?.ActiveProfile == null)
+            {
+                Debug.LogWarning("[CharacterSelectionManager] PreSpawn called with no active profile — skipping.");
+                return;
+            }
+
+            // Wipe any stale cache (e.g., on profile switch).
+            CleanupCharacterSelection();
+
+            // Load characters into CharacterManager so other systems can
+            // resolve CharacterData by id.
+            var characterManager = CharacterManager.Instance;
+            if (characterManager != null && availableCharacters != null && availableCharacters.Length > 0)
+            {
+                characterManager.SetAvailableCharacters(availableCharacters);
+            }
+
+            for (int i = 0; i < availableCharacters.Length; i++)
+            {
+                var cData = availableCharacters[i];
+                GameObject instance = await displayManager.SpawnCharacter(
+                    cData, characterPositions[i].position, characterPositions[i].rotation
+                );
+                if (!instance) continue;
+
+                // Hide before any other setup so the character never renders
+                // a frame at the menu pose.
+                instance.SetActive(false);
+
+                instance.layer = LayerMask.NameToLayer("Character");
+                var pointerHandler = instance.GetComponent<CharacterPointerHandler>();
+                if (pointerHandler == null)
+                {
+                    pointerHandler = instance.AddComponent<CharacterPointerHandler>();
+                }
+                pointerHandler.Initialize(cData.characterId);
+                spawnedCharacters[cData.characterId] = instance;
+
+                bool unlocked = IsCharacterUnlocked(cData.characterId);
+                characterStates[cData.characterId] = unlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
+                // Safe on inactive GO — SetInteractable lazy-resolves its collider.
+                pointerHandler.SetInteractable(unlocked, allowHover: true);
+            }
+
+            uiManager.Initialize(availableCharacters);
+            charactersPreSpawned = true;
+            Debug.Log($"[CharacterSelectionManager] Pre-spawn complete: {spawnedCharacters.Count} characters cached and hidden.");
+        }
+
+        /// <summary>
+        /// Reveals every pre-spawned character and applies its initial
+        /// display state (idle / locked). Called from InitializeCharacterSelection
+        /// when the cache is valid. Cheap — just SetActive(true) plus a
+        /// material/animation update per character.
+        /// </summary>
+        private void RevealPreSpawnedCharacters()
+        {
+            foreach (var kvp in spawnedCharacters)
+            {
+                var go = kvp.Value;
+                if (go == null) continue;
+                go.SetActive(true);
+                if (characterStates.TryGetValue(kvp.Key, out var state))
+                {
+                    displayManager.UpdateCharacterState(go, state);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Hides all spawned characters without destroying them, preserving
+        /// the pre-spawn cache. Used when state goes CharacterSelect →
+        /// MainMenu so the next Start click can reveal cheaply instead of
+        /// re-spawning from scratch.
+        /// </summary>
+        private void HideSpawnedCharacters()
+        {
+            foreach (var go in spawnedCharacters.Values)
+            {
+                if (go != null) go.SetActive(false);
+            }
+            cameraFocused = false;
+            currentlySelectedCharacterId = null;
+            currentlyHoveredCharacterId = null;
         }
 
         #endregion
@@ -148,14 +318,30 @@ namespace CyberPickle.Characters.Logic
                     InitializeCharacterSelection();
                     break;
                 case GameState.LevelSelect:
-                case GameState.MainMenu:
+                    // About to leave the scene — full destroy.
                     CleanupCharacterSelection();
+                    break;
+                case GameState.MainMenu:
+                    // Staying in MainMenu scene; preserve the pre-spawn cache
+                    // so a subsequent Start click can reveal cheaply.
+                    HideSpawnedCharacters();
                     break;
             }
         }
 
         /// <summary>
-        /// Spawns and sets up all characters for selection.
+        /// Entered when GameState becomes CharacterSelect (i.e., user clicked
+        /// Start, or a post-load broadcast restored the state on a return).
+        ///
+        /// Fast path: characters were pre-spawned during profile selection /
+        /// scene awake. Just reveal them and apply their cached display state.
+        /// No Instantiate cost, so the concurrent camera animation runs
+        /// against an already-settled scene — the click→camera-arrive transition
+        /// is effectively free of stutter.
+        ///
+        /// Slow path (fallback): pre-spawn never ran (e.g., direct Play in
+        /// Editor, or pre-spawn was cancelled). Spawn synchronously now —
+        /// this matches the behaviour from before the pre-spawn refactor.
         /// </summary>
         private async void InitializeCharacterSelection()
         {
@@ -165,11 +351,35 @@ namespace CyberPickle.Characters.Logic
                 return;
             }
 
-
             isTransitioning = true;
+
+            // If pre-spawn is in flight (rare; would mean the user clicked
+            // Start within ~70ms of profile selection), wait for it to finish
+            // before revealing. Normally preSpawnTask is already completed
+            // by the time the user navigates panels and clicks Start.
+            if (preSpawnTask != null && !preSpawnTask.IsCompleted)
+            {
+                Debug.Log("[CharacterSelectionManager] Awaiting in-flight pre-spawn before reveal...");
+                try { await preSpawnTask; }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[CharacterSelectionManager] Pre-spawn task faulted: {ex.Message}");
+                }
+            }
+
+            // ─── Fast path: reveal pre-spawned cache ────────────────────────
+            if (charactersPreSpawned && spawnedCharacters.Count > 0)
+            {
+                Debug.Log($"[CharacterSelectionManager] Revealing {spawnedCharacters.Count} pre-spawned characters (fast path).");
+                RevealPreSpawnedCharacters();
+                isTransitioning = false;
+                return;
+            }
+
+            // ─── Slow path: synchronous spawn (fallback) ────────────────────
+            Debug.LogWarning("[CharacterSelectionManager] Pre-spawn cache empty — falling back to inline spawn.");
             CleanupCharacterSelection();
 
-            // Load characters to character manager
             var characterManager = CharacterManager.Instance;
             if (characterManager != null && availableCharacters != null && availableCharacters.Length > 0)
             {
@@ -181,42 +391,31 @@ namespace CyberPickle.Characters.Logic
                 Debug.LogWarning("[CharacterSelectionManager] Could not load characters into CharacterManager");
             }
 
-            // Actually spawn each character
             for (int i = 0; i < availableCharacters.Length; i++)
             {
                 var cData = availableCharacters[i];
                 GameObject instance = await displayManager.SpawnCharacter(
                     cData, characterPositions[i].position, characterPositions[i].rotation
                 );
-
                 if (!instance) continue;
 
-                // Layer and name
                 instance.layer = LayerMask.NameToLayer("Character");
-                // Set pointer handler
                 var pointerHandler = instance.GetComponent<CharacterPointerHandler>();
                 if (pointerHandler == null)
                 {
                     pointerHandler = instance.AddComponent<CharacterPointerHandler>();
                 }
                 pointerHandler.Initialize(cData.characterId);
-
-                // Store references
                 spawnedCharacters[cData.characterId] = instance;
 
-                // Determine initial display state
                 bool unlocked = IsCharacterUnlocked(cData.characterId);
                 characterStates[cData.characterId] = unlocked ? CharacterDisplayState.Idle : CharacterDisplayState.Locked;
-
-                // Let pointer handler block clicks if locked
                 pointerHandler.SetInteractable(unlocked, allowHover: true);
-                // Update visuals
                 displayManager.UpdateCharacterState(instance, characterStates[cData.characterId]);
             }
 
-            // Pass data to UI manager
             uiManager.Initialize(availableCharacters);
-
+            charactersPreSpawned = true;  // cache is now valid for any later hide-then-reveal cycle.
             isTransitioning = false;
         }
 
@@ -234,6 +433,10 @@ namespace CyberPickle.Characters.Logic
             currentlyHoveredCharacterId = null;
             cameraFocused = false;
             isTransitioning = false;
+
+            // Pre-spawn cache is gone now — clear the flag so the next
+            // pre-spawn / inline-spawn knows the cache must be rebuilt.
+            charactersPreSpawned = false;
 
             // UI cleanup
             uiManager?.Cleanup();

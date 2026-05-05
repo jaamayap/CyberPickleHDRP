@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba3dd950df491d64a97a2355ecd515ef, type: 3}
+  m_Name: Enemy 2
+  m_EditorClassIdentifier: 
+  enemyId: Enemy 2
+  displayName: Enemy 2
+  isBoss: 0
+  visualPrefab: {fileID: 4756028820122807905, guid: 3c41358e45be86745975ed2dd576b8a8,
+    type: 3}
+  visualType: 1
+  maxHealth: 20
+  moveSpeed: 1
+  contactDamage: 20
+  bodyRadius: 0.4
+  corpseDelayBeforeDissolve: 3
+  corpseDissolveDuration: 1.5
+  neuralCreditsOnDeath: 1
+  xpOnDeath: 4
+  xpDropTable:
+    tier1Chance: 1
+    tier2Chance: 0.15
+    tier3Chance: 0.05
+    tier4Chance: 0.01
+    bossMultiDropCount: 0
+  rareDropChance: 0
+  rareDropTable: []
+  armor: 0
+  knockbackResistance: 0
+  stunResistance: 0
+  elementResistances:
+    physical: 1
+    fire: 1
+    ice: 1
+    electric: 1
+    energy: 1
+    poison: 1
+  aiPattern: 0
+  aggroRange: 20
+  attackRange: 1.5
+  attackCooldown: 1
+  specialAttackDamage: 5
+  specialAttackProjectile: {fileID: 0}
+  deathVfxPrefab: {fileID: 0}
+  hitReactionVfxPrefab: {fileID: 0}
+  persistentAuraVfxPrefab: {fileID: 0}
+  spawnSoundEvent: 
+  deathSoundEvent: 
+  hitSoundEvent: 
+  attackSoundEvent: 
+  footstepSoundEvent: 
+  icon: {fileID: 0}
+  description: 
+  threatLevel: 1
+  bossTitle: 
+  bossMusicEvent: 
+  phaseHealthThresholds: []
+  phaseAbilityIds: []

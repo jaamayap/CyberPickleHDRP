@@ -90,6 +90,22 @@ namespace CyberPickle.Core.Services.Authentication
 
         public async Task<bool> SignInAnonymouslyAsync()
         {
+            // Already signed in → no-op success. The Unity Authentication
+            // service throws "Invalid state for this operation. The player is
+            // already signed in." on a redundant sign-in call. AuthPanelController
+            // re-runs this on every MainMenu load, so the guard makes the method
+            // idempotent: callers don't need to re-check IsSignedIn themselves
+            // and the event chain (Authenticated → OnAuthenticationCompleted →
+            // OnProfileLoadRequested) still fires so downstream UI advances
+            // exactly as if a fresh sign-in had succeeded.
+            if (AuthenticationService.Instance.IsSignedIn)
+            {
+                Debug.Log("[AuthManager] Already signed in — short-circuiting anonymous sign-in.");
+                SetState(AuthenticationState.Authenticated);
+                authEvents.InvokeAuthenticationCompleted(AuthenticationService.Instance.PlayerId);
+                return true;
+            }
+
             if (currentState == AuthenticationState.AuthenticationInProgress)
             {
                 Debug.LogWarning("Authentication already in progress");
