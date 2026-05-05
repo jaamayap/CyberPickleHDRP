@@ -28,7 +28,7 @@ MonoBehaviour:
     power: 10
     critChance: 0.05
     lifesteal: 0
-    speed: 1
+    speed: 5
     magneticField: 1
     areaOfEffect: 1
     dexterity: 10

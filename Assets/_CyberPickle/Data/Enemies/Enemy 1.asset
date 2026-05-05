@@ -20,7 +20,7 @@ MonoBehaviour:
   visualType: 0
   maxHealth: 10
   moveSpeed: 2
-  contactDamage: 5
+  contactDamage: 10
   bodyRadius: 0.26
   corpseDelayBeforeDissolve: 3
   corpseDissolveDuration: 1.5
@@ -45,7 +45,7 @@ MonoBehaviour:
     energy: 1
     poison: 1
   aiPattern: 0
-  aggroRange: 30
+  aggroRange: 20
   attackRange: 1.5
   attackCooldown: 1
   specialAttackDamage: 5

@@ -20,8 +20,10 @@ MonoBehaviour:
   visualType: 1
   maxHealth: 20
   moveSpeed: 1
-  contactDamage: 10
+  contactDamage: 20
   bodyRadius: 0.4
+  corpseDelayBeforeDissolve: 3
+  corpseDissolveDuration: 1.5
   neuralCreditsOnDeath: 1
   xpOnDeath: 4
   xpDropTable:
@@ -43,7 +45,7 @@ MonoBehaviour:
     energy: 1
     poison: 1
   aiPattern: 0
-  aggroRange: 30
+  aggroRange: 20
   attackRange: 1.5
   attackCooldown: 1
   specialAttackDamage: 5

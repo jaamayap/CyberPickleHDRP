@@ -530,6 +530,22 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: -7601619937171317225}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a5e847397c0b4a44999c71ecd5fad89a,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9043200958798361994}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a5e847397c0b4a44999c71ecd5fad89a,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2664497500624990848}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a5e847397c0b4a44999c71ecd5fad89a,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5458285351249479453}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a5e847397c0b4a44999c71ecd5fad89a,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 423287299970569125}
   m_SourcePrefab: {fileID: 100100000, guid: a5e847397c0b4a44999c71ecd5fad89a, type: 3}
 --- !u!1 &4989332315425718118 stripped
 GameObject:
@@ -649,7 +665,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ceecbb08afaa3d64f9902cc1c833f0ca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpeed: 6
+  fallbackMaxSpeed: 6
   acceleration: 40
   deceleration: 50
   useCameraRelativeMovement: 1
@@ -698,6 +714,71 @@ MonoBehaviour:
   startingLevel: 1
   xpPerLevelBase: 10
   xpCurveExponent: 1
+--- !u!114 &9043200958798361994
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4989332315425718118}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d9174bd3ef38bc249b3bbbda5e15e5d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Stats.PlayerStats
+  _base:
+    maxHealth: 100
+    healthRegen: 1
+    defense: 10
+    power: 10
+    critChance: 0.05
+    lifesteal: 0
+    speed: 6
+    magneticField: 1
+    areaOfEffect: 1
+    dexterity: 10
+    luck: 1
+    hack: 0
+    cooldownReduction: 0
+    neuralAdaptation: 1
+--- !u!114 &2664497500624990848
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4989332315425718118}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b27a119a522a054b83471e73ea59821, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Player.PlayerStatsBridge
+--- !u!114 &5458285351249479453
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4989332315425718118}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cd8bdbb818248ce46bf23414abf185b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Player.PlayerHealth
+  invulnerabilityWindow: 0.4
+  verbose: 0
+--- !u!114 &423287299970569125
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4989332315425718118}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3550b53e5c6e844b952c8ab948cffe8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Player.PlayerHealthBridge
 --- !u!4 &5653842597062632924 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: a5e847397c0b4a44999c71ecd5fad89a,
