@@ -17,6 +17,12 @@ namespace CyberPickle.Characters.Logic
     /// </summary>
     public class CharacterDisplayManager : Manager<CharacterDisplayManager>
     {
+        // Scene-bound: maintains dictionaries of scene-instantiated character
+        // GameObjects, animators, and renderers. Lifecycle is tied to the
+        // MainMenu scene that hosts CharacterSelectionManager (which holds the
+        // serialized reference to this manager). Same lifetime, same flag.
+        protected override bool PersistAcrossScenes => false;
+
         #region Serialized Fields
 
         [Header("Animation Settings")]
@@ -255,7 +261,16 @@ namespace CyberPickle.Characters.Logic
             }
             else
             {
-                // 3) Otherwise, normal logic
+                // 3) Otherwise, normal logic — just mutate emission intensity.
+                // No need to reassign renderer.materials: the cached material
+                // instances in originalMaterials[character] are the SAME ones
+                // already attached to the renderer (they were unique-cloned by
+                // the renderer.materials getter at cache time and stored in
+                // originalMaterials). Mutating them with mat.SetFloat updates
+                // the live materials directly. Reassigning the array marked the
+                // renderer dirty and forced Unity to do a per-character material
+                // reload on every state change — costly during the spawn loop
+                // where this is called once per character.
                 float intensity = (state == CharacterDisplayState.Hover || state == CharacterDisplayState.Selected)
                     ? highlightIntensity
                     : 1f;
@@ -268,7 +283,6 @@ namespace CyberPickle.Characters.Logic
                         mat.SetFloat("_EmissionIntensity", intensity);
                     }
                 }
-                renderer.materials = currentMaterials;
             }
         }
 

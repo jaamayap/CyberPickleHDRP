@@ -14,6 +14,23 @@ namespace CyberPickle.Core.Management
         private static bool isQuitting = false;
         protected CancellationTokenSource cancellationTokenSource;
 
+        /// <summary>
+        /// Override and return false in derived managers that hold scene-bound
+        /// serialized references (e.g., spawn points, scene UI widgets, scene
+        /// canvases). Those managers MUST be re-created fresh whenever their
+        /// scene loads — otherwise the first-visit instance survives via
+        /// DontDestroyOnLoad, the second-visit scene-authored copy gets
+        /// destroyed as a duplicate, and the live (persisted) manager keeps
+        /// holding references to GameObjects that were destroyed when the
+        /// previous scene unloaded.
+        ///
+        /// Default is true (persist) — preserves existing behavior for global
+        /// managers like ProfileManager, CharacterManager, EquipmentManager
+        /// (whose only references are to ScriptableObjects, which don't go
+        /// stale across scene loads).
+        /// </summary>
+        protected virtual bool PersistAcrossScenes => true;
+
         public static T Instance
         {
             get
@@ -36,7 +53,14 @@ namespace CyberPickle.Core.Management
                             {
                                 GameObject go = new GameObject($"[{typeof(T).Name}]");
                                 instance = go.AddComponent<T>();
-                                DontDestroyOnLoad(go);
+                                // AddComponent runs Awake synchronously, which honors
+                                // PersistAcrossScenes. Mirror that here for the auto-
+                                // created GameObject so a non-persistent manager isn't
+                                // accidentally pinned to DontDestroyOnLoad.
+                                if (instance.PersistAcrossScenes)
+                                {
+                                    DontDestroyOnLoad(go);
+                                }
                             }
                         }
                     }
@@ -50,7 +74,10 @@ namespace CyberPickle.Core.Management
             if (instance == null)
             {
                 instance = (T)this;
-                DontDestroyOnLoad(gameObject);
+                if (PersistAcrossScenes)
+                {
+                    DontDestroyOnLoad(gameObject);
+                }
                 cancellationTokenSource = new CancellationTokenSource();
                 OnManagerAwake();
             }

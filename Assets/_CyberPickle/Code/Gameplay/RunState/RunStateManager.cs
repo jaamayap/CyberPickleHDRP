@@ -34,6 +34,13 @@ namespace CyberPickle.Gameplay.RunState
         [Tooltip("Log each phase transition to the console.")]
         public bool verbose = true;
 
+        // Scene-bound: this manager only exists during a run. Subscribers
+        // (RunStatsTracker, ResultsScreenController, future HUDs) all live in
+        // the Game scene and bind via OnEnable. Persisting across scenes would
+        // produce "duplicate" warnings on Try Again retries and leak event
+        // subscriptions from the dead first-run instance.
+        protected override bool PersistAcrossScenes => false;
+
         // ─── State ─────────────────────────────────────────────────────────
 
         /// <summary>Current run phase. Defaults to Loading at scene start until something explicitly transitions.</summary>

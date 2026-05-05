@@ -21,6 +21,12 @@ namespace CyberPickle.Characters.UI
     /// </summary>
     public class CharacterUIManager : Manager<CharacterUIManager>
     {
+        // Scene-bound: every panel CanvasGroup, TextMeshPro, and Transform
+        // below is a MainMenu scene object. Persisting this manager when
+        // MainMenu unloads would leave it holding destroyed UI references and
+        // crash the next time the character-select panels are populated.
+        protected override bool PersistAcrossScenes => false;
+
         [Header("Details Panel")]
         [SerializeField] private CanvasGroup detailsPanel;
         [SerializeField] private TextMeshProUGUI detailsCharacterNameText;

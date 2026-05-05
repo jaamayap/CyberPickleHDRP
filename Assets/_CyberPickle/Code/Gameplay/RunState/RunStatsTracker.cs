@@ -25,6 +25,12 @@ namespace CyberPickle.Gameplay.RunState
     [DisallowMultipleComponent]
     public class RunStatsTracker : Manager<RunStatsTracker>
     {
+        // Scene-bound: per-run metrics. Counters reset on every fresh run via
+        // OnPhaseChanged anyway, but pairing this with RunStateManager (also
+        // scene-bound) keeps the lifecycle symmetric and avoids "duplicate"
+        // warnings on Try Again retries.
+        protected override bool PersistAcrossScenes => false;
+
         // ─── Tracked metrics ──────────────────────────────────────────────
 
         public int   EnemiesKilled { get; private set; }

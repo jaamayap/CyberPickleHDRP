@@ -33,6 +33,7 @@ namespace CyberPickle.Gameplay.Player
         private Animator animator;
         private Rigidbody rb;
         private int speedHash;
+        private bool speedParameterExists;
 
         private void Awake()
         {
@@ -41,10 +42,31 @@ namespace CyberPickle.Gameplay.Player
             // String-to-hash lookup once at Awake; cheaper than passing the string
             // every frame to SetFloat.
             speedHash = Animator.StringToHash(speedParameter);
+
+            // Verify the Animator Controller actually has a float parameter
+            // matching speedParameter. If not, Animator.SetFloat would spam
+            // "Parameter 'Hash X' does not exist" once per Update — 60+/sec.
+            // We log a single warning at Awake and short-circuit Update so the
+            // character still animates via its idle state, just without
+            // locomotion blending.
+            speedParameterExists = HasFloatParameter(animator, speedHash);
+            if (!speedParameterExists)
+            {
+                Debug.LogWarning(
+                    $"[PlayerAnimationDriver] Animator on '{name}' has no float parameter '{speedParameter}'. " +
+                    $"Locomotion blending disabled. Add a float parameter named '{speedParameter}' to the " +
+                    $"Animator Controller, or change the [Speed Parameter] field on this component to match " +
+                    $"whatever name the controller uses (e.g., 'Velocity', 'MoveSpeed').",
+                    this);
+            }
         }
 
         private void Update()
         {
+            // Skip every frame if the controller has no matching parameter —
+            // calling SetFloat on a missing parameter produces a warning per call.
+            if (!speedParameterExists) return;
+
             // Use horizontal velocity only — vertical motion (gravity, jumps later)
             // shouldn't trigger the Run animation.
             Vector3 vel = rb.linearVelocity;
@@ -60,6 +82,24 @@ namespace CyberPickle.Gameplay.Player
             {
                 animator.SetFloat(speedHash, currentSpeed);
             }
+        }
+
+        /// <summary>
+        /// Returns true iff the Animator's runtime controller exposes a Float
+        /// parameter whose nameHash matches the supplied hash. Safe against a
+        /// null runtimeAnimatorController (e.g., prefab authored without one).
+        /// </summary>
+        private static bool HasFloatParameter(Animator anim, int hash)
+        {
+            if (anim == null || anim.runtimeAnimatorController == null) return false;
+            foreach (var p in anim.parameters)
+            {
+                if (p.nameHash == hash && p.type == AnimatorControllerParameterType.Float)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

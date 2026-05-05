@@ -6,6 +6,7 @@
 
 using UnityEngine;
 using TMPro;
+using CyberPickle.Core;
 using CyberPickle.Core.Events;
 using CyberPickle.Core.States;
 using System.Collections;
@@ -53,8 +54,35 @@ namespace CyberPickle.UI.Screens.MainMenu
         private void InitializeUI()
         {
             Debug.Log("[MainMenuController] Initializing UI");
-            pressButtonCanvasGroup.alpha = 1f;
-            isWaitingForInput = true;
+
+            // Detect whether this MainMenu load is a fresh launch or a return
+            // from a downstream scene (e.g., the user clicked Back from
+            // EquipmentHub with target state == CharacterSelect). On a fresh
+            // launch, GameManager.CurrentState is None or MainMenu and we
+            // want the press-any-button intro flow. On a return from
+            // downstream, the state is Loading (set by LoadSceneCoroutine
+            // mid-load) and the post-load broadcast will land us in the
+            // correct view momentarily — so suppress the press-any-button
+            // text and the input gate immediately to avoid a 1-2 frame flash
+            // and to avoid TransitionToAuth firing if the user's previous
+            // click is still buffered in Input.anyKeyDown.
+            var gameManager = GameManager.Instance;
+            bool freshLaunch = gameManager == null
+                || gameManager.CurrentState == GameState.None
+                || gameManager.CurrentState == GameState.MainMenu;
+
+            if (freshLaunch)
+            {
+                pressButtonCanvasGroup.alpha = 1f;
+                isWaitingForInput = true;
+            }
+            else
+            {
+                pressButtonCanvasGroup.alpha = 0f;
+                if (pressAnyButtonText != null) pressAnyButtonText.gameObject.SetActive(false);
+                isWaitingForInput = false;
+                Debug.Log($"[MainMenuController] Returning to MainMenu mid-flow (state={gameManager.CurrentState}); skipping press-any-button.");
+            }
 
             // Hide all panels initially
             if (authPanel != null)

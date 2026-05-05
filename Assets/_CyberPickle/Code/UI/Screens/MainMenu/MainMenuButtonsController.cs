@@ -155,6 +155,20 @@ namespace CyberPickle.UI.Screens.MainMenu
 
             SetButtonsInteractable(true);
 
+            // Reset the transitioning guard. Without this, OnStartClicked's
+            // early-return (`if (isTransitioning) return;`) blocks the click
+            // even though the button looks interactable. This bites on the
+            // Back-from-CharacterSelect path: the OnGameStateChanged(MainMenu)
+            // event fires while THIS panel is SetActive(false) (so its
+            // listener was unsubscribed via OnDisable), then the panel is
+            // re-enabled and OnEnable's fallback calls ForceActivateButtons.
+            // That fallback never went through HandleGameStateChanged, so
+            // isTransitioning was never cleared. Resetting it here makes
+            // every "re-enable buttons" path (HandleGameStateChanged,
+            // HandleUIAnimationCompleted, HandleProfileSelected, OnEnable
+            // fallback) symmetric.
+            isTransitioning = false;
+
             // Log button states after activation
             LogButtonStates("After activation");
         }
