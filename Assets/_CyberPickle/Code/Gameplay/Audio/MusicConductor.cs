@@ -43,6 +43,9 @@ namespace CyberPickle.Gameplay.Audio
         [Tooltip("Log each beat / bar to the console. Off by default — chatty.")]
         [SerializeField] private bool verbose;
 
+        [Tooltip("Mirror MusicEventBus.VerboseLogging — when ON, every Fire() call logs (RunStart, WeaponFire, EnemyDeath, PlayerHit, etc.). Useful for confirming producers are wired. WARNING: WeaponFire alone can spam 30+/sec in combat. Toggle off when not actively diagnosing.")]
+        [SerializeField] private bool verboseEventBus;
+
         // ─── Public state ─────────────────────────────────────────────────
 
         public float BPM => bpm;
@@ -86,6 +89,10 @@ namespace CyberPickle.Gameplay.Audio
         protected override void OnManagerEnabled()
         {
             base.OnManagerEnabled();
+            // Apply inspector toggle to the static bus flag. Editor-friendly:
+            // the user can flip the bool in the inspector mid-Play and changes
+            // take effect immediately via OnValidate (below).
+            MusicEventBus.VerboseLogging = verboseEventBus;
             // Subscribe to the bus for RunStart so we can reset our clock to
             // align beat 0 with the moment combat begins.
             MusicEventBus.OnEvent += HandleMusicEvent;
@@ -127,6 +134,15 @@ namespace CyberPickle.Gameplay.Audio
                 ResetClock();
             }
         }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            // Apply inspector tweaks live during Play so the user can toggle
+            // verbose logging mid-session without restarting.
+            MusicEventBus.VerboseLogging = verboseEventBus;
+        }
+#endif
 
         private void ResetClock()
         {
