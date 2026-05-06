@@ -1036,6 +1036,7 @@ MonoBehaviour:
   bpm: 128
   subdivisionsPerBeat: 4
   verbose: 1
+  verboseEventBus: 1
 --- !u!4 &625675775
 Transform:
   m_ObjectHideFlags: 0

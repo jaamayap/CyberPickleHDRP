@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d4791f168b9c65f49b8257bc4a6b8ee0, type: 3}
+  m_Name: Pool_Default
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Progression.UpgradePoolSO
+  poolId: default
+  cards: []
+  weightCommon: 60
+  weightUncommon: 25
+  weightRare: 10
+  weightEpic: 4
+  weightLegendary: 1
+  luckShiftPerHundred: 0.5
