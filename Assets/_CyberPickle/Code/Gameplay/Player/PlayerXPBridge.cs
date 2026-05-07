@@ -19,6 +19,7 @@ using System;
 using Unity.Entities;
 using UnityEngine;
 using CyberPickle.DOTS.Components;
+using CyberPickle.Gameplay.Audio;
 
 namespace CyberPickle.Gameplay.Player
 {
@@ -136,6 +137,10 @@ namespace CyberPickle.Gameplay.Player
                 changed = true;
 
                 OnLevelUp?.Invoke(xp.CurrentLevel);
+                // Broadcast onto the audio bus too — LevelUpCoordinator
+                // listens here to drive the choice screen, and future
+                // music systems use this for level-up stingers.
+                MusicEventBus.Fire(MusicEvent.LevelUp, xp.CurrentLevel);
             }
 
             if (changed)

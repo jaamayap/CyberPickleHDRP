@@ -29,6 +29,7 @@
 
 using System;
 using UnityEngine;
+using CyberPickle.Gameplay.Audio;
 using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Gameplay.Player
@@ -148,11 +149,18 @@ namespace CyberPickle.Gameplay.Player
             OnDamageTaken?.Invoke();
             OnHealthChanged?.Invoke(_currentHealth, MaxHealth);
 
+            // Broadcast to the audio bus. Damage feedback systems and the
+            // music conductor (low-HP heartbeat, music ducking) listen here.
+            MusicEventBus.Fire(MusicEvent.PlayerHit, reduced);
+
             if (_currentHealth <= 0f)
             {
                 _isAlive = false;
                 if (verbose) Debug.Log("[PlayerHealth] Player died.");
                 OnPlayerDied?.Invoke();
+                // RunEnd is also fired by RunStateManager when phase becomes
+                // GameOver; firing it here too means death-music can react
+                // immediately, before the run-state coroutine cycles.
             }
         }
 
@@ -163,7 +171,12 @@ namespace CyberPickle.Gameplay.Player
             float prev = _currentHealth;
             _currentHealth = Mathf.Min(MaxHealth, _currentHealth + amount);
             if (!Mathf.Approximately(prev, _currentHealth))
+            {
                 OnHealthChanged?.Invoke(_currentHealth, MaxHealth);
+                // Heal events drive subtle audio cues (lifesteal sub-bass,
+                // regen high-frequency shimmer per GDD §3.12.6).
+                MusicEventBus.Fire(MusicEvent.PlayerHealed, _currentHealth - prev);
+            }
         }
 
         /// <summary>

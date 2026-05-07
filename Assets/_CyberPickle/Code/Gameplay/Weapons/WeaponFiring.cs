@@ -23,6 +23,7 @@ using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
 using CyberPickle.DOTS.Components;
+using CyberPickle.Gameplay.Audio;
 
 namespace CyberPickle.Gameplay.Weapons
 {
@@ -122,6 +123,15 @@ namespace CyberPickle.Gameplay.Weapons
             entityManager.SetComponentData(projectile, new ProjectileVelocity { Value = velocity });
             entityManager.SetComponentData(projectile, new ProjectileDamage   { Value = projectileDamage });
             entityManager.SetComponentData(projectile, new Lifetime           { Remaining = projectileLifetime });
+
+            // Broadcast to the audio bus. Stage 0: a Debug.Log entry per shot
+            // (only when VerboseLogging is on — off by default to avoid log
+            // flood). Stage 2 (M9 Wwise): this becomes the per-shot Ak event
+            // post that schedules the weapon's musical note on the next grid
+            // boundary. The payload will eventually carry weapon-id + element
+            // so the conductor can pick the right pitch/sample; for the stub
+            // we just signal that A shot happened.
+            MusicEventBus.Fire(MusicEvent.WeaponFire, gameObject.name);
         }
     }
 }

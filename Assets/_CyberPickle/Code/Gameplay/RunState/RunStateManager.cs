@@ -24,6 +24,7 @@
 using System;
 using UnityEngine;
 using CyberPickle.Core.Management;
+using CyberPickle.Gameplay.Audio;
 
 namespace CyberPickle.Gameplay.RunState
 {
@@ -89,6 +90,25 @@ namespace CyberPickle.Gameplay.RunState
             }
 
             OnPhaseChanged?.Invoke(phase);
+
+            // Broadcast onto the audio bus too. The Stage 0 listener (the
+            // MusicConductor stub) uses PhaseChanged + RunStart to align
+            // its beat clock; future Wwise integration will use these to
+            // swap music states (combat / paused / boss / death).
+            MusicEventBus.Fire(MusicEvent.PhaseChanged, phase);
+
+            // The first transition into Running is the canonical "run started"
+            // moment for music — fire the dedicated event so consumers don't
+            // have to filter PhaseChanged for the Running case.
+            if (phase == RunStatePhase.Running &&
+                (previous == RunStatePhase.Loading || previous == RunStatePhase.GameOver))
+            {
+                MusicEventBus.Fire(MusicEvent.RunStart);
+            }
+            else if (phase == RunStatePhase.GameOver)
+            {
+                MusicEventBus.Fire(MusicEvent.RunEnd);
+            }
         }
 
         // ─── Lifecycle ────────────────────────────────────────────────────
