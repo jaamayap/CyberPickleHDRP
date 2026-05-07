@@ -13,7 +13,11 @@ MonoBehaviour:
   m_Name: Pool_Default
   m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Progression.UpgradePoolSO
   poolId: default
-  cards: []
+  cards:
+  - {fileID: 11400000, guid: cc9a9c6e11317ea4496b1274a742e408, type: 2}
+  - {fileID: 11400000, guid: 11d4249a2b1179b4b8074be32670f0f0, type: 2}
+  - {fileID: 11400000, guid: c7a117e3d3be5b3429e348293e0b2578, type: 2}
+  - {fileID: 11400000, guid: 71467b13c49d9d0448f123f516e8a8f8, type: 2}
   weightCommon: 60
   weightUncommon: 25
   weightRare: 10

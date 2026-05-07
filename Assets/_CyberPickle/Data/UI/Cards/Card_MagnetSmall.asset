@@ -12,13 +12,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eed9819a0a1f2914ba11fbb5034bb9dc, type: 3}
   m_Name: Card_MagnetSmall
   m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Progression.UpgradeCardSO
-  cardId: 
-  displayName: 
+  cardId: card_magnetsmall
+  displayName: +1 Magnetic Field
   description: 
   icon: {fileID: 0}
   tintColor: {r: 0.7, g: 0.7, b: 0.75, a: 1}
   rarity: 0
-  modifiers: []
+  modifiers:
+  - type: 7
+    kind: 0
+    value: 1
+    sourceId: 
   previewPrefab: {fileID: 0}
   hoverStingerEventId: 
   elementTags: []

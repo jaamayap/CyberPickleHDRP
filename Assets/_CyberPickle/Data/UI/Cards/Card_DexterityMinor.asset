@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eed9819a0a1f2914ba11fbb5034bb9dc, type: 3}
   m_Name: Card_DexterityMinor
   m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Progression.UpgradeCardSO
-  cardId: card_dexteritysmall
+  cardId: card_dexterityminor
   displayName: +10% Dexterity
   description: Dexterity increases fire rate for all weapons
   icon: {fileID: 0}
