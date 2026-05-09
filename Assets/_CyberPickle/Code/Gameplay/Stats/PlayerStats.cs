@@ -120,6 +120,42 @@ namespace CyberPickle.Gameplay.Stats
         /// <summary>Read-only view of base (un-modified) stat values. For HUD comparison.</summary>
         public BaseStats Base => _base;
 
+        /// <summary>
+        /// Returns the list of active modifiers contributing to a single stat.
+        /// Used by hover-tooltips to show the modifier-source breakdown
+        /// ("Base 6 + 0.10 from run_speed_minor + 0.05 from skill_quick_feet =
+        /// 6.90"). Allocates a list per call — UI hover paths typically call
+        /// this once on hover-in, not per-frame, so the GC cost is tolerable.
+        /// For per-frame display, cache the result on hover-in and refresh
+        /// on OnStatsChanged.
+        /// </summary>
+        public List<StatModifier> GetModifierBreakdown(PlayerStatType stat)
+        {
+            var result = new List<StatModifier>();
+            for (int i = 0; i < _modifiers.Count; i++)
+            {
+                if (_modifiers[i].type == stat)
+                    result.Add(_modifiers[i]);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Non-allocating variant. Caller supplies a pre-allocated list which
+        /// is cleared and filled. Use this if you're refreshing a tooltip
+        /// every frame and want to avoid GC pressure.
+        /// </summary>
+        public void GetModifierBreakdownNonAlloc(PlayerStatType stat, List<StatModifier> output)
+        {
+            if (output == null) return;
+            output.Clear();
+            for (int i = 0; i < _modifiers.Count; i++)
+            {
+                if (_modifiers[i].type == stat)
+                    output.Add(_modifiers[i]);
+            }
+        }
+
         /// <summary>Force-mark cache dirty. Call after externally mutating _base values.</summary>
         public void MarkDirty()
         {

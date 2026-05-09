@@ -18,6 +18,7 @@
 //      / ProjectileLifetime per-spawn so the same prefab can carry
 //      different stats from different weapons.
 
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -49,8 +50,13 @@ namespace CyberPickle.Gameplay.Weapons
         [Tooltip("Maximum lifetime of a projectile in seconds (despawns if it doesn't hit).")]
         [SerializeField] private float projectileLifetime = 3f;
 
+        [Header("Identity")]
+        [Tooltip("Stable id for this weapon, used for per-weapon stats attribution (DPS, kills, hover-tooltips). Convention: lowercase_snake_case ('laser_blaster', 'plasma_lance'). If empty, falls back to GameObject name lowercased + spaces→underscores.")]
+        [SerializeField] private string weaponId;
+
         private WeaponTargeting targeting;
         private float cooldown;
+        private FixedString64Bytes _weaponIdFixed;
 
         private World world;
         private EntityManager entityManager;
@@ -61,6 +67,15 @@ namespace CyberPickle.Gameplay.Weapons
         {
             targeting = GetComponent<WeaponTargeting>();
             if (muzzle == null) muzzle = transform;
+
+            // Resolve a stable weapon id once at Awake. Used by ProjectileSource
+            // for per-weapon damage attribution (PerWeaponStatsTracker, hover
+            // tooltips). FixedString64Bytes is Burst-compatible and fits
+            // typical weapon names (< 63 chars).
+            string id = !string.IsNullOrWhiteSpace(weaponId)
+                ? weaponId
+                : gameObject.name.ToLowerInvariant().Replace(' ', '_');
+            _weaponIdFixed = new FixedString64Bytes(id);
         }
 
         private void Update()
@@ -123,6 +138,15 @@ namespace CyberPickle.Gameplay.Weapons
             entityManager.SetComponentData(projectile, new ProjectileVelocity { Value = velocity });
             entityManager.SetComponentData(projectile, new ProjectileDamage   { Value = projectileDamage });
             entityManager.SetComponentData(projectile, new Lifetime           { Remaining = projectileLifetime });
+
+            // Attribute the projectile to its source weapon. The prefab
+            // baking doesn't include ProjectileSource (it's per-weapon, not
+            // per-prefab), so we add it on the spawned instance. ProjectileCollisionSystem
+            // reads this on hit to enqueue a DamageHitReport for PerWeaponStatsTracker.
+            if (entityManager.HasComponent<ProjectileSource>(projectile))
+                entityManager.SetComponentData(projectile, new ProjectileSource { WeaponId = _weaponIdFixed });
+            else
+                entityManager.AddComponentData(projectile, new ProjectileSource { WeaponId = _weaponIdFixed });
 
             // Broadcast to the audio bus. Stage 0: a Debug.Log entry per shot
             // (only when VerboseLogging is on — off by default to avoid log
