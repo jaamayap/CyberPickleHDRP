@@ -63,7 +63,17 @@ namespace CyberPickle.Gameplay.Progression
         public CardRarity rarity = CardRarity.Common;
 
         [Header("Effect")]
-        [Tooltip("Stat modifiers applied when this card is picked. ALL modifiers in the array are applied together via PlayerStats.AddModifier. Their sourceIds are prefixed at apply-time with this card's RuntimeSourceId so they can be batch-removed if the card is ever 'forgotten' (future feature).")]
+        [Tooltip("Stat modifiers applied when this card is picked. All modifiers in the array are applied together via PlayerStats.AddModifier.\n\n" +
+                 "VALUE CONVENTIONS (read carefully — these have bitten people):\n" +
+                 "  • AddBase: a flat amount added to the base. e.g., kind=AddBase, value=1 on MagneticField → +1m radius.\n" +
+                 "  • AddPercent: a DECIMAL FRACTION, NOT a percent integer.\n" +
+                 "      0.10 = +10% (multiplies by 1.10)\n" +
+                 "      0.50 = +50% (multiplies by 1.50)\n" +
+                 "      5    = +500% (multiplies by 6) ← almost always a mistake\n" +
+                 "      10   = +1000% (multiplies by 11) ← almost always a mistake\n" +
+                 "  • MultFinal: a multiplier on the final value. value=1.5 means ×1.5.\n" +
+                 "  • Override: replaces the value entirely. value=42 means the stat IS 42.\n\n" +
+                 "OnValidate (below) warns at edit time if AddPercent > 1.0 — that's the foot-gun threshold.")]
         public StatModifier[] modifiers;
 
         // ─── TODO fields (stubbed for forward compatibility) ──────────────
@@ -123,6 +133,27 @@ namespace CyberPickle.Gameplay.Progression
             if (string.IsNullOrWhiteSpace(cardId))
             {
                 cardId = name?.ToLower().Replace(" ", "_") ?? "unnamed_card";
+            }
+
+            // Foot-gun guard: AddPercent values are decimal fractions
+            // (0.10 = +10%). Anything > 1.0 is almost always a designer
+            // who typed 10 thinking "10%" — we want to catch that at
+            // edit time, not after a player picks a card and finds their
+            // stat 10× larger than intended (real bug from M7.3 testing
+            // where SpeedMinor stored 5 and ran 6 → 36 instead of 6 → 6.6).
+            if (modifiers == null) return;
+            for (int i = 0; i < modifiers.Length; i++)
+            {
+                var m = modifiers[i];
+                if (m.kind == ModifierKind.AddPercent && Mathf.Abs(m.value) > 1.0f)
+                {
+                    Debug.LogWarning(
+                        $"[UpgradeCardSO] '{name}' modifier #{i} (target {m.type}) has " +
+                        $"AddPercent value={m.value}. AddPercent is a DECIMAL FRACTION " +
+                        $"(0.10 = +10%); a value > 1.0 means > +100% which is rarely intentional. " +
+                        $"If you meant +{m.value}%, set value={m.value / 100f:F2} instead.",
+                        this);
+                }
             }
         }
 #endif
