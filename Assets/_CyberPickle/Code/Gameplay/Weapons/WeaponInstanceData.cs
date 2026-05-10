@@ -95,11 +95,17 @@ namespace CyberPickle.Gameplay.Weapons
         /// <summary>
         /// Active element. Drives the musical mode for this weapon's
         /// pattern playback (Fire = Phrygian Dominant, etc. — see
-        /// <c>procedural_music_reference.md</c> §8). Initialized from
-        /// <c>weaponData.defaultElement</c> when the weapon enters the
-        /// loadout. Locked to a new value when an element-coupled
-        /// power-up triggers the weapon's evolution (M9 work — see
-        /// <c>procedural_music_reference.md</c> §22.4).
+        /// <c>procedural_music_reference.md</c> §8).
+        ///
+        /// 2026-05-11 (M8): element is now SOURCED FROM THE AXIS'S POWER-UP
+        /// (not from <c>weaponData.defaultElement</c>). When a weapon enters
+        /// the loadout, it inherits the element of the power-up already on
+        /// the same axis (or <see cref="ElementId.None"/> if no power-up).
+        /// When a power-up is added/removed/replaced, the axis's weapon's
+        /// element is updated by <c>WeaponLoadoutRuntime</c> and
+        /// <c>MusicEvent.WeaponElementChanged</c> fires.
+        /// <c>WeaponData.defaultElement</c> remains for editor-test-only
+        /// scenarios — production weapons start neutral.
         /// </summary>
         public ElementId element = ElementId.None;
 

@@ -107,8 +107,15 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Required power-up ID to unlock final form")]
         public string requiredPowerUpId;
 
-        [Header("Element (default — see procedural_music_reference.md §22.4)")]
-        [Tooltip("Default element this weapon enters the loadout with. Drives the weapon's pre-evolution musical mode (Fire = Phrygian Dominant, Ice = Aeolian, etc.). Locked to a new value at evolution if a power-up of a different element triggers it. ElementId.None means 'no element assigned' — used for elementally-neutral weapons or testing.")]
+        [Header("Element — TEST-ONLY (see procedural_music_reference.md §22.4)")]
+        [Tooltip(
+            "TEST-ONLY default element. Production weapons start NEUTRAL " +
+            "(ElementId.None) and only acquire an element when a power-up " +
+            "is slotted on the same loadout axis (M8 element coupling). " +
+            "This field exists for editor / preview / unit-test scenarios " +
+            "where you want a weapon to fire with a specific element without " +
+            "going through the full power-up coupling flow. Leave as None " +
+            "for any weapon shipping in a real run.")]
         public ElementId defaultElement = ElementId.None;
 
         // ─── Dual-axis: Rarity tier perks ─────────────────────────────────
