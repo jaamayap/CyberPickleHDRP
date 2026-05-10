@@ -26,6 +26,7 @@
 //     SetAxisCount before any axis operations).
 
 using System;
+using DG.Tweening;
 using UnityEngine;
 using UnityEngine.UI;
 using CyberPickle.Gameplay.Audio;
@@ -68,7 +69,7 @@ namespace CyberPickle.UI.HUD
         [SerializeField] private Color slotPickerEligibleColor = new Color(0.40f, 0.95f, 1.00f, 0.60f);
 
         [Header("State / Layout")]
-        [Tooltip("RectTransform of the panel. Auto-fetched if null. Used by SetState to reposition between Compact and Expanded — currently instant; M8 step 5 adds DOTween animation.")]
+        [Tooltip("RectTransform of the panel. Auto-fetched if null. Used by SetState to reposition between Compact and Expanded.")]
         [SerializeField] private RectTransform rect;
 
         [Tooltip("Anchored position when in Compact (in-game HUD) state. Typically a screen corner.")]
@@ -82,6 +83,17 @@ namespace CyberPickle.UI.HUD
 
         [Tooltip("Local scale when in Expanded state. Larger so the cross dominates the screen during the modal.")]
         [SerializeField] private Vector3 expandedScale = new Vector3(1.6f, 1.6f, 1f);
+
+        [Header("Card Spawn Area (Expanded state)")]
+        [Tooltip("RectTransform at the center of the cross where the level-up modal spawns its cards. The level-up controller reparents card slots here when the cross is in Expanded state. Optional — leave null for the legacy non-cross modal layout.")]
+        [SerializeField] private RectTransform cardSpawnContainer;
+
+        [Header("Animation")]
+        [Tooltip("Seconds the Compact ↔ Expanded tween runs. Uses unscaled time so it animates while the game is paused (Time.timeScale=0 during LevelUpPaused). Set to 0 to disable animation (snap instantly).")]
+        [Min(0f)] [SerializeField] private float stateTweenDuration = 0.45f;
+
+        [Tooltip("Easing applied to the Compact ↔ Expanded tween.")]
+        [SerializeField] private Ease stateTweenEase = Ease.OutBack;
 
         [Header("Diagnostics")]
         [SerializeField] private bool verbose = false;
@@ -108,13 +120,23 @@ namespace CyberPickle.UI.HUD
         public event Action OnSlotPickerCancelled;
 
         /// <summary>
-        /// Set the cross's visual state (Compact ↔ Expanded). Currently
-        /// instant — DOTween animation lands in M8 step 5.
+        /// RectTransform at the center of the cross where the level-up modal
+        /// spawns its cards in Expanded state. Null if the cross isn't
+        /// configured as a card host (e.g., legacy non-cross modal layout).
         /// </summary>
-        public void SetState(CrossState state)
+        public RectTransform CardSpawnContainer => cardSpawnContainer;
+
+        /// <summary>
+        /// Set the cross's visual state (Compact ↔ Expanded). Tweens
+        /// position + scale via DOTween with unscaled time, so it animates
+        /// during LevelUpPaused (Time.timeScale = 0). If
+        /// <paramref name="animated"/> is false (or stateTweenDuration is 0),
+        /// the state snaps instantly.
+        /// </summary>
+        public void SetState(CrossState state, bool animated = true)
         {
             State = state;
-            ApplyState();
+            ApplyState(animated);
         }
 
         /// <summary>
@@ -173,7 +195,10 @@ namespace CyberPickle.UI.HUD
             // level via Update + raycasts (simpler than wiring per-slot
             // delegates and tearing them down). See HandleSlotPickerInput.
 
-            ApplyState();
+            // Awake snaps to current state without animating — the prefab's
+            // placement is irrelevant; we want to land exactly at the
+            // compactPosition/Scale before the first frame renders.
+            ApplyState(animated: false);
         }
 
         private void OnEnable()
@@ -185,6 +210,14 @@ namespace CyberPickle.UI.HUD
         {
             MusicEventBus.OnEvent -= HandleMusicEvent;
             UnbindLoadout();
+            _posTween?.Kill();
+            _scaleTween?.Kill();
+        }
+
+        private void OnDestroy()
+        {
+            _posTween?.Kill();
+            _scaleTween?.Kill();
         }
 
         private void HandleMusicEvent(MusicEvent type, object payload)
@@ -287,19 +320,111 @@ namespace CyberPickle.UI.HUD
 
         // ─── State (Compact / Expanded) ─────────────────────────────────
 
-        private void ApplyState()
+        private Tween _posTween;
+        private Tween _scaleTween;
+
+        private void ApplyState(bool animated = true)
         {
             if (rect == null) return;
+
+            Vector2 targetPos;
+            Vector3 targetScale;
             switch (State)
             {
                 case CrossState.Compact:
-                    rect.anchoredPosition = compactPosition;
-                    rect.localScale       = compactScale;
+                    targetPos   = compactPosition;
+                    targetScale = compactScale;
                     break;
                 case CrossState.Expanded:
-                    rect.anchoredPosition = expandedPosition;
-                    rect.localScale       = expandedScale;
+                    targetPos   = expandedPosition;
+                    targetScale = expandedScale;
                     break;
+                default:
+                    return;
+            }
+
+            // Kill any in-flight tweens so we don't fight an old animation.
+            _posTween?.Kill();
+            _scaleTween?.Kill();
+
+            if (!animated || stateTweenDuration <= 0f)
+            {
+                rect.anchoredPosition = targetPos;
+                rect.localScale       = targetScale;
+                return;
+            }
+
+            // SetUpdate(true) → use unscaled time so the tween runs even when
+            // Time.timeScale = 0 (LevelUpPaused). Same defensive pattern as
+            // the existing CharacterIconWidget / TooltipController fades.
+            _posTween   = rect.DOAnchorPos(targetPos, stateTweenDuration)
+                              .SetEase(stateTweenEase)
+                              .SetUpdate(true);
+            _scaleTween = rect.DOScale(targetScale, stateTweenDuration)
+                              .SetEase(stateTweenEase)
+                              .SetUpdate(true);
+        }
+
+        // ─── Commit animation (stat-pip fly-to-core) ────────────────────
+
+        [Header("Commit animation")]
+        [Tooltip("Pip prefab spawned during PlayCommitAnimation — one per stat magnitude unit. Optional. If null, the animation is a no-op (no visual feedback). Designer can wire a small Image or particle prefab here.")]
+        [SerializeField] private RectTransform commitPipPrefab;
+
+        [Tooltip("Pip flight duration (unscaled). Pips are tinted by the rolled element + tweened from a source position to the cross center.")]
+        [Min(0f)] [SerializeField] private float commitPipDuration = 0.7f;
+
+        [Tooltip("Easing curve for the commit pip flight. AnimationCurve so designers can author bursts/arcs in the inspector.")]
+        [SerializeField] private Ease commitPipEase = Ease.InQuad;
+
+        /// <summary>
+        /// Plays the "stat magnitude pips fly into the cross core"
+        /// animation. The level-up screen calls this just before fading out
+        /// after a card is committed — visual feedback that the modifiers
+        /// were absorbed by the build.
+        ///
+        /// <paramref name="fromScreenPos"/> is where the pips spawn (the
+        /// committed card's position). <paramref name="elementColor"/>
+        /// tints the pips. <paramref name="pipCount"/> controls density
+        /// (caller can scale by rarity / magnitude for richer feedback).
+        ///
+        /// No-op if <c>commitPipPrefab</c> isn't assigned.
+        /// </summary>
+        public void PlayCommitAnimation(Vector2 fromScreenPos, Color elementColor, int pipCount = 5)
+        {
+            if (commitPipPrefab == null) return;
+            if (cardSpawnContainer == null && rect == null) return;
+
+            var center = cardSpawnContainer != null ? cardSpawnContainer : rect;
+            var canvas = GetComponentInParent<Canvas>();
+            var canvasRt = canvas != null ? (RectTransform)canvas.transform : null;
+            if (canvasRt == null) return;
+
+            var cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+            // Convert screen positions to canvas-local so we can lerp in
+            // local space (preserves anchor + scale handling).
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, fromScreenPos, cam, out var fromLocal);
+            Vector2 toScreen = RectTransformUtility.WorldToScreenPoint(cam, center.position);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, toScreen, cam, out var toLocal);
+
+            for (int i = 0; i < Mathf.Max(1, pipCount); i++)
+            {
+                var pip = Instantiate(commitPipPrefab, canvasRt);
+                pip.gameObject.SetActive(true);
+                // Slight random offset so the pips spread out a bit.
+                Vector2 jitter = UnityEngine.Random.insideUnitCircle * 12f;
+                pip.anchoredPosition = fromLocal + jitter;
+
+                // Tint: any Graphic on the pip gets element-colored.
+                var graphic = pip.GetComponent<Graphic>();
+                if (graphic != null) graphic.color = elementColor;
+
+                float delay = i * 0.04f; // staggered launch
+                pip.DOAnchorPos(toLocal, commitPipDuration)
+                   .SetDelay(delay)
+                   .SetEase(commitPipEase)
+                   .SetUpdate(true)
+                   .OnComplete(() => { if (pip != null) Destroy(pip.gameObject); });
             }
         }
 

@@ -37,6 +37,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using CyberPickle.Core;
 using CyberPickle.Gameplay.Progression;
 using CyberPickle.UI.HUD;
 
@@ -172,6 +173,11 @@ namespace CyberPickle.UI.Screens.LevelUp
             _pendingSlottableCard = null;
             SetSlotPickerHint(false);
 
+            // Expand the cross — its center area becomes the visual stage
+            // for these cards. The cross's Compact ↔ Expanded tween (DOTween,
+            // unscaled time) animates while the game is paused.
+            if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Expanded);
+
             StopAllCoroutines();
             StartCoroutine(FadeIn());
         }
@@ -254,6 +260,8 @@ namespace CyberPickle.UI.Screens.LevelUp
             // If we're mid-slot-pick, cancel that first.
             if (_pendingSlottableCard != null) HandleCancelSlotPickerClicked();
             coordinator.NotifyDraftSkipped();
+            // Skip resumes the run with no card applied — collapse the cross.
+            if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Compact);
             StopAllCoroutines();
             StartCoroutine(FadeOut());
         }
@@ -276,9 +284,46 @@ namespace CyberPickle.UI.Screens.LevelUp
 
         private void CommitPick(DraftedCard card, int axisIndex)
         {
+            // Trigger the modifier-pip "fly into the core" animation BEFORE
+            // applying the card. The pip visual is element-tinted (matches
+            // the rolled element on the card) and spawns from the picked
+            // card slot's position.
+            if (crossPanel != null)
+            {
+                Vector2 fromScreenPos = GetClickedCardScreenPos(card);
+                Color elementColor = card.rolledElement != ElementId.None
+                    ? card.rolledElement.DisplayColor()
+                    : new Color(0.85f, 0.85f, 0.95f, 1f); // neutral chrome for non-element cards
+                crossPanel.PlayCommitAnimation(fromScreenPos, elementColor, pipCount: 5);
+            }
+
             coordinator.NotifyCardPicked(card, axisIndex);
+
+            // Collapse the cross + fade the panel as the run resumes.
+            if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Compact);
             StopAllCoroutines();
             StartCoroutine(FadeOut());
+        }
+
+        /// <summary>
+        /// Find the screen-space position of the slot that's currently
+        /// showing the picked card, so the commit animation can spawn its
+        /// pips from there. Falls back to screen center if the slot can't
+        /// be matched (defensive — e.g., picked via debug command).
+        /// </summary>
+        private Vector2 GetClickedCardScreenPos(DraftedCard card)
+        {
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] == null) continue;
+                if (!slots[i].Card.IsValid) continue;
+                if (slots[i].Card.source == card.source && slots[i].Card.rolledRarity == card.rolledRarity)
+                {
+                    var rt = (RectTransform)slots[i].transform;
+                    return RectTransformUtility.WorldToScreenPoint(null, rt.position);
+                }
+            }
+            return new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────

@@ -49,8 +49,15 @@ namespace CyberPickle.UI.Screens.LevelUp
         [Tooltip("TMP for the rarity badge ('COMMON', 'RARE', etc.). Optional.")]
         [SerializeField] private TextMeshProUGUI rarityText;
 
-        [Tooltip("TMP for the element badge ('FIRE', 'LIGHTNING', etc.) — only shown for power-up cards. Optional.")]
+        [Tooltip("TMP for the element badge ('FIRE', 'LIGHTNING', etc.) — only shown for power-up cards. Anchor this near the TOP of the card per the design (element 'faces the weapon ring' on the cross). Optional.")]
         [SerializeField] private TextMeshProUGUI elementText;
+
+        [Header("Stat Pips (bottom-of-card, M8 step 5)")]
+        [Tooltip("Parent RectTransform for the stat-magnitude pips. The card's visual concept (chat 2026-05-11) puts the element on top facing the weapon and the stat pips on the bottom facing the core — so anchor this container at the bottom of the card. Cleared and repopulated on each Bind. Optional — leave null to skip pip rendering.")]
+        [SerializeField] private RectTransform statPipsContainer;
+
+        [Tooltip("Prefab spawned once per rarity tier when populating the pip row. A small Image is sufficient — the script tints it by the rolled element / rarity. Hidden if statPipsContainer is null.")]
+        [SerializeField] private RectTransform statPipPrefab;
 
         [Header("Interaction")]
         [Tooltip("The pick button — usually the entire card area. Required.")]
@@ -148,6 +155,36 @@ namespace CyberPickle.UI.Screens.LevelUp
 
             if (banishButton != null)
                 banishButton.gameObject.SetActive(true);
+
+            // Stat pips — Common=1 ... Legendary=5. Tinted by the rolled
+            // element when present, else by rarity. Designer anchors the
+            // container at the card's bottom edge per the "modifiers face
+            // the core" visual concept.
+            PopulateStatPips(card);
+        }
+
+        private void PopulateStatPips(DraftedCard card)
+        {
+            if (statPipsContainer == null) return;
+
+            // Clear previous pips.
+            for (int i = statPipsContainer.childCount - 1; i >= 0; i--)
+                Destroy(statPipsContainer.GetChild(i).gameObject);
+
+            if (statPipPrefab == null) return;
+
+            int pipCount = (int)card.rolledRarity + 1; // Common=1 ... Legendary=5
+            Color tint = card.rolledElement != ElementId.None
+                ? card.rolledElement.DisplayColor()
+                : card.rolledRarity.DisplayColor();
+
+            for (int i = 0; i < pipCount; i++)
+            {
+                var pip = Instantiate(statPipPrefab, statPipsContainer);
+                pip.gameObject.SetActive(true);
+                var graphic = pip.GetComponent<Graphic>();
+                if (graphic != null) graphic.color = tint;
+            }
         }
 
         /// <summary>Disable interaction (e.g., during the pick-completion animation).</summary>
