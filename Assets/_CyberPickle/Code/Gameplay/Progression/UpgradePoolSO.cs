@@ -21,6 +21,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using CyberPickle.Core;
 
 namespace CyberPickle.Gameplay.Progression
 {
@@ -42,6 +43,25 @@ namespace CyberPickle.Gameplay.Progression
         [Min(0f)] public float weightRare      = 10f;
         [Min(0f)] public float weightEpic      = 4f;
         [Min(0f)] public float weightLegendary = 1f;
+
+        [Header("Card Type Weights (project defaults per weapon_rarity_v1.md §3 Path B)")]
+        [Tooltip("Relative draw weight for StatModifier cards (the original card type — applies StatModifier[] via PlayerStats). Default low because most stat-only effects are captured by per-weapon LevelUp cards now.")]
+        [Min(0f)] public float weightTypeStatModifier = 30f;
+
+        [Tooltip("Relative draw weight for LevelUp cards. Highest by default — leveling weapons is the bread-and-butter of the draft.")]
+        [Min(0f)] public float weightTypeLevelUp = 50f;
+
+        [Tooltip("Relative draw weight for PowerUp cards. M9 work; weight is set but cards typed PowerUp are stubs until then.")]
+        [Min(0f)] public float weightTypePowerUp = 25f;
+
+        [Tooltip("Relative draw weight for RarityUp cards — the per-shot damage scalar bumper.")]
+        [Min(0f)] public float weightTypeRarityUp = 15f;
+
+        [Tooltip("Relative draw weight for SkillUnlock cards. M11 work; weight is set but cards typed SkillUnlock are stubs until then.")]
+        [Min(0f)] public float weightTypeSkillUnlock = 10f;
+
+        [Tooltip("Relative draw weight for Cosmetic cards. 0 by default (cosmetics don't appear in level-up drafts; they're shop-only).")]
+        [Min(0f)] public float weightTypeCosmetic = 0f;
 
         [Header("Luck Modulation")]
         [Tooltip("How aggressively Luck shifts weight from Common→Legendary. At Luck=0 weights are unchanged. At Luck=100 + this multiplier 0.5, weights for Rare/Epic/Legendary are 50% higher and Common 50% lower (tunable). Ship safely below 1 to avoid game-breaking-rarity-flooding.")]
@@ -81,12 +101,13 @@ namespace CyberPickle.Gameplay.Progression
 
             if (eligible.Count == 0) return result;
 
-            // Compute per-card weights (rarity weight × Luck modulation).
+            // Compute per-card weights (type weight × rarity weight × Luck modulation).
             var weights = new float[eligible.Count];
             float totalWeight = 0f;
             for (int i = 0; i < eligible.Count; i++)
             {
-                weights[i] = ComputeWeight(eligible[i].rarity, luck);
+                var c = eligible[i];
+                weights[i] = TypeWeight(c.cardType) * ComputeWeight(c.rarity, luck);
                 totalWeight += weights[i];
             }
 
@@ -120,16 +141,16 @@ namespace CyberPickle.Gameplay.Progression
 
         // ─── Internals ────────────────────────────────────────────────────
 
-        private float ComputeWeight(CardRarity rarity, float luck)
+        private float ComputeWeight(Rarity rarity, float luck)
         {
             float baseWeight = rarity switch
             {
-                CardRarity.Common    => weightCommon,
-                CardRarity.Uncommon  => weightUncommon,
-                CardRarity.Rare      => weightRare,
-                CardRarity.Epic      => weightEpic,
-                CardRarity.Legendary => weightLegendary,
-                _                    => 0f,
+                Rarity.Common    => weightCommon,
+                Rarity.Uncommon  => weightUncommon,
+                Rarity.Rare      => weightRare,
+                Rarity.Epic      => weightEpic,
+                Rarity.Legendary => weightLegendary,
+                _                => 0f,
             };
 
             // Luck modulation: shift weight from Common toward higher rarities.
@@ -137,16 +158,33 @@ namespace CyberPickle.Gameplay.Progression
             float shiftAmount = Mathf.Clamp01((luck * 0.01f) * luckShiftPerHundred);
             float multiplier = rarity switch
             {
-                CardRarity.Common    => 1f - shiftAmount,
-                CardRarity.Uncommon  => 1f - shiftAmount * 0.4f,  // slightly down
-                CardRarity.Rare      => 1f + shiftAmount * 0.5f,  // up
-                CardRarity.Epic      => 1f + shiftAmount * 1.0f,
-                CardRarity.Legendary => 1f + shiftAmount * 1.5f,
-                _                    => 1f,
+                Rarity.Common    => 1f - shiftAmount,
+                Rarity.Uncommon  => 1f - shiftAmount * 0.4f,  // slightly down
+                Rarity.Rare      => 1f + shiftAmount * 0.5f,  // up
+                Rarity.Epic      => 1f + shiftAmount * 1.0f,
+                Rarity.Legendary => 1f + shiftAmount * 1.5f,
+                _                => 1f,
             };
 
             return Mathf.Max(0f, baseWeight * multiplier);
         }
+
+        /// <summary>
+        /// Lookup the per-card-type weight from this pool. Multiplied
+        /// against the rarity weight to produce the final draw weight
+        /// per card. See header for the project default distribution
+        /// (50/30/25/15/10/0 across LevelUp/StatMod/PowerUp/RarityUp/SkillUnlock/Cosmetic).
+        /// </summary>
+        private float TypeWeight(CardType type) => type switch
+        {
+            CardType.StatModifier => weightTypeStatModifier,
+            CardType.LevelUp      => weightTypeLevelUp,
+            CardType.PowerUp      => weightTypePowerUp,
+            CardType.RarityUp     => weightTypeRarityUp,
+            CardType.SkillUnlock  => weightTypeSkillUnlock,
+            CardType.Cosmetic     => weightTypeCosmetic,
+            _                     => 0f,
+        };
 
         private static bool PrerequisitesMet(UpgradeCardSO card, HashSet<string> ownedCardIds)
         {

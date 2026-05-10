@@ -14,7 +14,9 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using CyberPickle.Core;
 using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Gameplay.Weapons;
 using CyberPickle.Shop.Equipment;
 using CyberPickle.Shop.Equipment.Data;
 
@@ -55,6 +57,12 @@ namespace CyberPickle.Gameplay.Player
         private void LoadAndSpawn()
         {
             ClearSpawnedItems();
+
+            // Also clear the run-state loadout authority so retry-without-
+            // scene-reload starts with a clean slate. Visual prefabs and
+            // runtime instances are repopulated below by SpawnAtMount.
+            var existingLoadout = WeaponLoadoutRuntime.Instance;
+            if (existingLoadout != null) existingLoadout.ClearLoadout();
 
             int spawnedCount = 0;
 
@@ -135,6 +143,35 @@ namespace CyberPickle.Gameplay.Player
             instance.transform.localRotation = Quaternion.identity;
             instance.name = $"{data.displayName} (Equipped)";
             spawnedItems.Add(instance);
+
+            // 2026-05-10: also notify the runtime weapon-loadout system so the
+            // HUD's WeaponSlotsPanel can display the equipped weapon. Pre-Phase-4
+            // this hook didn't exist; the visual spawn was disconnected from the
+            // run-state authority. Now they're synced.
+            //
+            // Initial rarity defaults to Common — saved per-weapon rarity isn't
+            // a feature yet (see weapon_rarity_v1.md §3 Path A: rarity is rolled
+            // on first appearance during a run, not persisted across runs).
+            // Players upgrade via in-run cards / Augment Console.
+            if (data is WeaponData weaponData)
+            {
+                var loadout = WeaponLoadoutRuntime.Instance;
+                if (loadout != null)
+                {
+                    if (!loadout.TryAddWeapon(weaponData, Rarity.Common, out var added))
+                    {
+                        Debug.LogWarning($"[PlayerLoadoutLoader] WeaponLoadoutRuntime rejected '{data.displayName}' (loadout full?).");
+                    }
+                    else if (added != null)
+                    {
+                        Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> Registered '{data.displayName}' with WeaponLoadoutRuntime in slot {added.slotIndex}.");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("[PlayerLoadoutLoader] WeaponLoadoutRuntime.Instance is null — HUD weapon slots won't show this weapon.");
+                }
+            }
 
             Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> Spawned '{data.displayName}' at '{mount.name}'.");
             return true;

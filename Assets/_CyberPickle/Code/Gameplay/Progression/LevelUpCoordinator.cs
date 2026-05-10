@@ -90,10 +90,16 @@ namespace CyberPickle.Gameplay.Progression
                 return;
             }
 
-            int applied = card.ApplyTo(playerStats);
+            // 2026-05-10 (Phase 5): replaced direct ApplyTo(stats) with the
+            // universal Apply dispatch that routes by CardType — StatModifier
+            // still flows through ApplyTo internally; LevelUp / RarityUp now
+            // route through WeaponLoadoutRuntime; PowerUp / SkillUnlock log
+            // their intent until M9 / M11 wire them.
+            var loadout = CyberPickle.Gameplay.Weapons.WeaponLoadoutRuntime.Instance;
+            string applyResult = card.Apply(playerStats, loadout);
             _ownedCardIds.Add(card.cardId);
             if (verbose)
-                Debug.Log($"[LevelUpCoordinator] Applied '{card.cardId}' ({applied} modifiers). Stats now refreshed.");
+                Debug.Log($"[LevelUpCoordinator] Picked '{card.cardId}' ({card.cardType}): {applyResult}.");
 
             MusicEventBus.Fire(MusicEvent.CardPicked, card.cardId);
             OnCardApplied?.Invoke(card);
