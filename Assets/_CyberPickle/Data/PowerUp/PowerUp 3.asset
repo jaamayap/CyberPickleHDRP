@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 60c4bada8b422b54bbfdd7a4003062ca, type: 3}
   m_Name: PowerUp 3
   m_EditorClassIdentifier: 
-  equipmentId: powerup_3
-  displayName: 
-  description: 
+  equipmentId: powerup_critical_edge
+  displayName: Critical Edge
+  description: Boosts global Crit Chance. Crits trigger the music's mega-crit roll.
   slotType: 2
   equipmentIcon: {fileID: 21300000, guid: 08b3fdf1413418d4cbc81ba07d51dd44, type: 3}
   equipmentPrefab: {fileID: 0}
@@ -24,21 +24,12 @@ MonoBehaviour:
   requiredPlayerLevel: 1
   requiredAchievements: []
   maxUpgradeLevel: 5
-  effectType: 0
-  baseDuration: 0
-  baseCooldown: 0
-  isPassive: 1
-  affectedStat: Power
-  baseStatBoost: 10
-  isPercentageBased: 1
-  compatibleWeaponTypes: 
-  synergisticWeaponIds: []
-  affectedWeaponProperties: []
-  baseWeaponEnhancementMultiplier: 1.2
-  baseEffectDescription: 
-  maxLevelEffectDescription: 
-  activeEffectPrefab: {fileID: 0}
-  activationSound: {fileID: 0}
-  effectStrengthUpgradeMultiplier: 1.2
-  durationUpgradeMultiplier: 1.15
-  cooldownReductionMultiplier: 0.9
+  affectedStat: 4
+  magnitudesByRarity:
+  - 0.03
+  - 0.05
+  - 0.08
+  - 0.12
+  - 0.18
+  slotEffectPrefab: {fileID: 0}
+  slotSound: {fileID: 0}

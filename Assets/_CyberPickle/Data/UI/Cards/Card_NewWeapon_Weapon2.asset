@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eed9819a0a1f2914ba11fbb5034bb9dc, type: 3}
+  m_Name: Card_NewWeapon_Weapon2
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Progression.UpgradeCardSO
+  cardId: new_weapon_2
+  displayName: 'New Weapon: Weapon 2'
+  description: Equip Weapon 2 on a chosen axis.
+  icon: {fileID: 0}
+  tintColor: {r: 0.5, g: 0.95, b: 0.55, a: 1}
+  rarity: 1
+  cardType: 6
+  targetWeaponData: {fileID: 11400000, guid: aa7e9ddd2b8d5a741bb7158f0ff0a735, type: 2}
+  targetPowerUpData: {fileID: 0}
+  targetSkillId: 
+  modifiers: []
+  previewPrefab: {fileID: 0}
+  hoverStingerEventId: 
+  elementTags: []
+  prerequisiteCardIds: []
