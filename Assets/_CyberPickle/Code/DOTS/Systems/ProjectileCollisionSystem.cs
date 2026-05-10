@@ -82,6 +82,20 @@ namespace CyberPickle.DOTS.Systems
             }
             float powerMultiplier = 1f + power * 0.01f;
 
+            // Component lookup for the per-projectile weapon attribution. Optional —
+            // if a projectile lacks ProjectileSource (e.g., spawned by future systems
+            // that don't tag), we report a default weapon id. WeaponFiring always
+            // tags its spawns so this is the common path.
+            var sourceLookup = SystemAPI.GetComponentLookup<ProjectileSource>(isReadOnly: true);
+
+            // Hit-report queue for per-weapon stats. Drained by DamageReportDrainSystem
+            // each frame on the managed side. May not exist on frame 0 (system creation
+            // order) — defensive HasSingleton check below.
+            bool queueExists = SystemAPI.HasSingleton<DamageReportQueueSingleton>();
+            NativeQueue<DamageHitReport> reportQueue = default;
+            if (queueExists)
+                reportQueue = SystemAPI.GetSingleton<DamageReportQueueSingleton>().Queue;
+
             // Snapshot enemies into temp arrays for inner-loop access.
             // Exclude Dead so projectiles don't waste hits on corpses.
             EntityQuery enemyQuery = SystemAPI.QueryBuilder()
@@ -122,11 +136,31 @@ namespace CyberPickle.DOTS.Systems
                     // Apply damage formula: base × (1 + Power%) × critMultiplier.
                     // Element / weapon-upgrade / equipment / skill multipliers
                     // slot in here as those systems land (M8 / M9).
-                    float critMultiplier = (_random.NextFloat() < critChance) ? 2f : 1f;
+                    bool isCrit = _random.NextFloat() < critChance;
+                    float critMultiplier = isCrit ? 2f : 1f;
                     float finalDamage = projDamage.ValueRO.Value * powerMultiplier * critMultiplier;
 
                     health.Current -= finalDamage;
                     ecb.SetComponent(enemyEntity, health);
+
+                    // Enqueue a per-hit report for PerWeaponStatsTracker. Burst
+                    // can't call into managed code; the queue is the bridge.
+                    // DamageReportDrainSystem dequeues these on the managed side
+                    // each frame and dispatches to the tracker.
+                    if (queueExists)
+                    {
+                        FixedString64Bytes weaponId = default;
+                        if (sourceLookup.HasComponent(projEntity))
+                            weaponId = sourceLookup[projEntity].WeaponId;
+
+                        reportQueue.Enqueue(new DamageHitReport
+                        {
+                            WeaponId     = weaponId,
+                            DamageDealt  = finalDamage,
+                            IsCrit       = isCrit,
+                            KilledTarget = health.Current <= 0f,
+                        });
+                    }
 
                     // Spawn hit VFX entity at the projectile's position. The VFX prefab
                     // carries its own Lifetime + visuals (Hovl particle hierarchy via

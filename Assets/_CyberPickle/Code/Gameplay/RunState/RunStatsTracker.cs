@@ -17,6 +17,7 @@
 
 using UnityEngine;
 using CyberPickle.Core.Management;
+using CyberPickle.Gameplay.Audio;
 using Unity.Entities;
 using CyberPickle.DOTS.Components;
 
@@ -76,28 +77,28 @@ namespace CyberPickle.Gameplay.RunState
 
         // ─── Lifecycle ────────────────────────────────────────────────────
 
-        protected override void OnManagerAwake()
+        protected override void OnManagerEnabled()
         {
-            base.OnManagerAwake();
-            if (RunStateManager.Instance != null)
-                RunStateManager.Instance.OnPhaseChanged += HandlePhaseChanged;
+            base.OnManagerEnabled();
+            // 2026-05-10: switched from RunStateManager.OnPhaseChanged to
+            // MusicEventBus.RunStart. The old hook reset on EVERY transition
+            // to Running phase — including LevelUpPaused→Running, which
+            // wiped kills every time the player picked a card. RunStart only
+            // fires on Loading→Running and GameOver→Running (the actual
+            // fresh-run starts), which is the right semantics. Same pattern
+            // PerWeaponStatsTracker uses.
+            MusicEventBus.OnEvent += HandleMusicEvent;
         }
 
-        protected override void OnManagerDestroyed()
+        protected override void OnManagerDisabled()
         {
-            base.OnManagerDestroyed();
-            if (RunStateManager.Instance != null)
-                RunStateManager.Instance.OnPhaseChanged -= HandlePhaseChanged;
+            base.OnManagerDisabled();
+            MusicEventBus.OnEvent -= HandleMusicEvent;
         }
 
-        private void HandlePhaseChanged(RunStatePhase phase)
+        private void HandleMusicEvent(MusicEvent type, object payload)
         {
-            // Reset counters on every fresh Running transition (i.e., new run begins).
-            // RunStateManager already handles RunTime reset; we follow suit for kills.
-            if (phase == RunStatePhase.Running)
-            {
-                Reset();
-            }
+            if (type == MusicEvent.RunStart) Reset();
         }
     }
 }

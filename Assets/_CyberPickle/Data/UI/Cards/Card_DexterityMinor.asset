@@ -21,7 +21,7 @@ MonoBehaviour:
   modifiers:
   - type: 9
     kind: 1
-    value: 10
+    value: 0.1
     sourceId: 
   previewPrefab: {fileID: 0}
   hoverStingerEventId: 

@@ -45,3 +45,5 @@ MonoBehaviour:
   otherStatsUpgradeMultiplier: 1.15
   finalForm: {fileID: 11400000, guid: 4f1abd6e117fde44d8848e414ac53232, type: 2}
   requiredPowerUpId: powerup_1
+  defaultElement: 0
+  rarityTierPerks: []

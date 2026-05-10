@@ -68,5 +68,21 @@ namespace CyberPickle.Gameplay.Audio
         ButtonClick     = 51,
         MenuOpen        = 52,
         MenuClose       = 53,
+
+        // ─── Loadout (per-equipped-weapon state changes) ─────────────────
+        // Fired by WeaponLoadoutRuntime (scene-bound Manager<T>) whenever
+        // an equipped weapon's state changes. The music conductor binds
+        // these to per-slot Wwise RTPCs (Music_WeaponLevel_SlotN,
+        // Music_WeaponRarity_SlotN) per weapon_rarity_v1.md §7.
+        // payload: int slotIndex (0..3)
+        WeaponAdded         = 60,
+        // payload: int slotIndex
+        WeaponLevelChanged  = 61,
+        // payload: int slotIndex
+        WeaponRarityChanged = 62,
+        // payload: int slotIndex — fires when a weapon transitions to its evolved form
+        WeaponEvolved       = 63,
+        // payload: null
+        LoadoutCleared      = 64,
     }
 }
