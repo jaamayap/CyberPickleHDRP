@@ -1,10 +1,11 @@
 // File: Assets/_CyberPickle/Code/UI/Screens/LevelUp/CardSlot.cs
 // Namespace: CyberPickle.UI.Screens.LevelUp
 //
-// One card slot in the level-up choice screen. Binds an UpgradeCardSO to
-// the slot's visual elements (background tint, icon, name, description,
-// rarity badge), and surfaces hover + click as C# callbacks the parent
-// controller wires up.
+// One card slot in the level-up choice screen. Binds a DraftedCard
+// (the card SO + the values rolled at draft time — rarity, element)
+// to the slot's visual elements (background tint, icon, name,
+// description, rarity badge, element badge), and surfaces hover +
+// click as C# callbacks the parent controller wires up.
 //
 // Why a separate component (not just inline in LevelUpScreenController):
 // - Clean separation: controller owns flow, slot owns view
@@ -22,6 +23,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using CyberPickle.Core;
 using CyberPickle.Gameplay.Audio;
 using CyberPickle.Gameplay.Progression;
 
@@ -47,6 +49,9 @@ namespace CyberPickle.UI.Screens.LevelUp
         [Tooltip("TMP for the rarity badge ('COMMON', 'RARE', etc.). Optional.")]
         [SerializeField] private TextMeshProUGUI rarityText;
 
+        [Tooltip("TMP for the element badge ('FIRE', 'LIGHTNING', etc.) — only shown for power-up cards. Optional.")]
+        [SerializeField] private TextMeshProUGUI elementText;
+
         [Header("Interaction")]
         [Tooltip("The pick button — usually the entire card area. Required.")]
         [SerializeField] private Button pickButton;
@@ -64,7 +69,8 @@ namespace CyberPickle.UI.Screens.LevelUp
 
         // ─── Public state ─────────────────────────────────────────────────
 
-        public UpgradeCardSO Card { get; private set; }
+        /// <summary>The DraftedCard currently shown by this slot. Default if not bound.</summary>
+        public DraftedCard Card { get; private set; }
 
         // ─── Lifecycle ────────────────────────────────────────────────────
 
@@ -83,14 +89,16 @@ namespace CyberPickle.UI.Screens.LevelUp
         // ─── Public API ───────────────────────────────────────────────────
 
         /// <summary>
-        /// Bind a card to this slot. Updates all visuals. Pass null to clear
-        /// (used when the slot is recycled across level-ups).
+        /// Bind a drafted card to this slot. Updates all visuals. Pass an
+        /// invalid (default) DraftedCard to clear the slot (used when the
+        /// slot is recycled across level-ups or when the player has fewer
+        /// cards than slots).
         /// </summary>
-        public void Bind(UpgradeCardSO card)
+        public void Bind(DraftedCard card)
         {
             Card = card;
 
-            if (card == null)
+            if (!card.IsValid)
             {
                 gameObject.SetActive(false);
                 return;
@@ -98,26 +106,46 @@ namespace CyberPickle.UI.Screens.LevelUp
 
             gameObject.SetActive(true);
 
+            var so = card.source;
+            // For power-up cards, tint by element instead of card.tintColor.
+            // The element badge mirrors this — keeps the visual identity
+            // matched (per chat 2026-05-11 design: element on top of card).
             if (backgroundImage != null)
-                backgroundImage.color = card.tintColor;
+            {
+                backgroundImage.color = card.rolledElement != ElementId.None
+                    ? card.rolledElement.DisplayColor()
+                    : so.tintColor;
+            }
 
             if (iconImage != null)
             {
-                iconImage.sprite = card.icon;
-                iconImage.enabled = card.icon != null;
+                iconImage.sprite = so.icon;
+                iconImage.enabled = so.icon != null;
             }
 
             if (nameText != null)
-                nameText.text = card.displayName;
+                nameText.text = so.displayName;
 
             if (descriptionText != null)
-                descriptionText.text = card.description ?? string.Empty;
+                descriptionText.text = so.description ?? string.Empty;
 
             if (rarityText != null)
-                rarityText.text = card.rarity.ToString().ToUpperInvariant();
+                rarityText.text = card.rolledRarity.ToString().ToUpperInvariant();
 
-            // Hide banish button if not configured. Future: hide based on
-            // whether banishment is allowed for this run (token currency check).
+            if (elementText != null)
+            {
+                if (card.rolledElement != ElementId.None)
+                {
+                    elementText.text = card.rolledElement.DisplayName().ToUpperInvariant();
+                    elementText.color = card.rolledElement.DisplayColor();
+                    elementText.gameObject.SetActive(true);
+                }
+                else
+                {
+                    elementText.gameObject.SetActive(false);
+                }
+            }
+
             if (banishButton != null)
                 banishButton.gameObject.SetActive(true);
         }
@@ -133,10 +161,10 @@ namespace CyberPickle.UI.Screens.LevelUp
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (Card == null) return;
+            if (!Card.IsValid) return;
             // Bus event drives the hover-stinger preview (Stage 0 = log,
             // Stage 2 = Wwise event post). See GDD §3.11.4.
-            MusicEventBus.Fire(MusicEvent.CardHover, Card.cardId);
+            MusicEventBus.Fire(MusicEvent.CardHover, Card.source.cardId);
         }
 
         public void OnPointerExit(PointerEventData eventData)
@@ -148,13 +176,13 @@ namespace CyberPickle.UI.Screens.LevelUp
 
         private void HandlePickClicked()
         {
-            if (Card == null) return;
+            if (!Card.IsValid) return;
             OnPicked?.Invoke(this);
         }
 
         private void HandleBanishClicked()
         {
-            if (Card == null) return;
+            if (!Card.IsValid) return;
             OnBanished?.Invoke(this);
         }
     }

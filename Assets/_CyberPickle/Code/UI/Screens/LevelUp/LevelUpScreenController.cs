@@ -118,17 +118,17 @@ namespace CyberPickle.UI.Screens.LevelUp
 
         // ─── Coordinator → UI ─────────────────────────────────────────────
 
-        private void HandleCardsDrawn(IReadOnlyList<UpgradeCardSO> cards)
+        private void HandleCardsDrawn(IReadOnlyList<DraftedCard> cards)
         {
             if (verbose) Debug.Log($"[LevelUpScreen] Showing {cards.Count} cards.");
 
             // Bind each slot. If the coordinator drew fewer cards than we
             // have slots (small pool, lots banished), unused slots hide
-            // themselves via Bind(null).
+            // themselves via Bind(default DraftedCard).
             for (int i = 0; i < slots.Length; i++)
             {
                 if (slots[i] == null) continue;
-                UpgradeCardSO card = i < cards.Count ? cards[i] : null;
+                DraftedCard card = i < cards.Count ? cards[i] : default;
                 slots[i].Bind(card);
                 slots[i].SetInteractable(true);
             }
@@ -141,16 +141,21 @@ namespace CyberPickle.UI.Screens.LevelUp
 
         private void HandleSlotPicked(CardSlot slot)
         {
-            if (slot == null || slot.Card == null || coordinator == null) return;
+            if (slot == null || !slot.Card.IsValid || coordinator == null) return;
 
-            if (verbose) Debug.Log($"[LevelUpScreen] Picked '{slot.Card.cardId}'.");
+            if (verbose) Debug.Log($"[LevelUpScreen] Picked '{slot.Card.source.cardId}'.");
 
             // Disable all slots immediately so a fast double-click can't
             // pick two cards before the fade-out completes.
             for (int i = 0; i < slots.Length; i++)
                 if (slots[i] != null) slots[i].SetInteractable(false);
 
-            // Apply via the coordinator (which transitions back to Running).
+            // Apply via the coordinator. For cards requiring slot-pick
+            // (NewWeapon / NewPowerUp), this currently auto-picks the
+            // first empty axis (axisIndex=-1). The cross-UI slot-picker
+            // flow lands in M8 step 4 — it'll route through a new
+            // coordinator.RequestCommit() → coordinator.NotifySlotPicked()
+            // sequence so the player chooses the axis explicitly.
             coordinator.NotifyCardPicked(slot.Card);
 
             StopAllCoroutines();
@@ -159,15 +164,12 @@ namespace CyberPickle.UI.Screens.LevelUp
 
         private void HandleSlotBanished(CardSlot slot)
         {
-            if (slot == null || slot.Card == null || coordinator == null) return;
+            if (slot == null || !slot.Card.IsValid || coordinator == null) return;
 
-            if (verbose) Debug.Log($"[LevelUpScreen] Banished '{slot.Card.cardId}'.");
+            if (verbose) Debug.Log($"[LevelUpScreen] Banished '{slot.Card.source.cardId}'.");
 
-            // Banishment doesn't end the level-up — the player still has
-            // to pick from the remaining cards. Just clear the banished
-            // slot so the player visually understands it's gone.
             coordinator.NotifyCardBanished(slot.Card);
-            slot.Bind(null);
+            slot.Bind(default);
         }
 
         // ─── Fades (unscaled time) ────────────────────────────────────────

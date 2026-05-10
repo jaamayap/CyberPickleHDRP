@@ -11,33 +11,36 @@
 //      coordinator silently never subscribed. The MusicEventBus is a static
 //      class — process-global, alive from assembly load — so bus
 //      subscriptions don't care about scene-load timing.)
-//   2. On level-up: transitions RunStateManager → LevelUpPaused (per
-//      GDD §3.11, this freezes Time.timeScale. Future M7.3-day-5 polish
-//      replaces full pause with timeScale=0.05 slow-mo).
-//   3. Draws N cards from the active UpgradePoolSO (filtered by banished
-//      + prerequisite, weighted by Luck).
+//   2. On level-up: transitions RunStateManager → LevelUpPaused.
+//   3. Draws N cards from the active UpgradePoolSO. N is Luck-driven
+//      via RarityRollService.CardsVisibleForLuck (3 base, +1 per 50 Luck,
+//      cap 6 — see CLAUDE.md design pillar). Cards are filtered against
+//      the current loadout state (no NewWeapon when slots full, no
+//      LevelUpWeapon for un-equipped weapons, etc.).
 //   4. Raises OnCardsDrawn for the UI (LevelUpScreenController).
-//   5. Awaits a card pick via NotifyCardPicked() (called by the UI).
-//   6. Applies the picked card's modifiers to PlayerStats, records the
-//      pick in OwnedCardIds for prerequisite tracking, fires
-//      MusicEvent.CardPicked.
+//   5. Awaits one of three player actions:
+//        - Pick a card → Apply it, end the draft, advance.
+//        - Skip       → No card applied, +1 to bankedRerolls, end the draft, advance.
+//        - Reroll     → Costs 1 banked reroll, redraws the SAME draft (different cards).
+//   6. Applies the picked card's effect via UpgradeCardSO.ApplyToAxis,
+//      records the pick in OwnedCardIds, fires MusicEvent.CardPicked.
 //   7. Transitions RunStateManager back to Running.
+//
+// Banked rerolls are run-scoped (cleared on RunStart). The bank cap is
+// configurable; default 3.
 //
 // If multiple level-ups stack (XP gem cluster pushed past two thresholds
 // in one frame), the queue handles them in FIFO order — one card screen
-// per level, no batching. This matches Vampire Survivors' UX.
-//
-// Lifecycle: drop on a [LevelUpCoordinator] empty GameObject in Game.unity.
-// Inspector wiring: assign the active UpgradePoolSO. PlayerStats is
-// lazy-discovered the first time it's needed (which is at card-pick time,
-// by which point the player has been spawned for sure).
+// per level, no batching.
 
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using CyberPickle.Core.Services;
 using CyberPickle.Gameplay.Audio;
 using CyberPickle.Gameplay.RunState;
 using CyberPickle.Gameplay.Stats;
+using CyberPickle.Gameplay.Weapons;
 
 namespace CyberPickle.Gameplay.Progression
 {
@@ -49,12 +52,19 @@ namespace CyberPickle.Gameplay.Progression
         [SerializeField] private UpgradePoolSO pool;
 
         [Header("Player Refs")]
-        [Tooltip("Player's PlayerStats component. Lazy-discovered at first level-up (the player isn't spawned yet at scene-load time, so we can't bind here in OnEnable). Inspector slot left available in case you want to wire explicitly for testing.")]
+        [Tooltip("Player's PlayerStats component. Lazy-discovered at first level-up. Inspector slot left available for explicit testing.")]
         [SerializeField] private PlayerStats playerStats;
 
         [Header("Draw Settings")]
-        [Tooltip("How many cards to show on each level-up. Default 3 (Vampire Survivors / Survivor.io standard).")]
-        [Min(1)] [SerializeField] private int cardsPerOffer = 3;
+        [Tooltip(
+            "OBSOLETE — kept for back-compat with existing scenes. Card count is now driven by " +
+            "RarityRollService.CardsVisibleForLuck (3 base, +1 per 50 Luck, cap 6) per CLAUDE.md " +
+            "design pillar. This inspector value is only used as a floor when Luck = 0.")]
+        [Min(1)] [SerializeField] private int cardsPerOfferFloor = 3;
+
+        [Header("Banked Rerolls")]
+        [Tooltip("Maximum number of banked rerolls. Skip-without-pick adds 1 to the bank; rerolls drain it. Run-scoped (resets on RunStart).")]
+        [Min(0)] [SerializeField] private int bankedRerollsCap = 3;
 
         [Header("Diagnostics")]
         [Tooltip("Log each level-up + card pick to the console.")]
@@ -62,23 +72,36 @@ namespace CyberPickle.Gameplay.Progression
 
         // ─── Public events for the UI layer ───────────────────────────────
 
-        /// <summary>Fires when the coordinator has drawn cards and the UI should display them. Argument is the cards to show.</summary>
-        public event Action<IReadOnlyList<UpgradeCardSO>> OnCardsDrawn;
+        /// <summary>Fires when the coordinator has drawn cards and the UI should display them.</summary>
+        public event Action<IReadOnlyList<DraftedCard>> OnCardsDrawn;
 
-        /// <summary>Fires after the picked card's modifiers have been applied. Argument is the picked card. Useful for animation hooks.</summary>
-        public event Action<UpgradeCardSO> OnCardApplied;
+        /// <summary>Fires after the picked card's effect has been applied. Useful for animation hooks.</summary>
+        public event Action<DraftedCard> OnCardApplied;
+
+        /// <summary>Fires when banked rerolls change (UI updates the Reroll button label).</summary>
+        public event Action<int> OnBankedRerollsChanged;
+
+        /// <summary>Current number of banked rerolls.</summary>
+        public int BankedRerolls { get; private set; }
+
+        /// <summary>Cap on banked rerolls (inspector-configured).</summary>
+        public int BankedRerollsCap => bankedRerollsCap;
 
         // ─── Public API for the UI to call back into ──────────────────────
 
         /// <summary>
-        /// Called by the UI when the player picks a card. Applies modifiers,
-        /// records ownership, resumes the run.
+        /// Player picked a card from the current draft. Applies it, records
+        /// ownership, resumes the run.
+        ///
+        /// For cards with <c>RequiresSlotSelection == true</c>, callers can
+        /// supply <paramref name="axisIndex"/>; pass -1 to fall back to
+        /// "first empty axis" auto-pick.
         /// </summary>
-        public void NotifyCardPicked(UpgradeCardSO card)
+        public void NotifyCardPicked(DraftedCard card, int axisIndex = -1)
         {
-            if (card == null)
+            if (!card.IsValid)
             {
-                Debug.LogError("[LevelUpCoordinator] NotifyCardPicked called with null card.");
+                Debug.LogError("[LevelUpCoordinator] NotifyCardPicked called with invalid card.");
                 ResumeRun();
                 return;
             }
@@ -90,18 +113,13 @@ namespace CyberPickle.Gameplay.Progression
                 return;
             }
 
-            // 2026-05-10 (Phase 5): replaced direct ApplyTo(stats) with the
-            // universal Apply dispatch that routes by CardType — StatModifier
-            // still flows through ApplyTo internally; LevelUp / RarityUp now
-            // route through WeaponLoadoutRuntime; PowerUp / SkillUnlock log
-            // their intent until M9 / M11 wire them.
-            var loadout = CyberPickle.Gameplay.Weapons.WeaponLoadoutRuntime.Instance;
-            string applyResult = card.Apply(playerStats, loadout);
-            _ownedCardIds.Add(card.cardId);
+            var loadout = WeaponLoadoutRuntime.Instance;
+            string applyResult = card.source.ApplyToAxis(playerStats, loadout, axisIndex, card.rolledElement, card.rolledRarity);
+            _ownedCardIds.Add(card.source.cardId);
             if (verbose)
-                Debug.Log($"[LevelUpCoordinator] Picked '{card.cardId}' ({card.cardType}): {applyResult}.");
+                Debug.Log($"[LevelUpCoordinator] Picked '{card.source.cardId}' ({card.source.cardType}, {card.rolledRarity}/{card.rolledElement}, axis={axisIndex}): {applyResult}.");
 
-            MusicEventBus.Fire(MusicEvent.CardPicked, card.cardId);
+            MusicEventBus.Fire(MusicEvent.CardPicked, card.source.cardId);
             OnCardApplied?.Invoke(card);
 
             ResumeRun();
@@ -109,22 +127,70 @@ namespace CyberPickle.Gameplay.Progression
         }
 
         /// <summary>
-        /// Called by the UI when the player banishes a card from the pool.
-        /// The card stays in this offer (the player still has to pick from
-        /// the remaining cards) but won't appear in future draws this run.
+        /// Player chose to skip this draft entirely (didn't pick any card).
+        /// Adds +1 to the banked-reroll counter (clamped at cap), ends the
+        /// current draft, advances. No card applied, no card recorded as owned.
         /// </summary>
-        public void NotifyCardBanished(UpgradeCardSO card)
+        public void NotifyDraftSkipped()
         {
-            if (card == null) return;
-            _banishedCardIds.Add(card.cardId);
-            MusicEventBus.Fire(MusicEvent.CardBanished, card.cardId);
-            if (verbose) Debug.Log($"[LevelUpCoordinator] Banished '{card.cardId}'.");
+            int previousBank = BankedRerolls;
+            BankedRerolls = Mathf.Min(bankedRerollsCap, BankedRerolls + 1);
+
+            if (verbose)
+            {
+                if (BankedRerolls > previousBank)
+                    Debug.Log($"[LevelUpCoordinator] Draft skipped. Banked rerolls: {previousBank} → {BankedRerolls}.");
+                else
+                    Debug.Log($"[LevelUpCoordinator] Draft skipped. Bank already at cap ({bankedRerollsCap}); +1 reroll discarded.");
+            }
+
+            OnBankedRerollsChanged?.Invoke(BankedRerolls);
+            MusicEventBus.Fire(MusicEvent.CardSkipped, null);
+
+            ResumeRun();
+            ProcessNextPendingLevelUp();
         }
 
-        /// <summary>Diagnostic accessor. UI uses to grey-out already-owned cards if relevant.</summary>
-        public IReadOnlyCollection<string> OwnedCardIds => _ownedCardIds;
+        /// <summary>
+        /// Player spent 1 banked reroll to redraw the current draft.
+        /// Returns the new card list (also fires OnCardsDrawn so the UI can
+        /// just listen to the event). Returns an empty list if no banked
+        /// rerolls available — UI should disable the Reroll button when
+        /// BankedRerolls == 0.
+        /// </summary>
+        public IReadOnlyList<DraftedCard> NotifyRerollRequested()
+        {
+            if (BankedRerolls <= 0)
+            {
+                if (verbose) Debug.Log("[LevelUpCoordinator] Reroll requested but no banked rerolls available.");
+                return Array.Empty<DraftedCard>();
+            }
 
-        /// <summary>Diagnostic accessor. UI uses to grey-out banished cards.</summary>
+            BankedRerolls--;
+            OnBankedRerollsChanged?.Invoke(BankedRerolls);
+
+            if (verbose) Debug.Log($"[LevelUpCoordinator] Reroll spent. Banked rerolls: {BankedRerolls + 1} → {BankedRerolls}. Redrawing draft.");
+
+            // Re-draw using current loadout + Luck.
+            float luck = EnsurePlayerStats() ? playerStats.Get(PlayerStatType.Luck) : 0f;
+            int count = Mathf.Max(cardsPerOfferFloor, RarityRollService.CardsVisibleForLuck(luck));
+            var loadout = WeaponLoadoutRuntime.Instance;
+            var cards = pool.DrawCards(count, luck, loadout, _banishedCardIds, _ownedCardIds);
+
+            OnCardsDrawn?.Invoke(cards);
+            return cards;
+        }
+
+        /// <summary>Banish a card from the rest-of-run pool. Doesn't end the draft.</summary>
+        public void NotifyCardBanished(DraftedCard card)
+        {
+            if (!card.IsValid) return;
+            _banishedCardIds.Add(card.source.cardId);
+            MusicEventBus.Fire(MusicEvent.CardBanished, card.source.cardId);
+            if (verbose) Debug.Log($"[LevelUpCoordinator] Banished '{card.source.cardId}'.");
+        }
+
+        public IReadOnlyCollection<string> OwnedCardIds => _ownedCardIds;
         public IReadOnlyCollection<string> BanishedCardIds => _banishedCardIds;
 
         // ─── Internal state ───────────────────────────────────────────────
@@ -138,12 +204,6 @@ namespace CyberPickle.Gameplay.Progression
 
         private void OnEnable()
         {
-            // Subscribe to the process-global music bus. This is the ONLY
-            // listener we wire here because the bus is the only source we
-            // can rely on to be alive at OnEnable time — components like
-            // PlayerXPBridge don't exist yet (the player is spawned by
-            // GameSceneBootstrap.Start, AFTER all OnEnables). PlayerStats
-            // is lazy-discovered when needed (see EnsurePlayerStats).
             MusicEventBus.OnEvent += HandleMusicEvent;
         }
 
@@ -157,16 +217,6 @@ namespace CyberPickle.Gameplay.Progression
             switch (type)
             {
                 case MusicEvent.RunStart:
-                    // The player is spawned and PlayerStats is initialized BEFORE
-                    // RunStateManager.TransitionTo(Running) fires this event (see
-                    // GameSceneBootstrap.SpawnSelectedCharacter — InitializePlayerStats
-                    // is called before TransitionTo). So by the time we land here,
-                    // PlayerStats exists and is ready to read.
-                    //
-                    // Doing the find here means level-up events later are
-                    // free of any FindFirstObjectByType cost. The find is O(n)
-                    // in scene size — fine to pay once per run, expensive to
-                    // repeat per level-up.
                     CachePlayerRefs();
                     ResetRunScopedState();
                     break;
@@ -178,46 +228,31 @@ namespace CyberPickle.Gameplay.Progression
             }
         }
 
-        /// <summary>
-        /// One-time per-run cache of the player components. Honors any
-        /// inspector-wired reference (don't overwrite if the user pre-bound).
-        /// Logs an error if PlayerStats is somehow still missing — would
-        /// indicate the player failed to spawn or the bootstrap mis-ordered
-        /// stat init vs. RunStateManager transition.
-        /// </summary>
         private void CachePlayerRefs()
         {
             if (playerStats == null)
                 playerStats = FindFirstObjectByType<PlayerStats>();
 
             if (playerStats == null)
-                Debug.LogError("[LevelUpCoordinator] CachePlayerRefs: no PlayerStats found at RunStart. Player did not spawn correctly.");
+                Debug.LogError("[LevelUpCoordinator] CachePlayerRefs: no PlayerStats found at RunStart.");
             else if (verbose)
                 Debug.Log($"[LevelUpCoordinator] Cached PlayerStats on '{playerStats.name}' at RunStart.");
         }
 
-        /// <summary>
-        /// Resets per-run state. Called on RunStart so a Try Again from the
-        /// results screen starts with a fresh banish list, fresh owned-cards
-        /// list, and an empty pending-level queue. Without this, a previous
-        /// run's banishments could carry over (currently masked by the fact
-        /// that scene-bound managers are recreated on scene reload, but
-        /// resetting here removes that dependency).
-        /// </summary>
         private void ResetRunScopedState()
         {
             _ownedCardIds.Clear();
             _banishedCardIds.Clear();
             _pendingLevels.Clear();
             _screenActive = false;
+
+            if (BankedRerolls != 0)
+            {
+                BankedRerolls = 0;
+                OnBankedRerollsChanged?.Invoke(0);
+            }
         }
 
-        /// <summary>
-        /// Defensive fallback in case a level-up somehow fires before RunStart
-        /// (direct-Play testing, time-travel via debug command, etc.). Returns
-        /// true if PlayerStats is now valid; false if we genuinely can't find it.
-        /// In the normal flow this is a no-op since CachePlayerRefs already ran.
-        /// </summary>
         private bool EnsurePlayerStats()
         {
             if (playerStats != null) return true;
@@ -233,9 +268,6 @@ namespace CyberPickle.Gameplay.Progression
             if (verbose)
                 Debug.Log($"[LevelUpCoordinator] Level-up queued: {newLevel}. Queue depth = {_pendingLevels.Count}.");
 
-            // If the screen isn't currently up, start processing. If it IS
-            // up, this level-up is queued and processed when the current
-            // pick completes.
             if (!_screenActive)
                 ProcessNextPendingLevelUp();
         }
@@ -255,15 +287,15 @@ namespace CyberPickle.Gameplay.Progression
                 return;
             }
 
-            // Pause the run.
             if (RunStateManager.Instance != null)
                 RunStateManager.Instance.TransitionTo(RunStatePhase.LevelUpPaused);
 
-            // Draw cards. Pull Luck for rarity weighting; tolerate missing
-            // PlayerStats (would only happen on a direct-Play test that
-            // skipped the bootstrap) and just use luck=0.
+            // Card count: Luck-driven via RarityRollService.CardsVisibleForLuck.
+            // Floor at the inspector-configured count for legacy scenes.
             float luck = EnsurePlayerStats() ? playerStats.Get(PlayerStatType.Luck) : 0f;
-            var cards = pool.DrawCards(cardsPerOffer, luck, _banishedCardIds, _ownedCardIds);
+            int count = Mathf.Max(cardsPerOfferFloor, RarityRollService.CardsVisibleForLuck(luck));
+            var loadout = WeaponLoadoutRuntime.Instance;
+            var cards = pool.DrawCards(count, luck, loadout, _banishedCardIds, _ownedCardIds);
 
             if (cards.Count == 0)
             {
@@ -275,8 +307,16 @@ namespace CyberPickle.Gameplay.Progression
 
             if (verbose)
             {
-                string cardList = string.Join(", ", cards.ConvertAll(c => $"{c.cardId}({c.rarity})"));
-                Debug.Log($"[LevelUpCoordinator] Drew {cards.Count} cards for level {newLevel}: {cardList}");
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < cards.Count; i++)
+                {
+                    if (i > 0) sb.Append(", ");
+                    var d = cards[i];
+                    sb.Append($"{d.source.cardId}({d.rolledRarity}");
+                    if (d.rolledElement != Core.ElementId.None) sb.Append($"/{d.rolledElement}");
+                    sb.Append(')');
+                }
+                Debug.Log($"[LevelUpCoordinator] Drew {cards.Count} cards for level {newLevel}: {sb}");
             }
 
             _screenActive = true;

@@ -29,22 +29,32 @@ namespace CyberPickle.UI.HUD
         [Tooltip("TMP for the card's type tag (e.g., 'StatModifier', 'LevelUp', 'RarityUp'). Optional.")]
         [SerializeField] private TextMeshProUGUI typeTag;
 
-        private UpgradeCardSO _card;
+        private DraftedCard _drafted;
 
         // Picked-card details are static — the card was applied when picked,
         // its modifiers won't change. Tooltip just follows the mouse, no lock.
         public override bool IsLockable => false;
 
-        public void Bind(UpgradeCardSO card)
+        public void Bind(DraftedCard drafted)
         {
-            _card = card;
-            if (card == null) return;
+            _drafted = drafted;
+            if (!drafted.IsValid) return;
+
+            var card = drafted.source;
 
             if (nameText != null)
                 nameText.text = !string.IsNullOrEmpty(card.displayName) ? card.displayName : card.cardId;
 
+            // Rarity dot uses the ROLLED rarity (the actual one applied),
+            // not the asset's authored rarity. Same for the visual tint
+            // on power-up cards via element coupling — element overrides
+            // tint per chat 2026-05-11.
             if (rarityDot != null)
-                rarityDot.color = card.rarity.DisplayColor();
+            {
+                rarityDot.color = drafted.rolledElement != ElementId.None
+                    ? drafted.rolledElement.DisplayColor()
+                    : drafted.rolledRarity.DisplayColor();
+            }
 
             if (typeTag != null)
                 typeTag.text = card.cardType.ToString();
@@ -52,52 +62,86 @@ namespace CyberPickle.UI.HUD
 
         public override TooltipContent BuildContent()
         {
-            if (_card == null) return TooltipContent.Empty;
+            if (!_drafted.IsValid) return TooltipContent.Empty;
+            var card = _drafted.source;
 
             var sb = new StringBuilder(256);
-            string rarityHex = ColorUtility.ToHtmlStringRGB(_card.rarity.DisplayColor());
+            string rarityHex = ColorUtility.ToHtmlStringRGB(_drafted.rolledRarity.DisplayColor());
 
-            sb.AppendLine($"<color=#{rarityHex}>{_card.rarity.DisplayName()}</color>  •  {_card.cardType}");
-            if (!string.IsNullOrEmpty(_card.description))
+            sb.AppendLine($"<color=#{rarityHex}>{_drafted.rolledRarity.DisplayName()}</color>  •  {card.cardType}");
+            if (_drafted.rolledElement != ElementId.None)
+            {
+                string elementHex = ColorUtility.ToHtmlStringRGB(_drafted.rolledElement.DisplayColor());
+                sb.AppendLine($"<color=#{elementHex}>{_drafted.rolledElement.DisplayName()}</color>");
+            }
+            if (!string.IsNullOrEmpty(card.description))
             {
                 sb.AppendLine();
-                sb.AppendLine(_card.description);
+                sb.AppendLine(card.description);
             }
 
             // Detail by card type.
-            switch (_card.cardType)
+            switch (card.cardType)
             {
                 case CardType.StatModifier:
-                    AppendModifierList(sb, _card);
+                    AppendModifierList(sb, card);
                     break;
 
-                case CardType.LevelUp:
-                    if (_card.targetWeaponData != null)
+                case CardType.NewWeapon:
+                    if (card.targetWeaponData != null)
                     {
                         sb.AppendLine();
-                        sb.AppendLine($"<b>Targets:</b> {_card.targetWeaponData.displayName}");
-                        sb.AppendLine("Adds the weapon at L1 if not equipped, otherwise +1 level.");
+                        sb.AppendLine($"<b>Adds:</b> {card.targetWeaponData.displayName}");
+                        sb.AppendLine($"At rarity <b>{_drafted.rolledRarity}</b>.");
                     }
                     break;
 
-                case CardType.RarityUp:
-                    if (_card.targetWeaponData != null)
+                case CardType.LevelUpWeapon:
+                    if (card.targetWeaponData != null)
                     {
                         sb.AppendLine();
-                        sb.AppendLine($"<b>Targets:</b> {_card.targetWeaponData.displayName}");
-                        sb.AppendLine("Bumps the equipped weapon's rarity by +1 tier.");
+                        sb.AppendLine($"<b>Levels:</b> {card.targetWeaponData.displayName} +1");
                     }
                     break;
 
-                case CardType.PowerUp:
-                    sb.AppendLine();
-                    sb.AppendLine($"<b>Power-up:</b> <i>{_card.targetPowerUpId}</i>");
-                    sb.AppendLine("<size=80%><color=#aaaaaa>(M9 — power-up system not yet wired)</color></size>");
+                case CardType.RarityUpWeapon:
+                    if (card.targetWeaponData != null)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine($"<b>Rarity Up:</b> {card.targetWeaponData.displayName}");
+                    }
+                    break;
+
+                case CardType.NewPowerUp:
+                    if (card.targetPowerUpData != null)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine($"<b>Adds power-up:</b> {card.targetPowerUpData.displayName}");
+                        sb.AppendLine($"Stat: <b>{card.targetPowerUpData.affectedStat}</b> at <b>{_drafted.rolledRarity}</b>.");
+                        if (_drafted.rolledElement != ElementId.None)
+                            sb.AppendLine($"Confers <b>{_drafted.rolledElement}</b> to the weapon on the same axis.");
+                    }
+                    break;
+
+                case CardType.LevelUpPowerUp:
+                    if (card.targetPowerUpData != null)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine($"<b>Levels power-up:</b> {card.targetPowerUpData.displayName} +1");
+                    }
+                    break;
+
+                case CardType.RarityUpPowerUp:
+                    if (card.targetPowerUpData != null)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine($"<b>Rarity Up power-up:</b> {card.targetPowerUpData.displayName}");
+                    }
                     break;
 
                 case CardType.SkillUnlock:
                     sb.AppendLine();
-                    sb.AppendLine($"<b>Skill:</b> <i>{_card.targetSkillId}</i>");
+                    sb.AppendLine($"<b>Skill:</b> <i>{card.targetSkillId}</i>");
                     sb.AppendLine("<size=80%><color=#aaaaaa>(M11 — skill tree not yet wired)</color></size>");
                     break;
 
@@ -109,7 +153,7 @@ namespace CyberPickle.UI.HUD
 
             return new TooltipContent
             {
-                title = !string.IsNullOrEmpty(_card.displayName) ? _card.displayName : _card.cardId,
+                title = !string.IsNullOrEmpty(card.displayName) ? card.displayName : card.cardId,
                 body  = sb.ToString(),
             };
         }

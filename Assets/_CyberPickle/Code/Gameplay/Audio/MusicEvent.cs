@@ -55,6 +55,9 @@ namespace CyberPickle.Gameplay.Audio
         // payload: card-id (string) — fires when the user picks a card
         CardPicked      = 32,
         CardBanished    = 33,
+        // payload: null — fired when the player skips an entire draft
+        // (no card picked). Adds +1 to LevelUpCoordinator.BankedRerolls.
+        CardSkipped     = 34,
         CardRerolled    = 34,
 
         // ─── Bosses ──────────────────────────────────────────────────────
