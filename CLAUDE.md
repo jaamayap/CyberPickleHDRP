@@ -152,8 +152,10 @@ Assets/_CyberPickle/
 ### Burst-incompatible managed calls
 `System.Environment.TickCount`, `DateTime.Now`, etc. — never inside `[BurstCompile]` methods. Crashes player builds inside `__codegen__OnCreate`. Use `Unity.Mathematics.Random.CreateFromIndex(state.GlobalSystemVersion)` for Burst-safe RNG seeds.
 
-### Auto-imported AI packages
-**NEVER add `com.unity.ai.assistant` or `com.unity.ai.inference`** to `Packages/manifest.json`. They're auto-imported by Unity prompts but cause cascading EPERM errors when OneDrive holds file locks during package install. Already removed (M7.4 hotfix).
+### Unity AI packages — pinned versions only
+`com.unity.ai.assistant` is required by the Unity MCP server we use during development. **Pinned at `2.6.0-pre.1`** in `manifest.json`. Do NOT accept Unity's prompt to upgrade to `2.7.0-pre.3+` — that release introduced a paywall ("Up to 0 direct connections") that breaks MCP server discovery. Same goes for `com.unity.ai.inference` (pinned at `2.6.1`). If Unity's package window or a prompt offers an upgrade, dismiss it.
+
+These were briefly removed in `5c03787` (the EPERM-on-install regression caused by OneDrive file locks during fresh install). Once installed, they're stable — re-installing is the dangerous step, not running with them.
 
 ### NEVER edit manifest.json while Unity is running
 **Hard rule learned in M7.4:** do not edit `Packages/manifest.json` or `Packages/packages-lock.json` while Unity Editor is open, ESPECIALLY mid-package-install. Unity's package resolver watches the file and re-runs on every save. If a resolve is already in flight (e.g., user just changed something in Package Manager), my edit triggers a second resolve that fights the first, leaving `Library/PackageCache/<pkg>@*` in a half-extracted state. Recovery requires manually removing the package from the Project window in Unity and restarting the editor.
