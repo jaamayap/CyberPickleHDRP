@@ -19,11 +19,36 @@ These live in `OneDrive/Documents/6. Game/LLM Knowledge Base/`:
 
 | Document | Touch this if working on… |
 |---|---|
-| `GDD_V0.6.txt` | Game design, roadmap, milestones, content (cards, identities, breakpoints, implants), §3.5 music vision |
+| `GDD_V0.6.txt` | Game design (UNCHANGED sections only — read together with `GDD_V0.7_delta.md` for current truth) |
+| `GDD_V0.7_delta.md` | **Current canonical delta** — what changed since V0.6: amulets removed, Choice Tokens removed, 10-min runs, dual-axis weapons, Stage Bosses, Completion Tiers |
+| `economy_design_v1.md` | Currencies (NC + CC), sinks, Mining Rig, run economy, boss-kill rewards — **read before any currency or shop code** |
+| `progression_design_v1.md` | Career L60 cap, 300-node skill tree, Completion Tiers, achievements, mastery challenges — **read before any XP or skill-tree code** |
+| `weapon_rarity_v1.md` | Dual-axis weapon model (Level + Rarity), rarity rolls, Luck modulation, in-level interactables, music RTPC mapping — **read before any weapon, card, or rarity code** |
 | `procedural_music_reference.md` | Music theory, modes, BPM math, Wwise hierarchy, Ableton pipeline — the composer-side reference |
 | `modifier_engine_design.md` | Stats, modifiers, source taxonomy, persistence, analytics — **the architecture lock for everything stat-driven** |
 
-When in doubt about a system's design, the modifier engine doc is the second-most-important reference after the GDD.
+**Reading priority when in doubt:** GDD V0.7 delta → relevant v1 design doc → modifier_engine_design → V0.6 GDD for unchanged sections.
+
+---
+
+## Design pillars (LOCKED — read `GDD_V0.7_delta.md` before deviating)
+
+These three rules are inviolable. If a feature appears to violate any, the feature is wrong.
+
+1. **Currencies and XP unlock CONTENT and SHAPE BUILDS — they never raise the power floor.** No "+X% damage forever" meta-purchases. The richest player has more *content available*, not more *power available*.
+2. **Every progression unlock introduces a new pattern (Theory of Fun).** Skill keystones are different games. New weapons play differently. New levels feel mechanically different.
+3. **Every choice has opportunity cost — but no negative numbers.** Geography (path-cost in skill tree), point caps (60/300), and keystone exclusivity (one active) create cost. The UI never displays "-X%."
+
+### Locked design quantities (cite these without re-deriving)
+
+- **Run hard cap:** 10:00. Stage Boss spawns at 9:00. Endless mode unlocks post-Story-Complete (zero progression).
+- **Equipment slots in run:** 1 starting weapon + 3 drafted = 4 weapons; 1 armor; bandwidth-budgeted implants (typ 3-5); Mining Rig (meta-only).
+- **Currencies (persistent):** NC (active grind) + CC (prestige/idle). **No Choice Tokens.** Reroll/Banish/Lock now driven by Luck + skill nodes.
+- **Career cap:** L60 per character. 1 skill point per level = 60 points across a 300-node tree (20% allocation). Hard cap blocks marathon-grind.
+- **Weapons:** dual-axis — Level (1-5 + Evolved) for pattern complexity + Rarity (Common-Legendary) for stat multiplier (×1.0 to ×4.0). Independent axes. L5-Evolved + Legendary is the brass ring.
+- **Amulets:** REMOVED. All amulet roles merged into Implants.
+- **Stages:** 10 in 1.0. Each has a unique boss + difficulty tiers T1-T4. Per-level XP unlocks level-specific content.
+- **Completion endpoint:** "True Cyber Pickle" — all 7 prior tiers complete (~80-120 hr).
 
 ---
 
@@ -36,15 +61,25 @@ When in doubt about a system's design, the modifier engine doc is the second-mos
 - **Burst reads via singleton**: ECS systems read `PlayerStatsData` (mirror), never the MonoBehaviour. Bridge writes in LateUpdate when dirty.
 - **Main-thread mutation only**: `AddModifier` / `RemoveModifiersFromSource` from main thread. Never from Burst.
 
+### Rarity (centralized — DO NOT define new rarity enums)
+- **Single source of truth**: `CyberPickle.Core.Rarity` at `Assets/_CyberPickle/Code/Core/Rarity.cs`. 5 tiers (Common/Uncommon/Rare/Epic/Legendary, byte-typed).
+- **Used by**: cards, weapons, implants (M10), Mining Rig parts (M13), cosmetics, boss-drop legendaries, in-run chests.
+- **NOT used by**: XP gem tiers (numeric Tier 0-4 in `EnemyXPDropChances`, conceptually aligned but mechanically separate; use `Rarity.XPGemDisplayName()` for cyberpunk-flavored display names). Achievement tiers (Bronze/Silver/Gold/Platinum, separate enum per `progression_design_v1.md` §9).
+- **NEVER define a new rarity enum** (`CardRarity`, `WeaponRarity`, `ItemRarity`, etc.). If a system needs 5-tier item quality, use this enum. If it doesn't, it shouldn't have one.
+- **Canonical scalars + visuals on the enum** via `RarityExtensions`: `DamageMultiplier()`, `BaseDrawWeight()`, `DisplayName()`, `DisplayColor()`, `IsCelebrated()`. Read from there — never re-derive.
+- **Byte values are stable contracts** — Common=0..Legendary=4. DO NOT renumber (persisted in save data, .asset files, ECS chunks).
+
 ### Music system
 - **Dexterity → tempo** (60-180 BPM)
 - **Speed (movement) → master root MIDI** (±1 octave around C3)
-- **Element per weapon → mode** (Fire = Phrygian Dominant, Lightning = Phrygian, Ice = Aeolian, etc.)
+- **Element per weapon → mode** (Fire = Phrygian Dominant, Lightning = Phrygian, Ice = Aeolian, etc.); element locked in via power-up coupling at evolution
 - **Weapon family → musical role**: Projectile = melody, Explosive = percussion, Beam = harmony
-- **Weapon level (1-5 + Evolved) → pattern complexity**
-- **Weapon damage → bus distortion / compression RTPC**
-- **Luck → mega-crit roll** on top of crit
+- **Weapon level (1-5 + Evolved) → one hand-composed pattern per level** (4 bars × 32 subdivisions, scale-degree-based — see `procedural_music_reference.md` §22). Pattern data is custom format; composer authors via DAW + MIDI importer.
+- **Weapon rarity (Common-Legendary) → distortion / compression depth** (per-slot RTPC `Music_WeaponRarity_SlotN`)
+- **Power-ups carry type AND element** — same mechanical effect appears in multiple element flavors in the draft. Element = which musical mode the coupled weapon's pattern plays in.
+- **Luck → mega-crit roll** on top of crit + cards-visible-per-draft (3 base, +1 per 50 Luck, cap 6)
 - **Grid**: 32 subdivisions per bar; per-pattern grain (8/16/32)
+- **Pattern playback**: custom `RhythmicPattern` SO + tick-driven `PatternPlaybackService` posting per-cell Wwise events with Pitch/Velocity RTPCs. NOT runtime MIDI — MIDI is composer-side authoring only via Editor importer.
 - **Bus**: `MusicEventBus` is the canonical fan-out for all gameplay-audio events
 
 ### Manager<T> singletons
@@ -120,6 +155,11 @@ Assets/_CyberPickle/
 ### Auto-imported AI packages
 **NEVER add `com.unity.ai.assistant` or `com.unity.ai.inference`** to `Packages/manifest.json`. They're auto-imported by Unity prompts but cause cascading EPERM errors when OneDrive holds file locks during package install. Already removed (M7.4 hotfix).
 
+### NEVER edit manifest.json while Unity is running
+**Hard rule learned in M7.4:** do not edit `Packages/manifest.json` or `Packages/packages-lock.json` while Unity Editor is open, ESPECIALLY mid-package-install. Unity's package resolver watches the file and re-runs on every save. If a resolve is already in flight (e.g., user just changed something in Package Manager), my edit triggers a second resolve that fights the first, leaving `Library/PackageCache/<pkg>@*` in a half-extracted state. Recovery requires manually removing the package from the Project window in Unity and restarting the editor.
+
+**Process rule:** never edit `manifest.json` / `packages-lock.json` without an explicit "yes, edit the manifest" instruction from the user, even when documentation or troubleshooting threads suggest it as a fix. Suggest the change and let the user make it themselves with Unity closed. The manifest edit is one of those operations that LOOKS safe (just text in JSON) but has runtime consequences in Unity's package resolver that aren't visible to me.
+
 ### TMP shader typo on re-import
 `Assets/TextMesh Pro/Shaders/SDFFunctions.hlsl` line 25 ships from the TMP package with `texture2D atlas` (lowercase). The valid HLSL type is `Texture2D` (capital T). Breaks 11 DXR shader passes. **If TMP is re-imported, fix the typo again.**
 
@@ -149,7 +189,14 @@ UI animations during `LevelUpPaused` / `GameOver` MUST use `Time.unscaledDeltaTi
 - Day 4: Selective damage numbers + hitstop
 - Day 5: Enemy state flash + element-coded particle bursts
 
-**Next milestones**: M7.5 polish (`IModifierSource` interface unification) → M8 element system + tags → M9 economy + identities → M10 specials + implants + music spike → M11 archetypes + skill tree.
+**Next milestones** (per `GDD_V0.7_delta.md` roadmap impact):
+- M7.5: polish (`IModifierSource` interface unification)
+- M8: Element system + tags (ElementId, WeaponFamily on WeaponData; WeaponLoadoutRuntime singleton)
+- M9: Choice Economy + Synergy Identities + Wwise Stage 2 (RTPCs from `weapon_rarity_v1.md` §7; card-type distribution)
+- M10: Implants + Music Spike (bandwidth budget, implant catalog, rarity → distortion mapping)
+- M11: Skill Tree (300 nodes / 60 pts authoring + UI; Career L60 cap)
+- M12: Level Design Pass (4 archetypes, in-level interactables, 10 stages, T1-T4 tiers)
+- M13: Completion Tiers + Achievements + Mining Rig (rig parts collection, badges)
 
 ---
 
