@@ -324,6 +324,12 @@ namespace CyberPickle.Gameplay.Weapons
                 Debug.Log($"<color=cyan>[WeaponFiring]</color> Slot {slotIndex} '{idForSource}' fired — L{lvl} {rar} dmg={effectiveDamage:F1} spd={effectiveSpeed:F1}.");
             }
 
+            // Spawn the muzzle flash (Mono-side, one-shot). The visual is
+            // looked up from ElementVfxLibrary by the weapon's currently-
+            // coupled element; scale comes from weaponData.muzzleFlashScale.
+            // M9 PR A — projectile + hit VFX library swap lands in later PRs.
+            SpawnMuzzleFlash(instance);
+
             // Broadcast to the audio bus. Stage 0: a Debug.Log entry per shot
             // (only when VerboseLogging is on — off by default to avoid log
             // flood). Stage 2 (M9 Wwise): this becomes the per-shot Ak event
@@ -332,6 +338,52 @@ namespace CyberPickle.Gameplay.Weapons
             // so the conductor can pick the right pitch/sample; for the stub
             // we just signal that A shot happened.
             MusicEventBus.Fire(MusicEvent.WeaponFire, gameObject.name);
+        }
+
+        // ─── Muzzle flash (M9 PR A) ───────────────────────────────────────
+
+        /// <summary>
+        /// Spawn the muzzle-flash GameObject for this shot. Visual picked
+        /// from <see cref="ElementVfxLibrary"/> by the weapon's currently-
+        /// coupled <see cref="ElementId"/>. Scaled by
+        /// <c>weaponData.muzzleFlashScale</c>.
+        ///
+        /// One-shot — auto-destroys after the longest particle system's
+        /// duration so we don't leak GameObjects. Spawned UNPARENTED (so it
+        /// stays where it was fired even as the weapon rotates to track the
+        /// next target).
+        ///
+        /// Silent no-op when:
+        ///   - The library asset is missing (warned once via the library)
+        ///   - The element has no flashPrefab authored
+        ///   - The flash scale is zero (designer explicitly disabled it)
+        /// </summary>
+        private void SpawnMuzzleFlash(WeaponInstanceData instance)
+        {
+            var lib = ElementVfxLibrary.Instance;
+            if (lib == null) return;
+
+            ElementId element = instance != null && instance.IsValid ? instance.element : ElementId.None;
+            var entry = lib.Get(element);
+            if (entry.flashPrefab == null) return;
+
+            float scale = weaponData != null ? weaponData.muzzleFlashScale : 1f;
+            if (scale <= 0f) return;
+
+            // Spawn at muzzle, oriented along muzzle.forward.
+            GameObject flash = UnityEngine.Object.Instantiate(entry.flashPrefab, muzzle.position, muzzle.rotation);
+            flash.transform.localScale = Vector3.one * scale;
+
+            // Auto-cleanup. Use the longest particle system duration + a
+            // small grace period so trailing particles finish before destroy.
+            float maxDuration = 1.0f;
+            foreach (var ps in flash.GetComponentsInChildren<ParticleSystem>())
+            {
+                var main = ps.main;
+                float dur = main.duration + main.startLifetime.constantMax;
+                if (dur > maxDuration) maxDuration = dur;
+            }
+            UnityEngine.Object.Destroy(flash, maxDuration + 0.5f);
         }
 
         /// <summary>
