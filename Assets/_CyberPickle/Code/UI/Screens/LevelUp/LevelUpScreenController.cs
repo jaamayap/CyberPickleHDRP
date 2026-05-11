@@ -260,7 +260,9 @@ namespace CyberPickle.UI.Screens.LevelUp
             // If we're mid-slot-pick, cancel that first.
             if (_pendingSlottableCard != null) HandleCancelSlotPickerClicked();
             coordinator.NotifyDraftSkipped();
-            // Skip resumes the run with no card applied — collapse the cross.
+            // Skip resumes the run with no card applied — hide cards +
+            // collapse the cross + fade the panel.
+            HideAllCardSlots();
             if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Compact);
             StopAllCoroutines();
             StartCoroutine(FadeOut());
@@ -299,10 +301,30 @@ namespace CyberPickle.UI.Screens.LevelUp
 
             coordinator.NotifyCardPicked(card, axisIndex);
 
+            // Hide all card slots — the player committed; the in-game HUD
+            // should now show ONLY the cross axes (weapons + power-ups).
+            // Without this, the unselected cards would ride the cross
+            // back to the compact corner still visible.
+            HideAllCardSlots();
+
             // Collapse the cross + fade the panel as the run resumes.
             if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Compact);
             StopAllCoroutines();
             StartCoroutine(FadeOut());
+        }
+
+        /// <summary>
+        /// Deactivate every card slot's GameObject. CardSlot.Bind(default)
+        /// hides itself via SetActive(false). On the next level-up,
+        /// HandleCardsDrawn re-Binds with fresh draft cards which re-enables
+        /// the GameObjects.
+        /// </summary>
+        private void HideAllCardSlots()
+        {
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] != null) slots[i].Bind(default);
+            }
         }
 
         /// <summary>
