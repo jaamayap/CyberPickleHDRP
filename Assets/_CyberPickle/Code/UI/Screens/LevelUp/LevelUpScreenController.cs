@@ -95,6 +95,14 @@ namespace CyberPickle.UI.Screens.LevelUp
         {
             SetPanelVisibility(0f, interactable: false);
             SetSlotPickerHint(false);
+            // Cards live under CardSpawnContainer (a separate canvas from
+            // this panel's CanvasGroup), so SetPanelVisibility(0) doesn't
+            // hide them. Without this, the placeholder card content
+            // ("NAME / Description / etc." authored in the scene) shows
+            // from the moment the Game scene loads until the first
+            // level-up. Hide on Awake; HandleCardsDrawn re-activates
+            // them when a draft fires.
+            HideAllCardSlots();
         }
 
         private void OnEnable()
