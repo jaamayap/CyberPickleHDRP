@@ -54,8 +54,20 @@ namespace CyberPickle.Gameplay.Weapons
         [Tooltip("The weapon's design SO. When assigned, base damage / fire-rate / projectile-speed come from this asset and are scaled per the runtime instance's Level + Rarity from WeaponLoadoutRuntime. Leave null only for scene-test setups; production uses weaponData.")]
         [SerializeField] private WeaponData weaponData;
 
-        [Tooltip("Loadout slot this WeaponFiring component represents. 0 = starting weapon (typical); 1..3 = drafted in-run weapons (these are usually spawned dynamically). The runtime reads the matching WeaponInstanceData from WeaponLoadoutRuntime.GetSlot(slotIndex) on each fire.")]
+        [Tooltip("Loadout slot this WeaponFiring component represents. 0 = North axis (typical for the starting weapon); 1..3 = drafted weapons. The runtime reads the matching WeaponInstanceData from WeaponLoadoutRuntime.GetSlot(slotIndex) on each fire. Designers can author this for fixed scene-test setups; PlayerLoadoutLoader overrides it via SetSlotIndex when spawning dynamically.")]
         [SerializeField, Range(0, WeaponLoadoutRuntime.MaxSlots - 1)] private int slotIndex = 0;
+
+        /// <summary>
+        /// Override the slot/axis index at runtime. Called by
+        /// PlayerLoadoutLoader after Instantiate-ing the weapon prefab so
+        /// each spawned weapon reads its OWN loadout axis (otherwise every
+        /// dynamically-spawned weapon would inherit the prefab's authored
+        /// slotIndex = 0 and they'd all read the same axis's instance data).
+        /// </summary>
+        public void SetSlotIndex(int idx)
+        {
+            slotIndex = Mathf.Clamp(idx, 0, WeaponLoadoutRuntime.MaxSlots - 1);
+        }
 
         [Header("Fallback Stats (used only when WeaponData is null)")]
         [Tooltip("Shots per second — fallback for inspector tests when WeaponData is unassigned.")]
