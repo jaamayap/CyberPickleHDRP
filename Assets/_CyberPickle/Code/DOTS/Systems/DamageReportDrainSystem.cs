@@ -14,8 +14,11 @@
 
 using Unity.Collections;
 using Unity.Entities;
+using UnityEngine;
+using CyberPickle.Core;
 using CyberPickle.DOTS.Components;
 using CyberPickle.Gameplay.Combat;
+using CyberPickle.Gameplay.Weapons;
 
 namespace CyberPickle.DOTS.Systems
 {
@@ -66,6 +69,18 @@ namespace CyberPickle.DOTS.Systems
                 // backing up the queue. Subsequent reports will land normally
                 // once the tracker is alive.
                 tracker?.RecordHit(report);
+
+                // M9 PR F: spawn the Mono-side hit VFX. ElementVfxLibrary
+                // picks the right per-element prefab; HitVfxApplier scales
+                // particles by damage / crit / weapon scale / AoE; tints by
+                // element + crit. Silent if the library or prefab is missing.
+                ElementId element = (ElementId)report.Element;
+                HitVfxApplier.Play(
+                    weaponId:     report.WeaponId.ToString(),
+                    element:      element,
+                    hitPosition:  new Vector3(report.HitPosition.x, report.HitPosition.y, report.HitPosition.z),
+                    damageDealt:  report.DamageDealt,
+                    isCrit:       report.IsCrit);
             }
         }
     }

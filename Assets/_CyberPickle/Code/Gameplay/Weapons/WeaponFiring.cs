@@ -424,6 +424,13 @@ namespace CyberPickle.Gameplay.Weapons
                 {
                     Value = (byte)instance.rarity,
                 });
+                // Stamp the element AT FIRE TIME — projectiles in flight
+                // keep their original element even if the axis's power-up
+                // changes mid-flight (per M9 PR F design).
+                AddOrSetComponent(projectile, new WeaponElement
+                {
+                    Value = (byte)instance.element,
+                });
             }
 
             if (entityManager.HasComponent<ProjectileSource>(projectile))

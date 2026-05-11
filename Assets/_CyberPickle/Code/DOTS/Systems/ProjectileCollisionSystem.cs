@@ -87,6 +87,9 @@ namespace CyberPickle.DOTS.Systems
             // that don't tag), we report a default weapon id. WeaponFiring always
             // tags its spawns so this is the common path.
             var sourceLookup = SystemAPI.GetComponentLookup<ProjectileSource>(isReadOnly: true);
+            // M9 PR F: per-projectile element tag (optional — defaults to
+            // None for projectiles without it, e.g., future spawn paths).
+            var elementLookup = SystemAPI.GetComponentLookup<WeaponElement>(isReadOnly: true);
 
             // Hit-report queue for per-weapon stats. Drained by DamageReportDrainSystem
             // each frame on the managed side. May not exist on frame 0 (system creation
@@ -153,12 +156,18 @@ namespace CyberPickle.DOTS.Systems
                         if (sourceLookup.HasComponent(projEntity))
                             weaponId = sourceLookup[projEntity].WeaponId;
 
+                        byte element = 0; // ElementId.None
+                        if (elementLookup.HasComponent(projEntity))
+                            element = elementLookup[projEntity].Value;
+
                         reportQueue.Enqueue(new DamageHitReport
                         {
                             WeaponId     = weaponId,
                             DamageDealt  = finalDamage,
                             IsCrit       = isCrit,
                             KilledTarget = health.Current <= 0f,
+                            HitPosition  = projPos,
+                            Element      = element,
                         });
                     }
 
