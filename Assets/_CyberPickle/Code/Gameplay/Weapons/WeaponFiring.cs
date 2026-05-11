@@ -2,8 +2,32 @@
 // Namespace: CyberPickle.Gameplay.Weapons
 //
 // Auto-fires entity-based projectiles at the WeaponTargeting's current
-// target on a fire-rate cooldown. Lives MonoBehaviour-side (one per
-// weapon), but spawns ECS-side projectiles for runtime performance.
+// target. Lives MonoBehaviour-side (one per weapon), but spawns ECS-side
+// projectiles for runtime performance.
+//
+// 2026-05-11 refactor (M9 PR G2 — PHASE-LOCK TO MUSIC GRID):
+//   - Replaced the per-weapon float cooldown ticker (which drifted
+//     between weapons via FP error, no-target gating, mid-cycle rate
+//     changes, and resume-from-pause phase offsets) with a subscription
+//     to MusicConductor.OnSubdivision.
+//   - Every shot is now sampled against the master beat grid:
+//
+//       totalSubdivs = barCount × beatsPerBar × conductor.SubdivisionsPerBeat
+//       fireCells    = weaponData.GetFireCellsForLevel(level, totalSubdivs)
+//       fire when    = fireCells.Contains(conductor.CurrentSubdivision % totalSubdivs)
+//
+//     ALL weapons sampling the same grid coincide at every common multiple
+//     of their intervals → mathematically cannot drift. Pistol firing 8/bar
+//     and sniper firing 2/bar share fire cells at {0, 8} every bar forever.
+//
+//   - Pause / level-up / mid-run weapon adds: conductor handles all of
+//     these correctly (clock preserved through pauses, new subscribers
+//     pick up the next aligned tick). Nothing local to compensate for.
+//
+//   - Fallback Time.deltaTime cooldown is RETAINED for scene-test setups
+//     where MusicConductor.Instance is null (editor preview, one-weapon
+//     isolated test). Won't phase-lock to anything, but lets the weapon
+//     fire so the test scene is usable.
 //
 // 2026-05-10 refactor (Phase 4):
 //   - Reads per-shot stats from WeaponLoadoutRuntime + WeaponData instead
@@ -112,7 +136,6 @@ namespace CyberPickle.Gameplay.Weapons
         // ─── Runtime state ────────────────────────────────────────────────
 
         private WeaponTargeting targeting;
-        private float cooldown;
         private FixedString64Bytes _weaponIdFixed;
 
         private World world;
@@ -120,6 +143,23 @@ namespace CyberPickle.Gameplay.Weapons
         private Entity prefabEntity = Entity.Null;        // legacy single-prefab cache
         private Entity prefabRegistryEntity = Entity.Null; // entity holding the per-element buffer
         private bool dotsInitialized;
+
+        // Grid-locked firing (M9 PR G2). Subscribed to MusicConductor
+        // .OnSubdivision; HandleSubdivision tests if the current grid tick
+        // is one of our pattern's fire cells and shoots if so. Cells are
+        // cached per (level, totalSubdivs) tuple; recomputed lazily when
+        // either changes (level-up, BPM change wouldn't change cells —
+        // subdivision count is BPM-independent — but conductor grid
+        // resolution change would).
+        private bool _gridSubscribed;
+        private int[] _fireCellsCache;
+        private int _cachedLevel = -1;
+        private int _cachedTotalSubdivs = -1;
+
+        // Fallback ticker — used ONLY when MusicConductor.Instance is null
+        // (scene-test setups). Same drift-prone behavior as the pre-PR-G2
+        // code, but the only path that exists when the conductor is absent.
+        private float _fallbackCooldown;
 
         private void Awake()
         {
@@ -143,19 +183,118 @@ namespace CyberPickle.Gameplay.Weapons
             return gameObject.name.ToLowerInvariant().Replace(' ', '_');
         }
 
+        // ─── Subscription lifecycle ───────────────────────────────────────
+
+        private void OnEnable()
+        {
+            // PlayerLoadoutLoader spawns weapon prefabs after the conductor
+            // exists in the Game scene boot order. Subscribe to the grid;
+            // if the conductor is absent (scene-test, editor preview), the
+            // fallback ticker in Update() handles firing — desyncs but works.
+            var conductor = MusicConductor.Instance;
+            if (conductor != null)
+            {
+                conductor.OnSubdivision += HandleSubdivision;
+                _gridSubscribed = true;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (!_gridSubscribed) return;
+            var conductor = MusicConductor.Instance;
+            if (conductor != null)
+                conductor.OnSubdivision -= HandleSubdivision;
+            _gridSubscribed = false;
+        }
+
+        // ─── Grid-locked tick (the main firing path) ─────────────────────
+
+        /// <summary>
+        /// Fires once per master grid subdivision. Tests whether the
+        /// conductor's current subdivision is one of this weapon's pattern
+        /// fire-cells; shoots if so. Phase-locked across all weapons
+        /// because they all sample the same monotonic CurrentSubdivision
+        /// counter.
+        /// </summary>
+        private void HandleSubdivision()
+        {
+            if (!targeting.HasTarget) return;
+            if (!ResolvePrefab()) return;
+
+            var conductor = MusicConductor.Instance;
+            if (conductor == null) return; // shouldn't happen — we'd have unsubscribed
+
+            var instance = GetCurrentInstance();
+            var data = ResolveWeaponData(instance);
+            if (data == null) return;
+
+            int subdivPerBeat = conductor.SubdivisionsPerBeat;
+            int totalSubdivs = data.GetTotalSubdivisions(subdivPerBeat);
+            if (totalSubdivs <= 0) return;
+
+            int level = (instance != null && instance.IsValid) ? instance.level : 1;
+            EnsureFireCellsCache(data, level, totalSubdivs);
+            if (_fireCellsCache == null || _fireCellsCache.Length == 0) return;
+
+            // Phase within the pattern. CurrentSubdivision is the
+            // conductor's monotonic counter since RunStart — modulo our
+            // pattern length gives our position in the loop.
+            int phase = conductor.CurrentSubdivision % totalSubdivs;
+
+            // Cells are sorted ascending; linear scan is fine for
+            // typical cell counts (≤64 in default L1..L5 config).
+            for (int i = 0; i < _fireCellsCache.Length; i++)
+            {
+                int cell = _fireCellsCache[i];
+                if (cell == phase)
+                {
+                    Fire(instance);
+                    return;
+                }
+                if (cell > phase) return; // sorted — no further match possible
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds the fire-cell index list when (level, totalSubdivs)
+        /// changes. Otherwise reuses the cached array — no per-tick
+        /// allocation. Triggers naturally on level-up (instance.level
+        /// changes) and on conductor grid-resolution changes (rare).
+        /// </summary>
+        private void EnsureFireCellsCache(WeaponData data, int level, int totalSubdivs)
+        {
+            if (_fireCellsCache != null
+                && _cachedLevel == level
+                && _cachedTotalSubdivs == totalSubdivs)
+                return;
+
+            _fireCellsCache = data.GetFireCellsForLevel(level, totalSubdivs);
+            _cachedLevel = level;
+            _cachedTotalSubdivs = totalSubdivs;
+        }
+
+        // ─── Fallback ticker (no MusicConductor — scene-test only) ──────
+
         private void Update()
         {
-            cooldown -= Time.deltaTime;
-            if (cooldown > 0f) return;
-            if (!targeting.HasTarget) return;
+            // Grid path handles firing when subscribed; nothing to do here.
+            if (_gridSubscribed) return;
 
+            // No conductor available — fall back to the legacy cooldown
+            // model so isolated scene tests still work. Won't be
+            // phase-locked to anything, but a single weapon by itself
+            // doesn't need to be.
+            _fallbackCooldown -= Time.deltaTime;
+            if (_fallbackCooldown > 0f) return;
+            if (!targeting.HasTarget) return;
             if (!ResolvePrefab()) return;
 
             var instance = GetCurrentInstance();
             Fire(instance);
 
             float effectiveRate = GetEffectiveFireRate(instance);
-            cooldown = 1f / Mathf.Max(0.01f, effectiveRate);
+            _fallbackCooldown = 1f / Mathf.Max(0.01f, effectiveRate);
         }
 
         // ─── Effective stat helpers ───────────────────────────────────────

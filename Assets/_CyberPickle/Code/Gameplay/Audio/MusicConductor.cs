@@ -22,6 +22,7 @@ using System;
 using UnityEngine;
 using CyberPickle.Core.Management;
 using CyberPickle.Gameplay.RunState;
+using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Gameplay.Audio
 {
@@ -33,11 +34,27 @@ namespace CyberPickle.Gameplay.Audio
         protected override bool PersistAcrossScenes => false;
 
         [Header("Tempo")]
-        [Tooltip("Master tempo in beats per minute. Default 128 — French-electro / cyberpunk standard. See GDD §3.5.2.")]
+        [Tooltip("Current master tempo in beats per minute. Default 128 — French-electro / cyberpunk standard. See GDD §3.5.2. At runtime this value is OVERWRITTEN by RecomputeBpmFromDex() each time PlayerStats.Dexterity changes (unless enableDexterityToBpm is off).")]
         [SerializeField, Range(60f, 200f)] private float bpm = 128f;
 
         [Tooltip("Subdivisions per beat. 4 = 16th-note grid (fast weapons), 2 = 8th-note grid (medium), 1 = quarter (slow). Most weapons will quantize to 16ths.")]
         [SerializeField, Range(1, 8)] private int subdivisionsPerBeat = 4;
+
+        [Header("Dexterity → BPM (anchor-based mapping)")]
+        [Tooltip("When ON, BPM is recomputed live from PlayerStats.Dexterity each time stats change. The serialized bpm field above becomes the boot-time default — it's overwritten on the first stats event (typically RunStart). Turn OFF for manual tuning / scene testing without a player.")]
+        [SerializeField] private bool enableDexterityToBpm = true;
+
+        [Tooltip("BPM when Dexterity equals minDexterityAnchor. This is the SLOW end of the song-build arc — what the player hears at the start of a run with no Dex investments.")]
+        [SerializeField, Range(30f, 120f)] private float bpmAtMinDex = 60f;
+
+        [Tooltip("Dexterity value treated as the 'minimum expected'. Below this, BPM stays clamped at bpmAtMinDex. Default 10 matches BaseStats.Defaults.dexterity — the unmodified starting value.")]
+        [SerializeField, Min(0f)] private float minDexterityAnchor = 10f;
+
+        [Tooltip("BPM when Dexterity equals maxDexterityAnchor. This is the FAST end of the song-build arc — what a fully Dex-maxed build hears at end-of-run climax.")]
+        [SerializeField, Range(120f, 240f)] private float bpmAtMaxDex = 180f;
+
+        [Tooltip("Dexterity value treated as the 'maximum expected'. Above this, BPM stays clamped at bpmAtMaxDex. Tune to what you want a Dex-stacked build to reach — e.g. 30 if a player picking ~5 of the +10% Dex cards should hit max tempo. Higher values = harder to reach top BPM = more progression headroom.")]
+        [SerializeField, Min(0.1f)] private float maxDexterityAnchor = 30f;
 
         [Header("Diagnostics")]
         [Tooltip("Log each beat / bar to the console. Off by default — chatty.")]
@@ -84,6 +101,12 @@ namespace CyberPickle.Gameplay.Audio
         private int _lastBeatFired = -1;
         private int _lastBarFired = -1;
 
+        // Dex→BPM wiring. PlayerStats is a scene MonoBehaviour (not a
+        // Manager<T> singleton), so we resolve it lazily on RunStart and
+        // subscribe to its change event.
+        private PlayerStats _playerStats;
+        private bool _subscribedToPlayerStats;
+
         // ─── Manager lifecycle ────────────────────────────────────────────
 
         protected override void OnManagerEnabled()
@@ -114,13 +137,21 @@ namespace CyberPickle.Gameplay.Audio
             MusicEventBus.OnEvent -= HandleMusicEvent;
             if (RunStateManager.Instance != null)
                 RunStateManager.Instance.OnPhaseChanged -= HandleRunPhaseChanged;
+            UnsubscribePlayerStats();
         }
 
         // ─── Event handlers ───────────────────────────────────────────────
 
         private void HandleMusicEvent(MusicEvent type, object _)
         {
-            if (type == MusicEvent.RunStart) ResetClock();
+            if (type == MusicEvent.RunStart)
+            {
+                ResetClock();
+                // Player exists by RunStart (the bootstrap spawned it before
+                // firing the event). Lazily wire PlayerStats here so the
+                // conductor doesn't need any direct reference to the player.
+                ResolveAndSubscribePlayerStats();
+            }
         }
 
         private void HandleRunPhaseChanged(RunStatePhase phase)
@@ -195,6 +226,114 @@ namespace CyberPickle.Gameplay.Audio
                     }
                 }
             }
+        }
+
+        // ─── Dexterity → BPM (PR G3) ──────────────────────────────────────
+
+        /// <summary>
+        /// Resolve <see cref="PlayerStats"/> via scene search and subscribe
+        /// to its <see cref="PlayerStats.OnStatsChanged"/> event. Called on
+        /// RunStart (when the player is guaranteed to exist). No-op if
+        /// already subscribed or PlayerStats can't be found (direct-play in
+        /// Game.unity without a character — fine, BPM stays at the inspector
+        /// default).
+        /// </summary>
+        private void ResolveAndSubscribePlayerStats()
+        {
+            if (_subscribedToPlayerStats) return;
+            _playerStats = FindFirstObjectByType<PlayerStats>();
+            if (_playerStats == null) return;
+
+            _playerStats.OnStatsChanged += HandlePlayerStatsChanged;
+            _subscribedToPlayerStats = true;
+
+            // Initial sync — the current Dex value sets the initial BPM.
+            // Without this we'd miss the Initialize() event that fired
+            // before we subscribed (RunStart sequence: player init → bus fire).
+            RecomputeBpmFromDex();
+        }
+
+        private void UnsubscribePlayerStats()
+        {
+            if (_playerStats != null && _subscribedToPlayerStats)
+                _playerStats.OnStatsChanged -= HandlePlayerStatsChanged;
+            _playerStats = null;
+            _subscribedToPlayerStats = false;
+        }
+
+        private void HandlePlayerStatsChanged(PlayerStatType type)
+        {
+            // Respond to Dexterity changes AND to the bulk-change sentinel
+            // (PlayerStats fires OnStatsChanged(default) on Initialize and
+            // bulk RemoveModifiersFromSource — default == MaxHealth == 0).
+            // Both could mean Dex changed. The recompute is cheap, just
+            // re-runs unnecessarily for non-Dex stat changes.
+            if (type == PlayerStatType.Dexterity || type == default)
+                RecomputeBpmFromDex();
+        }
+
+        /// <summary>
+        /// Read current Dexterity from <see cref="PlayerStats"/>, map it to
+        /// a BPM via linear interpolation between two designer-set anchors,
+        /// and forward to <see cref="SetBpm"/> (which handles the clock rebase).
+        ///
+        /// Mapping:
+        ///   • Dex ≤ minDexterityAnchor → bpmAtMinDex (slow / song-floor)
+        ///   • Dex ≥ maxDexterityAnchor → bpmAtMaxDex (fast / song-ceiling)
+        ///   • In between: linear interpolation
+        ///
+        /// <see cref="Mathf.InverseLerp"/> auto-clamps the [0..1] interpolant,
+        /// so out-of-range Dex values are safe (and ride the clamp).
+        /// </summary>
+        private void RecomputeBpmFromDex()
+        {
+            if (!enableDexterityToBpm) return;
+            if (_playerStats == null) return;
+
+            float dex = _playerStats.Get(PlayerStatType.Dexterity);
+            float t   = Mathf.InverseLerp(minDexterityAnchor, maxDexterityAnchor, dex);
+            float newBpm = Mathf.Lerp(bpmAtMinDex, bpmAtMaxDex, t);
+            SetBpm(newBpm);
+        }
+
+        /// <summary>
+        /// Set the BPM at runtime and REBASE the run-start time so the
+        /// current subdivision index is preserved under the new tempo.
+        /// Without this rebase, a BPM jump causes Update()'s catch-up loop
+        /// to fire (or skip) many subdivisions in one frame — weapons
+        /// burst-fire or pause for a beat.
+        ///
+        /// Math: at the moment of change we're at
+        /// <c>currentPosInSubdivs = elapsed / oldSecondsPerSubdiv</c>.
+        /// Under new tempo we want the same position, so
+        /// <c>newRunStartTime = Time.time - currentPosInSubdivs × newSecondsPerSubdiv</c>.
+        /// Result: the next subdivision fires after exactly one full
+        /// <c>newSecondsPerSubdiv</c>, with the fractional progress through
+        /// the current subdivision preserved.
+        ///
+        /// Public so designers / debug tools can force a tempo for testing
+        /// (the dex-driven path also goes through here).
+        /// </summary>
+        public void SetBpm(float newBpm)
+        {
+            if (newBpm <= 0f) return;
+            if (Mathf.Approximately(newBpm, bpm)) return;
+
+            // Preserve fractional progress through the current subdivision.
+            float oldElapsed = Time.time - _runStartTime;
+            float oldSecondsPerSubdiv = 60f / (bpm * Mathf.Max(1, subdivisionsPerBeat));
+            float currentPosInSubdivs = oldSecondsPerSubdiv > 0f
+                ? oldElapsed / oldSecondsPerSubdiv
+                : 0f;
+
+            float newSecondsPerSubdiv = 60f / (newBpm * Mathf.Max(1, subdivisionsPerBeat));
+            _runStartTime = Time.time - currentPosInSubdivs * newSecondsPerSubdiv;
+
+            float oldBpm = bpm;
+            bpm = newBpm;
+
+            if (verbose)
+                Debug.Log($"[MusicConductor] BPM {oldBpm:F1} → {newBpm:F1} (clock rebased).");
         }
 
         // ─── Quantization helper (Day 1 baseline; extended in M7.3) ─────

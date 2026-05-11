@@ -25,11 +25,11 @@ MonoBehaviour:
   baseStats:
     maxHealth: 100
     healthRegen: 1
-    defense: 10
+    defense: 1
     power: 10
     critChance: 0.05
     lifesteal: 0
-    speed: 2
+    speed: 3
     magneticField: 1
     areaOfEffect: 1
     dexterity: 10

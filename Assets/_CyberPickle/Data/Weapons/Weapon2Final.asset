@@ -15,7 +15,7 @@ MonoBehaviour:
   equipmentId: handweapon_
   displayName: Laser Gun
   description: This is a placeholder laser gun
-  slotType: 1
+  slotType: 0
   equipmentIcon: {fileID: 21300000, guid: 5c8df201ee00d644d97e2fe661c886e1, type: 3}
   equipmentPrefab: {fileID: 0}
   neuralCreditCost: 0
@@ -24,22 +24,22 @@ MonoBehaviour:
   requiredPlayerLevel: 1
   requiredAchievements: []
   maxUpgradeLevel: 5
-  weaponType: 1
-  attackType: 2
+  weaponType: 0
+  attackType: 0
   baseDamage: 10
   baseFireRate: 2
   baseProjectileSpeed: 10
   baseAreaOfEffect: 1
   basePierceCount: 0
-  canCriticalHit: 0
-  baseCriticalChance: 0.05
-  criticalDamageMultiplier: 2
   projectilePrefab: {fileID: 0}
   fireSound: {fileID: 0}
   hitSound: {fileID: 0}
   hitEffectPrefab: {fileID: 0}
-  damageUpgradeMultiplier: 1.2
-  fireRateUpgradeMultiplier: 1.1
-  otherStatsUpgradeMultiplier: 1.15
+  activeCellsPerLevel: 0400000008000000100000002000000040000000
+  barCount: 4
+  beatsPerBar: 4
+  baseBPM: 60
   finalForm: {fileID: 11400000}
   requiredPowerUpId: powerup_2
+  defaultElement: 0
+  rarityTierPerks: []

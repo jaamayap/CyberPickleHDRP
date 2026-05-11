@@ -22,13 +22,13 @@ MonoBehaviour:
   characterIcon: {fileID: 0}
   lockedMaterial: {fileID: 2100000, guid: 12e188d20200db34fa3f08fd5dbfe314, type: 2}
   baseStats:
-    maxHealth: 200
+    maxHealth: 50
     healthRegen: 1
-    defense: 10
+    defense: 1
     power: 10
     critChance: 0.05
     lifesteal: 0
-    speed: 5
+    speed: 3
     magneticField: 1
     areaOfEffect: 1
     dexterity: 10

@@ -3523,7 +3523,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1074df45eeb9b074c8cf48b96e9df101, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Audio.MusicConductor
-  bpm: 128
+  bpm: 60
   subdivisionsPerBeat: 4
   verbose: 1
   verboseEventBus: 1

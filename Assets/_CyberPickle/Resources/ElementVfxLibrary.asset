@@ -14,37 +14,58 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Weapons.ElementVfxLibrary
   entries:
   - element: 0
-    flashPrefab: {fileID: 0}
-    projectilePrefab: {fileID: 0}
-    hitPrefab: {fileID: 0}
+    flashPrefab: {fileID: 1192211784737388, guid: b48f622ce9babee4697d19cee99d7497,
+      type: 3}
+    projectilePrefab: {fileID: 1574263468501362, guid: 4d33f2b10ef002b4881097633277e50c,
+      type: 3}
+    hitPrefab: {fileID: 1157033039736294, guid: 095e0daff592f2840a6ec3ef59f42eab,
+      type: 3}
   - element: 1
-    flashPrefab: {fileID: 0}
-    projectilePrefab: {fileID: 0}
-    hitPrefab: {fileID: 0}
+    flashPrefab: {fileID: 1738175644799202, guid: 541187f441eca6249979a47c3f3edb41,
+      type: 3}
+    projectilePrefab: {fileID: 1449260960837898, guid: cdd2ba6c00d631b44b5fe5b05f719d18,
+      type: 3}
+    hitPrefab: {fileID: 1339124478685776, guid: 194bdae22e4e0814b9a8b995fa2637be,
+      type: 3}
   - element: 2
-    flashPrefab: {fileID: 0}
-    projectilePrefab: {fileID: 0}
-    hitPrefab: {fileID: 0}
+    flashPrefab: {fileID: 1192148152262008, guid: a6a25f5cbd112ed4fad6644f88046902,
+      type: 3}
+    projectilePrefab: {fileID: 1887302512045466, guid: cd8973864474ec448affdff663af1805,
+      type: 3}
+    hitPrefab: {fileID: 1780996139795400, guid: 65d8a7efaed051743871892c322da7ae,
+      type: 3}
   - element: 3
-    flashPrefab: {fileID: 0}
-    projectilePrefab: {fileID: 0}
-    hitPrefab: {fileID: 0}
+    flashPrefab: {fileID: 1177731487666324, guid: 3db1fd7cbb7077b478cd560056d2a93b,
+      type: 3}
+    projectilePrefab: {fileID: 1018882707796302, guid: be7ea0ecbecb38d4ea88f960e4c833ac,
+      type: 3}
+    hitPrefab: {fileID: 1486957119801806, guid: 665463b47a7f9b24e87d759b23e024a3,
+      type: 3}
   - element: 4
-    flashPrefab: {fileID: 0}
-    projectilePrefab: {fileID: 0}
-    hitPrefab: {fileID: 0}
+    flashPrefab: {fileID: 1179295499806372, guid: 3e5f4d8ef4983914b9534674e42e70b8,
+      type: 3}
+    projectilePrefab: {fileID: 1698648575761504, guid: 02e1804a832cbed44a4be77f15dae547,
+      type: 3}
+    hitPrefab: {fileID: 1012929371636226, guid: 1d069d69304ee5940a9b42256ebd8b65,
+      type: 3}
   - element: 5
-    flashPrefab: {fileID: 1569979447995748, guid: de79adfa69af17a4a8392603753976a1,
+    flashPrefab: {fileID: 1224217824244948, guid: fe1260ab81a03f74aa9f07067cd55037,
       type: 3}
-    projectilePrefab: {fileID: 1569979447995748, guid: de79adfa69af17a4a8392603753976a1,
+    projectilePrefab: {fileID: 1569979447995748, guid: afd94db6d54b7c44394c743cce5d557e,
       type: 3}
-    hitPrefab: {fileID: 1569979447995748, guid: de79adfa69af17a4a8392603753976a1,
+    hitPrefab: {fileID: 1059669524233346, guid: eea226e828108c84c9ff426584aea41a,
       type: 3}
   - element: 6
-    flashPrefab: {fileID: 0}
-    projectilePrefab: {fileID: 0}
-    hitPrefab: {fileID: 0}
+    flashPrefab: {fileID: 1368339559166676, guid: 7f1568ab4a8850442bf79d35a37fdeca,
+      type: 3}
+    projectilePrefab: {fileID: 1034045548656336, guid: 8daf522d5b4a360448d6391944e0e32d,
+      type: 3}
+    hitPrefab: {fileID: 1036333269638840, guid: 8554e3363fe066e4fa3d3e6030230c6b,
+      type: 3}
   - element: 7
-    flashPrefab: {fileID: 0}
-    projectilePrefab: {fileID: 0}
-    hitPrefab: {fileID: 0}
+    flashPrefab: {fileID: 1633242581645256, guid: d0ce0ee84c4f62341b5bfd7b251256da,
+      type: 3}
+    projectilePrefab: {fileID: 1128728136785006, guid: 55780487f86c0c04991d0b2e85707497,
+      type: 3}
+    hitPrefab: {fileID: 1493225883543534, guid: cbd4105281dc7a046835789a8e3da473,
+      type: 3}

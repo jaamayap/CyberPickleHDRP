@@ -25,24 +25,21 @@ MonoBehaviour:
   requiredPlayerLevel: 1
   requiredAchievements: []
   maxUpgradeLevel: 5
-  weaponType: 0
   attackType: 0
   baseDamage: 5
-  baseFireRate: 5
   baseProjectileSpeed: 15
   baseAreaOfEffect: 1
   basePierceCount: 0
-  canCriticalHit: 1
-  baseCriticalChance: 0.05
-  criticalDamageMultiplier: 2
-  projectilePrefab: {fileID: 1569979447995748, guid: de79adfa69af17a4a8392603753976a1,
-    type: 3}
-  fireSound: {fileID: 0}
-  hitSound: {fileID: 0}
-  hitEffectPrefab: {fileID: 0}
-  damageUpgradeMultiplier: 1.2
-  fireRateUpgradeMultiplier: 1.1
-  otherStatsUpgradeMultiplier: 1.15
+  baseRange: 10
+  muzzleFlashScale: 0.5
+  projectileScale: 0.5
+  hitVfxScale: 0.5
+  hitVfxScalesWithAreaOfEffect: 0
+  trajectory: 0
+  flightBeats: 1
+  activeCellsPerLevel: 0400000008000000100000002000000040000000
+  barCount: 4
+  beatsPerBar: 4
   finalForm: {fileID: 11400000, guid: 4f1abd6e117fde44d8848e414ac53232, type: 2}
   requiredPowerUpId: powerup_1
   defaultElement: 0

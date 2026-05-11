@@ -23,7 +23,20 @@
       "mcp__unity-mcp__Unity_Camera_Capture",
       "mcp__unity-mcp__Unity_RunCommand",
       "mcp__unity-mcp__Unity_ReadConsole",
-      "mcp__unity-mcp__Unity_ManageGameObject"
+      "mcp__unity-mcp__Unity_ManageGameObject",
+      "Bash(touch /tmp/wait5)",
+      "Bash(rm /tmp/wait5)",
+      "Bash(touch /tmp/wait_unity)",
+      "Bash(rm /tmp/wait_unity)",
+      "mcp__Blender__get_screenshot_of_window_as_image",
+      "mcp__Blender__execute_blender_code",
+      "mcp__unity-mcp__Unity_ValidateScript",
+      "mcp__unity-mcp__Unity_Profiler_GetOverallGcAlloca_ac50c101",
+      "mcp__unity-mcp__Unity_Profiler_GetFrameTopTimeSam_ccc85b2d",
+      "mcp__unity-mcp__Unity_Profiler_GetFrameRangeTopTimeSummary",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\jaama\\\\OneDrive\\\\Documents\\\\6. Game\\\\CyberPickleHDRP\\\\Assets\\\\_CyberPickle\\\\Code\" -Recurse -Filter \"*.cs\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)"
     ],
     "deny": [],
     "ask": []

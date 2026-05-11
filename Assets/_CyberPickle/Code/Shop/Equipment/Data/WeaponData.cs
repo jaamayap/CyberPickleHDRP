@@ -74,6 +74,29 @@ namespace CyberPickle.Shop.Equipment.Data
     }
 
     /// <summary>
+    /// How a weapon picks which enemy to aim at each re-target tick. Read by
+    /// <c>WeaponTargeting.FindBestTarget</c>. Byte-typed for stable ordering
+    /// in serialized assets — do not renumber.
+    /// </summary>
+    public enum TargetingStrategy : byte
+    {
+        /// <summary>Nearest enemy in range. Pistol / shotgun default — fastest to compute, snappiest in feel.</summary>
+        Closest = 0,
+
+        /// <summary>Lowest current HP. Useful for executing wounded enemies before they reach you.</summary>
+        Weakest = 1,
+
+        /// <summary>Highest current HP. Useful for prioritizing tanks / bosses over chaff.</summary>
+        Strongest = 2,
+
+        /// <summary>Enemy with the most OTHER enemies lined up behind them in a narrow cone (per <c>targetingConeHalfAngleDeg</c>). Sniper default — pierce shots chain naturally through the column. O(N²) — beat-throttled by WeaponTargeting.</summary>
+        MostInLine = 3,
+
+        /// <summary>Enemy with the most OTHER enemies within <c>baseAreaOfEffect</c> radius of them. Grenade default — the lob lands in a kill zone instead of singling out one target. O(N²) — beat-throttled by WeaponTargeting.</summary>
+        DensestCluster = 4,
+    }
+
+    /// <summary>
     /// ScriptableObject that defines data for weapon equipment.
     /// </summary>
     [CreateAssetMenu(fileName = "Weapon", menuName = "CyberPickle/Equipment/WeaponData")]
@@ -99,6 +122,13 @@ namespace CyberPickle.Shop.Equipment.Data
 
         [Tooltip("Maximum targeting range (world units). Used by WeaponTargeting to ignore enemies outside this radius. Pistols ~12, shotgun ~8, sniper ~25, grenade ~18.")]
         [Min(1f)] public float baseRange = 15f;
+
+        [Header("Targeting")]
+        [Tooltip("How the weapon picks which enemy to aim at each re-target tick. Closest is the default. MostInLine is the sniper's bread and butter (chains pierce through a column). DensestCluster lands grenades on tightly packed groups.")]
+        public TargetingStrategy targetingStrategy = TargetingStrategy.Closest;
+
+        [Tooltip("HALF-angle (degrees) of the 'in line' cone used by the MostInLine strategy. 8° = a ±8° wedge ≈ 16° total. Wider = easier to find lined targets but less sniper-like precision. Narrower = harder to find lineups but more dramatic when one happens. Ignored by non-MostInLine strategies.")]
+        [Range(1f, 45f)] public float targetingConeHalfAngleDeg = 8f;
 
         // ─── VFX scaling (visuals come from ElementVfxLibrary) ────────────
 
@@ -281,6 +311,76 @@ namespace CyberPickle.Shop.Equipment.Data
         {
             var conductor = MusicConductor.Instance;
             return conductor != null ? conductor.BPM : FallbackBPM;
+        }
+
+        // ─── Grid-locked firing (phase-locked to MusicConductor) ─────────
+
+        /// <summary>
+        /// Total subdivisions in one pattern cycle at the conductor's grid
+        /// resolution. = <c>barCount × beatsPerBar × subdivisionsPerBeat</c>.
+        ///
+        /// Example: 1 bar × 4 beats × 4 subdivs/beat = 16 subdivisions
+        /// (the conductor's default 16th-note grid). 4-bar pattern at the
+        /// same grid = 64. WeaponFiring uses this together with
+        /// <see cref="GetFireCellsForLevel"/> to phase-lock every shot to
+        /// the master beat clock, eliminating float-cooldown drift between
+        /// weapons.
+        /// </summary>
+        public int GetTotalSubdivisions(int subdivisionsPerBeat)
+        {
+            return barCount * beatsPerBar * Mathf.Max(1, subdivisionsPerBeat);
+        }
+
+        /// <summary>
+        /// Returns the subdivision indices at which this weapon fires
+        /// within one pattern cycle, in the range [0, totalSubdivs - 1].
+        /// Cells are evenly distributed across the pattern via integer
+        /// Bresenham-style spacing: <c>cell[i] = i × totalSubdivs / activeCells</c>.
+        ///
+        /// Properties of this distribution:
+        ///   • Always includes subdiv 0 (first cell of pattern).
+        ///   • Sorted ascending (cells[i+1] >= cells[i]).
+        ///   • For activeCells that divides totalSubdivs evenly (e.g., 8 in
+        ///     16), gives clean integer intervals (every 2 subdivs). For
+        ///     non-clean cases (e.g., 5 in 16), distributes as evenly as
+        ///     integer math allows: {0, 3, 6, 9, 12}.
+        ///   • Two weapons sampling the same grid coincide at every
+        ///     common multiple of their intervals → mathematically cannot
+        ///     drift apart.
+        ///
+        /// When real composer-authored patterns land (procedural_music_
+        /// reference §22 — explicit cell array per level/element), this
+        /// method's body becomes a lookup into that authored array. The
+        /// API stays the same so WeaponFiring doesn't need to change.
+        ///
+        /// Returns empty array when no pattern is authored, totalSubdivs is
+        /// invalid, or activeCells == 0.
+        /// </summary>
+        public int[] GetFireCellsForLevel(int level, int totalSubdivs)
+        {
+            if (activeCellsPerLevel == null || activeCellsPerLevel.Length == 0)
+                return System.Array.Empty<int>();
+            if (totalSubdivs <= 0)
+                return System.Array.Empty<int>();
+
+            int idx = Mathf.Clamp(level - 1, 0, activeCellsPerLevel.Length - 1);
+            int activeCells = activeCellsPerLevel[idx];
+            if (activeCells <= 0)
+                return System.Array.Empty<int>();
+
+            // Saturate: a pattern can't have more fire-cells than grid
+            // subdivisions. Every subdiv fires.
+            if (activeCells >= totalSubdivs)
+            {
+                var all = new int[totalSubdivs];
+                for (int i = 0; i < totalSubdivs; i++) all[i] = i;
+                return all;
+            }
+
+            var cells = new int[activeCells];
+            for (int i = 0; i < activeCells; i++)
+                cells[i] = i * totalSubdivs / activeCells;
+            return cells;
         }
 
         /// <summary>

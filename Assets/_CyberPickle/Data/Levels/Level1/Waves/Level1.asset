@@ -33,7 +33,7 @@ MonoBehaviour:
     speedJitter: 0.28
   - label: Slow Big
     enemyType: {fileID: 11400000, guid: a49ced813c94afd47b0cf154e9769e5a, type: 2}
-    spawnsPerSecond: 0.5
+    spawnsPerSecond: 0.3
     startTime: 120
     endTime: 999
     oneShotBurst: 0
@@ -53,7 +53,7 @@ MonoBehaviour:
     enemyType: {fileID: 11400000, guid: 000fb3b152eb927469455465c52b00fb, type: 2}
     spawnsPerSecond: 0.2
     startTime: 180
-    endTime: 0
+    endTime: 999
     oneShotBurst: 0
     spawnRadius: 30
     radialJitter: 1.26
@@ -67,5 +67,14 @@ MonoBehaviour:
     spawnRadius: 30
     radialJitter: 1.45
     speedJitter: 0.202
-  planDuration: 300
+  - label: Zombie Reinforcement
+    enemyType: {fileID: 11400000, guid: e055186bb65fc5146887954811468fb2, type: 2}
+    spawnsPerSecond: 1
+    startTime: 180
+    endTime: 999
+    oneShotBurst: 0
+    spawnRadius: 30
+    radialJitter: 1.45
+    speedJitter: 0.202
+  planDuration: 600
   loop: 0
