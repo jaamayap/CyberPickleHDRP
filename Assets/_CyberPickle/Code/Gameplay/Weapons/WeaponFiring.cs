@@ -390,10 +390,14 @@ namespace CyberPickle.Gameplay.Weapons
             // local rotations produce spread for free.
             float3 velocity = ((float3)fromMuzzle.forward) * effectiveSpeed;
 
-            entityManager.SetComponentData(projectile, LocalTransform.FromPositionRotation(spawnPos, spawnRot));
-            entityManager.SetComponentData(projectile, new ProjectileVelocity { Value = velocity });
-            entityManager.SetComponentData(projectile, new ProjectileDamage   { Value = effectiveDamage });
-            entityManager.SetComponentData(projectile, new Lifetime           { Remaining = projectileLifetime });
+            // AddOrSet for all gameplay components — the prefab bake adds
+            // these (via ProjectilePrefabSetupAuthoring), but using
+            // AddOrSetComponent keeps this defensive against future prefab
+            // configurations that skip the bake-side stamp.
+            AddOrSetComponent(projectile, LocalTransform.FromPositionRotation(spawnPos, spawnRot));
+            AddOrSetComponent(projectile, new ProjectileVelocity { Value = velocity });
+            AddOrSetComponent(projectile, new ProjectileDamage   { Value = effectiveDamage });
+            AddOrSetComponent(projectile, new Lifetime           { Remaining = projectileLifetime });
 
             if (instance != null && instance.IsValid)
             {

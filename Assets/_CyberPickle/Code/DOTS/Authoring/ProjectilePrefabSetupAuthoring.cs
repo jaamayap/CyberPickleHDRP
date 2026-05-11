@@ -16,6 +16,7 @@
 // the weapon's currently-coupled ElementId, falling back to None.
 
 using Unity.Entities;
+using Unity.Mathematics;
 using UnityEngine;
 using CyberPickle.Core;
 using CyberPickle.DOTS.Components;
@@ -66,6 +67,19 @@ namespace CyberPickle.DOTS.Authoring
                     {
                         if (entry.prefab == null) continue;
                         var prefabEntity = GetEntity(entry.prefab, TransformUsageFlags.Dynamic);
+
+                        // Stamp the gameplay components required by
+                        // ProjectileMovementSystem (Tag + Velocity + LocalTransform)
+                        // and ProjectileCollisionSystem (Damage + HitVFXPrefabRef
+                        // — the system null-checks the ref). Defaults are
+                        // overridden per-shot by WeaponFiring.
+                        //
+                        // This means the user's element prefabs can be PURE
+                        // VISUALS (Hovl etc.) — no ProjectileAuthoring required.
+                        // The SubScene setup authoring handles the gameplay
+                        // wrapper for every registered element prefab.
+                        AddProjectileGameplayComponents(prefabEntity);
+
                         buffer.Add(new ProjectilePrefabEntry
                         {
                             Element = (byte)entry.element,
@@ -82,6 +96,11 @@ namespace CyberPickle.DOTS.Authoring
                 Entity legacyEntity = (authoring.projectilePrefab != null)
                     ? GetEntity(authoring.projectilePrefab, TransformUsageFlags.Dynamic)
                     : Entity.Null;
+
+                if (legacyEntity != Entity.Null)
+                {
+                    AddProjectileGameplayComponents(legacyEntity);
+                }
 
                 AddComponent(setupEntity, new ProjectilePrefabHolder { Value = legacyEntity });
 
@@ -103,6 +122,24 @@ namespace CyberPickle.DOTS.Authoring
                         });
                     }
                 }
+            }
+
+            /// <summary>
+            /// Stamp the gameplay components required by the projectile
+            /// systems onto a baked prefab entity. Defaults here are
+            /// overridden per-shot by WeaponFiring (velocity from muzzle
+            /// forward × speed; damage from rarity × power; lifetime from
+            /// the weapon's inspector). HitVFXPrefabRef stays Entity.Null
+            /// — M9 spawns hit VFX Mono-side from ElementVfxLibrary in
+            /// a later PR; ProjectileCollisionSystem null-checks the ref.
+            /// </summary>
+            private void AddProjectileGameplayComponents(Entity prefabEntity)
+            {
+                AddComponent<ProjectileTag>(prefabEntity);
+                AddComponent(prefabEntity, new ProjectileVelocity { Value = float3.zero });
+                AddComponent(prefabEntity, new ProjectileDamage   { Value = 5f });
+                AddComponent(prefabEntity, new Lifetime           { Remaining = 3f });
+                AddComponent(prefabEntity, new HitVFXPrefabRef    { Value = Entity.Null });
             }
         }
     }
