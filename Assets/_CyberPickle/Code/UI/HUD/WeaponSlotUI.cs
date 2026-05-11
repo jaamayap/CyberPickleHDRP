@@ -131,11 +131,12 @@ namespace CyberPickle.UI.HUD
             sb.AppendLine();
             sb.AppendLine("<b>Stats</b>");
 
-            // Read live PlayerStats for the damage + fire rate breakdown.
+            // Read live PlayerStats for the damage breakdown. BPM is now
+            // global (MusicConductor.Instance.BPM) — read directly via the
+            // static helper on WeaponData.
             var playerStats = Object.FindFirstObjectByType<PlayerStats>();
             float power      = playerStats != null ? playerStats.Get(PlayerStatType.Power)      : 0f;
             float critChance = playerStats != null ? playerStats.Get(PlayerStatType.CritChance) : 0f;
-            float dex        = playerStats != null ? playerStats.Get(PlayerStatType.Dexterity)  : 0f;
 
             float baseDmg     = instance.weaponData.baseDamage;
             float rarityMul   = instance.rarity.DamageMultiplier();
@@ -149,13 +150,14 @@ namespace CyberPickle.UI.HUD
             if (critChance > 0f)
                 sb.AppendLine($"<color=#ffaaaa>{perShotCrit:F1}</color> on crit  <size=80%>({critChance * 100f:F0}% chance)</size>");
 
-            // Pattern-driven fire rate.
-            float fireRate = instance.weaponData.GetFireRateForLevel(instance.level, dex);
-            float bpm      = instance.weaponData.ComputeBPM(dex);
+            // Pattern-driven fire rate. BPM is global (set by MusicConductor,
+            // ultimately driven by Dexterity).
+            float fireRate = instance.weaponData.GetFireRateForLevel(instance.level);
+            float bpm      = WeaponData.CurrentBPM();
             int activeCells = (instance.weaponData.activeCellsPerLevel != null && instance.weaponData.activeCellsPerLevel.Length > 0)
                 ? instance.weaponData.activeCellsPerLevel[Mathf.Clamp(instance.level - 1, 0, instance.weaponData.activeCellsPerLevel.Length - 1)]
                 : 0;
-            sb.AppendLine($"{fireRate:F2}/s  <size=80%>({activeCells} cells / {instance.weaponData.barCount} bars @ {bpm:F0} BPM, Dex {dex:F0})</size>");
+            sb.AppendLine($"{fireRate:F2}/s  <size=80%>({activeCells} cells / {instance.weaponData.barCount} bars @ {bpm:F0} BPM)</size>");
 
             float avgDmg = perShotNoCrit * (1f - critChance) + perShotCrit * critChance;
             float expectedDps = avgDmg * fireRate;

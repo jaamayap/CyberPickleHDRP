@@ -42,7 +42,6 @@ using CyberPickle.Core;
 using CyberPickle.DOTS.Components;
 using CyberPickle.Gameplay.Audio;
 using CyberPickle.Gameplay.Player;
-using CyberPickle.Gameplay.Stats;
 using CyberPickle.Shop.Equipment.Data;
 
 namespace CyberPickle.Gameplay.Weapons
@@ -180,33 +179,35 @@ namespace CyberPickle.Gameplay.Weapons
         }
 
         /// <summary>
-        /// Effective fire rate (shots/sec). Pulls from the new pattern-driven
-        /// formula on <see cref="WeaponData"/>: active-cells per level × BPM
-        /// (BPM scales with player Dexterity). Falls back to flat baseFireRate
-        /// (Dex-scaled) when patterns aren't authored, and finally to the
-        /// inspector <c>fireRate</c> field when no <see cref="WeaponData"/>.
+        /// Effective fire rate (shots/sec). Pulls from the pattern-driven
+        /// formula on <see cref="WeaponData"/>: active-cells per level / pattern
+        /// duration at the current global BPM (read from MusicConductor).
+        /// Falls back to the inspector <c>fireRate</c> only when no
+        /// <see cref="WeaponData"/> is wired (scene-test setups).
+        ///
+        /// Returns 0 when WeaponData exists but has no pattern authored —
+        /// indicates a misconfigured weapon. We log a warning once so it's
+        /// visible without spamming the console every frame.
         /// </summary>
+        private bool _warnedNoPattern;
         private float GetEffectiveFireRate(WeaponInstanceData instance)
         {
             var data = ResolveWeaponData(instance);
-            float dex = ResolvePlayerDexterity();
-            if (data != null && instance != null && instance.IsValid)
-                return data.GetFireRateForLevel(instance.level, dex);
             if (data != null)
-                return data.GetFireRateForLevel(1, dex);
+            {
+                int level = (instance != null && instance.IsValid) ? instance.level : 1;
+                float rate = data.GetFireRateForLevel(level);
+                if (rate <= 0f && !_warnedNoPattern)
+                {
+                    Debug.LogWarning(
+                        $"[WeaponFiring] '{data.displayName}' has no activeCellsPerLevel " +
+                        $"authored — fire rate = 0. Author the pattern in the inspector " +
+                        $"or this weapon will never fire.");
+                    _warnedNoPattern = true;
+                }
+                return rate;
+            }
             return fireRate;
-        }
-
-        /// <summary>
-        /// Read player Dexterity from PlayerStats. Cheap on the firing path
-        /// (one component lookup + a cached array index). Returns 0 if no
-        /// player has spawned yet.
-        /// </summary>
-        private PlayerStats _cachedStats;
-        private float ResolvePlayerDexterity()
-        {
-            if (_cachedStats == null) _cachedStats = Object.FindFirstObjectByType<PlayerStats>();
-            return _cachedStats != null ? _cachedStats.Get(PlayerStatType.Dexterity) : 0f;
         }
 
         /// <summary>
