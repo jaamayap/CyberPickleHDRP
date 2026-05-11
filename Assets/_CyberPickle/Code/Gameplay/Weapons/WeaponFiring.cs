@@ -69,8 +69,23 @@ namespace CyberPickle.Gameplay.Weapons
         [SerializeField] private float projectileDamage = 5f;
 
         [Header("Spawn")]
-        [Tooltip("Optional muzzle/barrel transform — projectiles spawn from here. Falls back to the weapon's own transform.")]
+        [Tooltip(
+            "LEGACY single muzzle — projectiles spawn from here. " +
+            "Used only when muzzleTransforms is empty. Falls back to the " +
+            "weapon's own transform if both are empty.")]
         [SerializeField] private Transform muzzle;
+
+        [Tooltip(
+            "Multiple muzzles (M9 PR B). Fires ONE projectile per muzzle per " +
+            "shot — shotgun has 3 muzzles, pistol/sniper have 1. Each muzzle's " +
+            "OWN forward vector is the projectile direction, so authored local " +
+            "rotations on the side muzzles create natural spread without " +
+            "per-muzzle aiming (per the shotgun design from chat 2026-05-11: " +
+            "central muzzle aims via WeaponTargeting; side muzzles fire " +
+            "forward along the weapon's overall facing, offset by their " +
+            "authored local rotations). Leave empty to use the legacy " +
+            "single 'muzzle' field above.")]
+        [SerializeField] private Transform[] muzzleTransforms;
 
         [Tooltip("Maximum lifetime of a projectile in seconds (despawns if it doesn't hit). Independent of weapon level/rarity — projectiles always self-expire on the same timer regardless of who fired them.")]
         [SerializeField] private float projectileLifetime = 3f;
@@ -266,26 +281,75 @@ namespace CyberPickle.Gameplay.Weapons
 
         private void Fire(WeaponInstanceData instance)
         {
-            Entity projectile = entityManager.Instantiate(prefabEntity);
-
-            float3 spawnPos = muzzle.position;
-            quaternion spawnRot = muzzle.rotation;
-
             float effectiveSpeed  = GetEffectiveProjectileSpeed(instance);
             float effectiveDamage = GetEffectiveDamage(instance);
 
-            float3 velocity = ((float3)muzzle.forward) * effectiveSpeed;
+            // Resolve the attribution id once — same for every muzzle of this shot.
+            FixedString64Bytes idForSource = _weaponIdFixed;
+            var resolvedData = ResolveWeaponData(instance);
+            if (resolvedData != null && !string.IsNullOrEmpty(resolvedData.equipmentId))
+                idForSource = new FixedString64Bytes(resolvedData.equipmentId);
+
+            // Determine the muzzle set for this shot. Multi-muzzle weapons
+            // (shotgun has 3) fire one projectile per muzzle, each along its
+            // OWN forward — authored local rotations on the side muzzles
+            // create natural spread without per-muzzle aiming. Pistol /
+            // sniper / grenade have 1 muzzle.
+            int muzzleCount = (muzzleTransforms != null && muzzleTransforms.Length > 0)
+                              ? muzzleTransforms.Length
+                              : 1;
+
+            for (int i = 0; i < muzzleCount; i++)
+            {
+                Transform m = (muzzleTransforms != null && muzzleTransforms.Length > 0)
+                              ? muzzleTransforms[i]
+                              : muzzle;
+                if (m == null) continue;
+
+                FireOneProjectile(m, instance, effectiveSpeed, effectiveDamage, idForSource);
+                SpawnMuzzleFlash(m, instance);
+            }
+
+            if (verboseLogging)
+            {
+                string lvl = instance != null ? instance.level.ToString() + (instance.evolved ? "E" : "") : "?";
+                string rar = instance != null ? instance.rarity.ToString() : "?";
+                Debug.Log($"<color=cyan>[WeaponFiring]</color> Slot {slotIndex} '{idForSource}' fired ×{muzzleCount} muzzle(s) — L{lvl} {rar} dmg={effectiveDamage:F1} spd={effectiveSpeed:F1}.");
+            }
+
+            // Broadcast to the audio bus. Stage 0: a Debug.Log entry per shot
+            // (only when VerboseLogging is on — off by default to avoid log
+            // flood). Stage 2 (M9 Wwise): this becomes the per-shot Ak event
+            // post that schedules the weapon's musical note on the next grid
+            // boundary. The payload will eventually carry weapon-id + element
+            // so the conductor can pick the right pitch/sample; for the stub
+            // we just signal that A shot happened.
+            MusicEventBus.Fire(MusicEvent.WeaponFire, gameObject.name);
+        }
+
+        /// <summary>
+        /// Spawn one ECS projectile from the given muzzle Transform. Splits
+        /// out from Fire() so multi-muzzle weapons (shotgun) can call this
+        /// once per muzzle without duplicating the prefab-Instantiate + per-
+        /// shot component stamping.
+        /// </summary>
+        private void FireOneProjectile(Transform fromMuzzle, WeaponInstanceData instance,
+                                       float effectiveSpeed, float effectiveDamage,
+                                       FixedString64Bytes idForSource)
+        {
+            Entity projectile = entityManager.Instantiate(prefabEntity);
+
+            float3 spawnPos = fromMuzzle.position;
+            quaternion spawnRot = fromMuzzle.rotation;
+            // Each muzzle's OWN forward — side muzzles authored with offset
+            // local rotations produce spread for free.
+            float3 velocity = ((float3)fromMuzzle.forward) * effectiveSpeed;
 
             entityManager.SetComponentData(projectile, LocalTransform.FromPositionRotation(spawnPos, spawnRot));
             entityManager.SetComponentData(projectile, new ProjectileVelocity { Value = velocity });
             entityManager.SetComponentData(projectile, new ProjectileDamage   { Value = effectiveDamage });
             entityManager.SetComponentData(projectile, new Lifetime           { Remaining = projectileLifetime });
 
-            // Stamp WeaponLevel + WeaponRarity for downstream Burst consumers.
-            // ProjectileCollisionSystem doesn't currently read these — damage
-            // is pre-baked above — but having them on the projectile means
-            // future systems (e.g., per-rarity-tier hit effects, music-side
-            // projectile tracking) can read level/rarity without a Mono lookup.
             if (instance != null && instance.IsValid)
             {
                 AddOrSetComponent(projectile, new WeaponLevel
@@ -299,67 +363,34 @@ namespace CyberPickle.Gameplay.Weapons
                 });
             }
 
-            // Attribute the projectile to its source weapon. ProjectileCollisionSystem
-            // reads this on hit to enqueue a DamageHitReport for PerWeaponStatsTracker.
-            // Priority: inspector weaponData.equipmentId → loadout weaponData.equipmentId
-            // → cached _weaponIdFixed (from inspector weaponId or GO name). This way
-            // the projectile is attributed under the SAME equipmentId the HUD slot
-            // looks up — without that match, GetStats(weaponId) returns null and
-            // the slot shows no DPS / hits / kills.
-            FixedString64Bytes idForSource = _weaponIdFixed;
-            var resolvedData = ResolveWeaponData(instance);
-            if (resolvedData != null && !string.IsNullOrEmpty(resolvedData.equipmentId))
-            {
-                idForSource = new FixedString64Bytes(resolvedData.equipmentId);
-            }
             if (entityManager.HasComponent<ProjectileSource>(projectile))
                 entityManager.SetComponentData(projectile, new ProjectileSource { WeaponId = idForSource });
             else
                 entityManager.AddComponentData(projectile, new ProjectileSource { WeaponId = idForSource });
-
-            if (verboseLogging)
-            {
-                string lvl = instance != null ? instance.level.ToString() + (instance.evolved ? "E" : "") : "?";
-                string rar = instance != null ? instance.rarity.ToString() : "?";
-                Debug.Log($"<color=cyan>[WeaponFiring]</color> Slot {slotIndex} '{idForSource}' fired — L{lvl} {rar} dmg={effectiveDamage:F1} spd={effectiveSpeed:F1}.");
-            }
-
-            // Spawn the muzzle flash (Mono-side, one-shot). The visual is
-            // looked up from ElementVfxLibrary by the weapon's currently-
-            // coupled element; scale comes from weaponData.muzzleFlashScale.
-            // M9 PR A — projectile + hit VFX library swap lands in later PRs.
-            SpawnMuzzleFlash(instance);
-
-            // Broadcast to the audio bus. Stage 0: a Debug.Log entry per shot
-            // (only when VerboseLogging is on — off by default to avoid log
-            // flood). Stage 2 (M9 Wwise): this becomes the per-shot Ak event
-            // post that schedules the weapon's musical note on the next grid
-            // boundary. The payload will eventually carry weapon-id + element
-            // so the conductor can pick the right pitch/sample; for the stub
-            // we just signal that A shot happened.
-            MusicEventBus.Fire(MusicEvent.WeaponFire, gameObject.name);
         }
 
         // ─── Muzzle flash (M9 PR A) ───────────────────────────────────────
 
         /// <summary>
-        /// Spawn the muzzle-flash GameObject for this shot. Visual picked
-        /// from <see cref="ElementVfxLibrary"/> by the weapon's currently-
-        /// coupled <see cref="ElementId"/>. Scaled by
+        /// Spawn the muzzle-flash GameObject from a specific muzzle Transform.
+        /// Visual picked from <see cref="ElementVfxLibrary"/> by the weapon's
+        /// currently-coupled <see cref="ElementId"/>. Scaled by
         /// <c>weaponData.muzzleFlashScale</c>.
         ///
         /// One-shot — auto-destroys after the longest particle system's
         /// duration so we don't leak GameObjects. Spawned UNPARENTED (so it
         /// stays where it was fired even as the weapon rotates to track the
-        /// next target).
+        /// next target). Multi-muzzle weapons (shotgun) call this once per
+        /// muzzle — 3 flashes spawn simultaneously.
         ///
         /// Silent no-op when:
         ///   - The library asset is missing (warned once via the library)
         ///   - The element has no flashPrefab authored
         ///   - The flash scale is zero (designer explicitly disabled it)
         /// </summary>
-        private void SpawnMuzzleFlash(WeaponInstanceData instance)
+        private void SpawnMuzzleFlash(Transform fromMuzzle, WeaponInstanceData instance)
         {
+            if (fromMuzzle == null) return;
             var lib = ElementVfxLibrary.Instance;
             if (lib == null) return;
 
@@ -370,8 +401,8 @@ namespace CyberPickle.Gameplay.Weapons
             float scale = weaponData != null ? weaponData.muzzleFlashScale : 1f;
             if (scale <= 0f) return;
 
-            // Spawn at muzzle, oriented along muzzle.forward.
-            GameObject flash = UnityEngine.Object.Instantiate(entry.flashPrefab, muzzle.position, muzzle.rotation);
+            // Spawn at muzzle, oriented along the muzzle's forward.
+            GameObject flash = UnityEngine.Object.Instantiate(entry.flashPrefab, fromMuzzle.position, fromMuzzle.rotation);
             flash.transform.localScale = Vector3.one * scale;
 
             // Auto-cleanup. Use the longest particle system duration + a

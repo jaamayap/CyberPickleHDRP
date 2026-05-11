@@ -98,34 +98,32 @@ namespace CyberPickle.Gameplay.Player
 
         private int SpawnFromEquipped(Dictionary<EquipmentSlotType, List<EquipmentData>> equipped)
         {
+            // M9 PR B: weapons spawn at the cross-axis mount matching the
+            // axis they LAND in inside WeaponLoadoutRuntime. The flow is:
+            //   1. Iterate equipped weapons (HandWeapon + BodyWeapon types)
+            //      in a stable order.
+            //   2. SpawnAtMount registers each weapon with the loadout
+            //      runtime, which appends to the first empty axis (0..3).
+            //   3. The returned axisIndex picks the mount transform from
+            //      WeaponMountPoints.GetMountForAxis(axisIndex):
+            //          0 → Front, 1 → Right, 2 → Back, 3 → Left
+            //
+            // The old "hand-weapons go in HandR/HandL, body in Body" mapping
+            // is preserved as fallback inside WeaponMountPoints itself, so
+            // characters with only the legacy 3 mounts still work.
+
             int count = 0;
+            var ordered = new List<WeaponData>(4);
 
-            // Hand weapons (max 2 — slot 0 right, slot 1 left)
             if (equipped.TryGetValue(EquipmentSlotType.HandWeapon, out var handWeapons))
-            {
-                for (int i = 0; i < handWeapons.Count; i++)
-                {
-                    Transform mount = mounts.GetHandMount(i);
-                    if (mount == null)
-                    {
-                        Debug.LogWarning($"[PlayerLoadoutLoader] No hand mount available for slot {i} on '{name}'. Skipping '{handWeapons[i]?.displayName}'.");
-                        continue;
-                    }
-                    if (SpawnAtMount(handWeapons[i], mount)) count++;
-                }
-            }
+                foreach (var w in handWeapons) if (w is WeaponData wd) ordered.Add(wd);
 
-            // Body weapon (max 1)
-            if (equipped.TryGetValue(EquipmentSlotType.BodyWeapon, out var bodyWeapons) && bodyWeapons.Count > 0)
+            if (equipped.TryGetValue(EquipmentSlotType.BodyWeapon, out var bodyWeapons))
+                foreach (var w in bodyWeapons) if (w is WeaponData wd) ordered.Add(wd);
+
+            foreach (var weapon in ordered)
             {
-                if (mounts.Body == null)
-                {
-                    Debug.LogWarning($"[PlayerLoadoutLoader] No body mount on '{name}'. Skipping '{bodyWeapons[0]?.displayName}'.");
-                }
-                else
-                {
-                    if (SpawnAtMount(bodyWeapons[0], mounts.Body)) count++;
-                }
+                if (SpawnAtAxis(weapon)) count++;
             }
 
             // PowerUps / Armor / Amulet: visual representation deferred to later
@@ -134,7 +132,41 @@ namespace CyberPickle.Gameplay.Player
             return count;
         }
 
-        private bool SpawnAtMount(EquipmentData data, Transform mount)
+        /// <summary>
+        /// Register the weapon with the loadout runtime (it picks the next
+        /// empty axis), then spawn its visual at the mount matching that
+        /// axis. The mount mapping is owned by <see cref="WeaponMountPoints"/>.
+        /// </summary>
+        private bool SpawnAtAxis(WeaponData weapon)
+        {
+            if (weapon == null || weapon.equipmentPrefab == null) return false;
+
+            var loadout = WeaponLoadoutRuntime.Instance;
+            if (loadout == null)
+            {
+                Debug.LogWarning("[PlayerLoadoutLoader] WeaponLoadoutRuntime.Instance is null — falling back to legacy mount mapping.");
+                // Legacy fallback: drop on HandR if available, else skip.
+                return mounts.HandR != null && SpawnAtMount(weapon, mounts.HandR);
+            }
+
+            if (!loadout.TryAddWeapon(weapon, Rarity.Common, out var added) || added == null)
+            {
+                Debug.LogWarning($"[PlayerLoadoutLoader] WeaponLoadoutRuntime rejected '{weapon.displayName}' (loadout full?).");
+                return false;
+            }
+
+            int axis = added.slotIndex;
+            Transform mount = mounts.GetMountForAxis(axis);
+            if (mount == null)
+            {
+                Debug.LogWarning($"[PlayerLoadoutLoader] No mount found for axis {axis} on '{name}'. '{weapon.displayName}' registered with loadout but has no visual.");
+                return true; // logical add succeeded even if visual didn't
+            }
+
+            return SpawnAtMount(weapon, mount, alreadyRegistered: true);
+        }
+
+        private bool SpawnAtMount(EquipmentData data, Transform mount, bool alreadyRegistered = false)
         {
             if (data == null || data.equipmentPrefab == null) return false;
 
@@ -144,28 +176,19 @@ namespace CyberPickle.Gameplay.Player
             instance.name = $"{data.displayName} (Equipped)";
             spawnedItems.Add(instance);
 
-            // 2026-05-10: also notify the runtime weapon-loadout system so the
-            // HUD's WeaponSlotsPanel can display the equipped weapon. Pre-Phase-4
-            // this hook didn't exist; the visual spawn was disconnected from the
-            // run-state authority. Now they're synced.
-            //
-            // Initial rarity defaults to Common — saved per-weapon rarity isn't
-            // a feature yet (see weapon_rarity_v1.md §3 Path A: rarity is rolled
-            // on first appearance during a run, not persisted across runs).
-            // Players upgrade via in-run cards / Augment Console.
-            if (data is WeaponData weaponData)
+            // Legacy registration path — used when the new SpawnAtAxis flow
+            // isn't applicable (e.g., direct-Play fallback, or future
+            // equipment types we add later). When alreadyRegistered is true,
+            // the caller (SpawnAtAxis) has already done this step.
+            if (!alreadyRegistered && data is WeaponData weaponData)
             {
                 var loadout = WeaponLoadoutRuntime.Instance;
                 if (loadout != null)
                 {
                     if (!loadout.TryAddWeapon(weaponData, Rarity.Common, out var added))
-                    {
                         Debug.LogWarning($"[PlayerLoadoutLoader] WeaponLoadoutRuntime rejected '{data.displayName}' (loadout full?).");
-                    }
                     else if (added != null)
-                    {
-                        Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> Registered '{data.displayName}' with WeaponLoadoutRuntime in slot {added.slotIndex}.");
-                    }
+                        Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> Registered '{data.displayName}' with WeaponLoadoutRuntime in axis {added.slotIndex}.");
                 }
                 else
                 {
