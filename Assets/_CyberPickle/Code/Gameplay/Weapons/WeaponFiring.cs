@@ -390,14 +390,28 @@ namespace CyberPickle.Gameplay.Weapons
             // local rotations produce spread for free.
             float3 velocity = ((float3)fromMuzzle.forward) * effectiveSpeed;
 
-            // AddOrSet for all gameplay components — the prefab bake adds
-            // these (via ProjectilePrefabSetupAuthoring), but using
-            // AddOrSetComponent keeps this defensive against future prefab
-            // configurations that skip the bake-side stamp.
+            // AddOrSet for all gameplay components. The user's element
+            // prefabs (Hovl etc.) are pure visuals — no authoring on them.
+            // The SubScene baker (ProjectilePrefabSetupAuthoring) can't
+            // stamp these onto the prefab entity (Unity baker isolation
+            // forbids modifying entities owned by a different authoring),
+            // so we add them per-Instantiate here. The first shot from a
+            // freshly-baked prefab causes a chunk migration; later shots
+            // hit the same archetype and don't migrate. Acceptable cost
+            // at our projectile counts (peak ~100 in flight).
             AddOrSetComponent(projectile, LocalTransform.FromPositionRotation(spawnPos, spawnRot));
             AddOrSetComponent(projectile, new ProjectileVelocity { Value = velocity });
             AddOrSetComponent(projectile, new ProjectileDamage   { Value = effectiveDamage });
             AddOrSetComponent(projectile, new Lifetime           { Remaining = projectileLifetime });
+
+            // Tag + HitVFX ref required by the projectile systems.
+            // ProjectileMovementSystem queries WithAll<ProjectileTag>;
+            // ProjectileCollisionSystem queries WithAll<HitVFXPrefabRef>
+            // (and null-checks the ref before spawning). Both must be on
+            // the entity before the next ECS frame.
+            if (!entityManager.HasComponent<ProjectileTag>(projectile))
+                entityManager.AddComponent<ProjectileTag>(projectile);
+            AddOrSetComponent(projectile, new HitVFXPrefabRef { Value = Entity.Null });
 
             if (instance != null && instance.IsValid)
             {
