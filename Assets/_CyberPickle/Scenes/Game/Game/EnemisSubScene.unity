@@ -262,8 +262,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0bd827eec44a4ab4d846b01e9073e330, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  projectilePrefab: {fileID: 1569979447995748, guid: de79adfa69af17a4a8392603753976a1,
-    type: 3}
+  entries:
+  - element: 0
+    prefab: {fileID: 1574263468501362, guid: 4d33f2b10ef002b4881097633277e50c, type: 3}
+  - element: 1
+    prefab: {fileID: 1449260960837898, guid: cdd2ba6c00d631b44b5fe5b05f719d18, type: 3}
+  - element: 2
+    prefab: {fileID: 1887302512045466, guid: cd8973864474ec448affdff663af1805, type: 3}
+  - element: 3
+    prefab: {fileID: 1018882707796302, guid: be7ea0ecbecb38d4ea88f960e4c833ac, type: 3}
+  - element: 4
+    prefab: {fileID: 1698648575761504, guid: 02e1804a832cbed44a4be77f15dae547, type: 3}
+  - element: 5
+    prefab: {fileID: 1569979447995748, guid: afd94db6d54b7c44394c743cce5d557e, type: 3}
+  - element: 6
+    prefab: {fileID: 1034045548656336, guid: 8daf522d5b4a360448d6391944e0e32d, type: 3}
+  - element: 7
+    prefab: {fileID: 1128728136785006, guid: 55780487f86c0c04991d0b2e85707497, type: 3}
+  projectilePrefab: {fileID: 0}
 --- !u!4 &785783801
 Transform:
   m_ObjectHideFlags: 0

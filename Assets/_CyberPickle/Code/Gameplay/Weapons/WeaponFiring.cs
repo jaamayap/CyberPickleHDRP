@@ -106,7 +106,8 @@ namespace CyberPickle.Gameplay.Weapons
 
         private World world;
         private EntityManager entityManager;
-        private Entity prefabEntity = Entity.Null;
+        private Entity prefabEntity = Entity.Null;        // legacy single-prefab cache
+        private Entity prefabRegistryEntity = Entity.Null; // entity holding the per-element buffer
         private bool dotsInitialized;
 
         private void Awake()
@@ -241,10 +242,12 @@ namespace CyberPickle.Gameplay.Weapons
 
         // ─── Prefab resolution ────────────────────────────────────────────
 
+        /// <summary>
+        /// Verify the DOTS world is ready + cache the registry entity. The
+        /// per-shot ELEMENT lookup happens later in <see cref="ResolvePrefabForElement"/>.
+        /// </summary>
         private bool ResolvePrefab()
         {
-            if (prefabEntity != Entity.Null) return true;
-
             if (!dotsInitialized)
             {
                 world = World.DefaultGameObjectInjectionWorld;
@@ -253,28 +256,58 @@ namespace CyberPickle.Gameplay.Weapons
                 dotsInitialized = true;
             }
 
-            // Look up the projectile prefab via the ProjectilePrefabHolder
-            // singleton, populated by ProjectilePrefabSetupAuthoring at bake
-            // time. This indirection ensures the prefab was baked via
-            // GetEntity(prefab, flags) — which sets up LinkedEntityGroup so
-            // Instantiate duplicates the full hierarchy (visual children).
-            EntityQuery query = entityManager.CreateEntityQuery(typeof(ProjectilePrefabHolder));
-
-            if (query.CalculateEntityCount() == 0)
+            // Cache the entity that owns the per-element buffer + legacy
+            // holder. Refreshed lazily because SubScenes can be re-loaded.
+            if (prefabRegistryEntity == Entity.Null || !entityManager.Exists(prefabRegistryEntity))
             {
-                // SubScene not loaded yet, or ProjectilePrefabSetupAuthoring not configured.
-                return false;
+                using var query = entityManager.CreateEntityQuery(typeof(ProjectilePrefabHolder));
+                if (query.CalculateEntityCount() == 0) return false;
+                prefabRegistryEntity = query.GetSingletonEntity();
             }
 
-            ProjectilePrefabHolder holder = query.GetSingleton<ProjectilePrefabHolder>();
-            if (holder.Value == Entity.Null)
+            // Refresh legacy single-prefab cache (used as None / fallback
+            // when the per-element buffer doesn't have an entry).
+            if (entityManager.HasComponent<ProjectilePrefabHolder>(prefabRegistryEntity))
             {
-                Debug.LogWarning("[WeaponFiring] ProjectilePrefabHolder.Value is Entity.Null — did you forget to assign the projectilePrefab on ProjectilePrefabSetupAuthoring?");
-                return false;
+                var holder = entityManager.GetComponentData<ProjectilePrefabHolder>(prefabRegistryEntity);
+                prefabEntity = holder.Value;
             }
 
-            prefabEntity = holder.Value;
+            // Even if the legacy field is Entity.Null, the per-element
+            // buffer may be populated — return true so Fire() can call
+            // ResolvePrefabForElement, which checks the buffer too.
             return true;
+        }
+
+        /// <summary>
+        /// Per-shot lookup: pick the baked projectile entity matching the
+        /// weapon's currently-coupled element. Falls back to the None/
+        /// legacy entry when no per-element entry exists.
+        /// </summary>
+        private Entity ResolvePrefabForElement(ElementId element)
+        {
+            if (!dotsInitialized || prefabRegistryEntity == Entity.Null)
+                return Entity.Null;
+
+            // Try the per-element buffer first.
+            if (entityManager.HasBuffer<ProjectilePrefabEntry>(prefabRegistryEntity))
+            {
+                var buffer = entityManager.GetBuffer<ProjectilePrefabEntry>(prefabRegistryEntity);
+                byte elemByte = (byte)element;
+                Entity noneEntry = Entity.Null;
+                for (int i = 0; i < buffer.Length; i++)
+                {
+                    if (buffer[i].Element == elemByte && buffer[i].Prefab != Entity.Null)
+                        return buffer[i].Prefab;
+                    if (buffer[i].Element == (byte)ElementId.None && buffer[i].Prefab != Entity.Null)
+                        noneEntry = buffer[i].Prefab;
+                }
+                // No match for this element; fall back to None entry.
+                if (noneEntry != Entity.Null) return noneEntry;
+            }
+
+            // Last-resort: legacy single-prefab field.
+            return prefabEntity;
         }
 
         // ─── Fire ─────────────────────────────────────────────────────────
@@ -289,6 +322,17 @@ namespace CyberPickle.Gameplay.Weapons
             var resolvedData = ResolveWeaponData(instance);
             if (resolvedData != null && !string.IsNullOrEmpty(resolvedData.equipmentId))
                 idForSource = new FixedString64Bytes(resolvedData.equipmentId);
+
+            // Resolve the projectile prefab for this shot's element. Falls
+            // back to None / legacy entry inside ResolvePrefabForElement.
+            ElementId element = instance != null && instance.IsValid ? instance.element : ElementId.None;
+            Entity perElementPrefab = ResolvePrefabForElement(element);
+            if (perElementPrefab == Entity.Null)
+            {
+                if (verboseLogging)
+                    Debug.LogWarning($"[WeaponFiring] No projectile prefab baked for element {element} (and no fallback). Skipping shot.");
+                return;
+            }
 
             // Determine the muzzle set for this shot. Multi-muzzle weapons
             // (shotgun has 3) fire one projectile per muzzle, each along its
@@ -306,7 +350,7 @@ namespace CyberPickle.Gameplay.Weapons
                               : muzzle;
                 if (m == null) continue;
 
-                FireOneProjectile(m, instance, effectiveSpeed, effectiveDamage, idForSource);
+                FireOneProjectile(m, instance, effectiveSpeed, effectiveDamage, idForSource, perElementPrefab);
                 SpawnMuzzleFlash(m, instance);
             }
 
@@ -335,9 +379,10 @@ namespace CyberPickle.Gameplay.Weapons
         /// </summary>
         private void FireOneProjectile(Transform fromMuzzle, WeaponInstanceData instance,
                                        float effectiveSpeed, float effectiveDamage,
-                                       FixedString64Bytes idForSource)
+                                       FixedString64Bytes idForSource,
+                                       Entity sourcePrefab)
         {
-            Entity projectile = entityManager.Instantiate(prefabEntity);
+            Entity projectile = entityManager.Instantiate(sourcePrefab);
 
             float3 spawnPos = fromMuzzle.position;
             quaternion spawnRot = fromMuzzle.rotation;
