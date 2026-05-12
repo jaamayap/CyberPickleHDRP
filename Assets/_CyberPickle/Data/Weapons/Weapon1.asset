@@ -27,10 +27,12 @@ MonoBehaviour:
   maxUpgradeLevel: 5
   attackType: 0
   baseDamage: 5
-  baseProjectileSpeed: 15
-  baseAreaOfEffect: 1
+  baseProjectileSpeed: 10
+  baseAreaOfEffect: 0.1
   basePierceCount: 0
   baseRange: 10
+  targetingStrategy: 0
+  targetingConeHalfAngleDeg: 8
   muzzleFlashScale: 0.5
   projectileScale: 0.5
   hitVfxScale: 0.5

@@ -145,6 +145,15 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("If true, hit VFX is ADDITIONALLY scaled by baseAreaOfEffect — the burst visually fills the damage radius. Set true for grenade launcher; leave false for point-impact weapons.")]
         public bool hitVfxScalesWithAreaOfEffect = false;
 
+        // Note: trail-linger duration USED to live here as `trailLingerSeconds`.
+        // It's gone now — the fade-out duration is read directly from the
+        // projectile prefab itself (CyberPickleProjectileVisual.GetTotalFadeDuration
+        // or, for legacy non-hybrid projectiles, the longest particle's
+        // lifetime in the Companion hierarchy). A weapon can fire many
+        // element-coupled projectile variants, each with different
+        // particle timings — a single per-weapon value couldn't be right
+        // for all of them. The prefab owns its own timing.
+
         // ─── Trajectory ───────────────────────────────────────────────────
 
         [Header("Trajectory")]
@@ -157,6 +166,14 @@ namespace CyberPickle.Shop.Equipment.Data
             "explode on beat N+1). Grenade launcher uses 2 (kick-kick tick-" +
             "tock on beats 1 and 3 of 4/4). Set higher (3, 4) for slow lobs.")]
         [Min(1)] public int flightBeats = 1;
+
+        [Tooltip(
+            "PARABOLIC ONLY — angular velocity per local axis (degrees per " +
+            "second) applied to the projectile during flight. Makes the " +
+            "grenade tumble visually. Default (180, 90, 60) is a chaotic-" +
+            "but-not-dizzying spin. Set to zero for a non-tumbling lob. " +
+            "Ignored when trajectory = Straight.")]
+        public Vector3 tumbleRateDegreesPerSecond = new Vector3(180f, 90f, 60f);
 
         // ─── Fire-rate pattern (Level → shots/sec via active-cell density) ─
 
@@ -271,6 +288,29 @@ namespace CyberPickle.Shop.Equipment.Data
         }
 
         /// <summary>
+        /// Pierce count at the given (level, rarity) — number of ADDITIONAL
+        /// enemies the projectile can punch through after the first hit.
+        /// Formula: <c>basePierceCount + (level - 1) + (int)rarity</c>.
+        ///
+        /// Examples for a sniper with <c>basePierceCount = 1</c>:
+        ///   L1 Common    → 1 + 0 + 0 = 1   (hits 2 enemies total)
+        ///   L3 Rare      → 1 + 2 + 2 = 5   (hits 6 enemies total)
+        ///   L5 Legendary → 1 + 4 + 4 = 9   (hits 10 enemies total — chain mode)
+        ///
+        /// Returns 0 for any weapon with <c>basePierceCount = 0</c> when not
+        /// scaling — set <c>basePierceCount</c> to 0 to keep a weapon at
+        /// single-target regardless of level / rarity (pistol, shotgun).
+        /// Set to 1+ to unlock the pierce progression (sniper).
+        /// </summary>
+        public int GetPierceCountForLevelAndRarity(int level, Rarity rarity)
+        {
+            if (basePierceCount <= 0) return 0; // pierce disabled for this weapon
+            int levelBonus = Mathf.Max(0, level - 1);
+            int rarityBonus = (int)rarity; // Common=0..Legendary=4
+            return basePierceCount + levelBonus + rarityBonus;
+        }
+
+        /// <summary>
         /// Effective fire rate (shots/sec) at the given level. Reads the
         /// global BPM from <see cref="MusicConductor"/> — there's no
         /// per-weapon BPM anymore (BPM is a song-level property; all
@@ -311,6 +351,46 @@ namespace CyberPickle.Shop.Equipment.Data
         {
             var conductor = MusicConductor.Instance;
             return conductor != null ? conductor.BPM : FallbackBPM;
+        }
+
+        // ─── Parabolic launch math (shared by WeaponFiring + WeaponTargeting) ─
+
+        /// <summary>Gravity magnitude (m/s²) used by all parabolic launch math. World-standard 9.81. Centralised here so the projectile + the weapon's aim use the same value.</summary>
+        public const float ParabolicGravityMagnitude = 9.81f;
+
+        /// <summary>
+        /// Solves for the launch velocity (v0) such that a ballistic
+        /// projectile fired from <paramref name="start"/> will arrive at
+        /// <paramref name="target"/> after <paramref name="flightTimeSec"/>
+        /// seconds under standard gravity.
+        ///
+        /// Math: <c>x(t) = P0 + v0·t + 0.5·g·t²</c>; solving for v0 at
+        /// <c>x(T) = P1</c>:  <c>v0 = (P1 - P0)/T - 0.5·g·T</c>.
+        ///
+        /// Shared by WeaponFiring (uses v0 as the projectile's initial
+        /// velocity) and WeaponTargeting (uses v0 as the AIM DIRECTION
+        /// for the weapon's transform.LookRotation, so the gun visually
+        /// points along the lob).
+        /// </summary>
+        public static Vector3 ComputeParabolicLaunchVelocity(Vector3 start, Vector3 target, float flightTimeSec)
+        {
+            if (flightTimeSec <= 0.0001f) flightTimeSec = 0.0001f;
+            Vector3 g = new Vector3(0f, -ParabolicGravityMagnitude, 0f);
+            Vector3 delta = target - start;
+            return delta / flightTimeSec - 0.5f * g * flightTimeSec;
+        }
+
+        /// <summary>
+        /// Flight time in seconds for the parabolic projectile, given the
+        /// current global BPM. = <c>flightBeats × 60 / BPM</c>. Naturally
+        /// scales with Dexterity (which drives BPM via MusicConductor) —
+        /// faster Dex → tighter rhythm → shorter flight per beat.
+        /// </summary>
+        public float GetParabolicFlightTimeSeconds()
+        {
+            float bpm = CurrentBPM();
+            int beats = Mathf.Max(1, flightBeats);
+            return beats * (60f / bpm);
         }
 
         // ─── Grid-locked firing (phase-locked to MusicConductor) ─────────

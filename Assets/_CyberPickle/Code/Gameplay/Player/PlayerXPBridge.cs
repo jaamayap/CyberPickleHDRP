@@ -11,6 +11,15 @@
 //   - Exposes CurrentXP / CurrentLevel / XPToNextLevel public getters
 //     for the HUD to read.
 //
+// 2026-05-11 fix — RUN-RESET ON RETRY:
+//   The PlayerXP entity lives in the DOTS World, which is independent of
+//   the Unity scene lifecycle. On retry, the scene reloads but the entity
+//   persists, so a fresh PlayerXPBridge would adopt last run's level / XP
+//   instead of starting clean. Now subscribes to MusicEvent.RunStart and
+//   resets the singleton's contents to (level = startingLevel, XP = 0,
+//   threshold = ComputeXPThreshold(startingLevel)) on every run start.
+//   Same pattern as LevelUpCoordinator / PerWeaponStatsTracker.
+//
 // XP curve: simple "level² × xpPerLevelBase" — first level needs 10 XP,
 // level 2 needs ~40, level 3 needs ~90. Tunable below; replace with a
 // curve asset when balance starts mattering.
@@ -61,11 +70,53 @@ namespace CyberPickle.Gameplay.Player
         private void OnEnable()
         {
             EnsureSingleton();
+            MusicEventBus.OnEvent += HandleMusicEvent;
         }
 
         private void OnDisable()
         {
+            MusicEventBus.OnEvent -= HandleMusicEvent;
             initialized = false;
+        }
+
+        private void HandleMusicEvent(MusicEvent type, object _)
+        {
+            if (type == MusicEvent.RunStart) ResetForNewRun();
+        }
+
+        /// <summary>
+        /// Reset the PlayerXP singleton's contents to the initial state
+        /// (level = startingLevel, XP = 0, threshold = curve at level 1).
+        /// Called on MusicEvent.RunStart so retries / new runs start clean
+        /// regardless of the DOTS entity surviving the scene reload.
+        ///
+        /// Does NOT destroy the singleton entity — just rewrites its data.
+        /// Destruction-and-recreate would also work but risks racing with
+        /// any other system that cached the entity reference.
+        /// </summary>
+        private void ResetForNewRun()
+        {
+            EnsureSingleton();
+            if (!initialized) return;
+            if (!entityManager.Exists(singletonEntity)) return;
+
+            CurrentLevel  = startingLevel;
+            CurrentXP     = 0;
+            XPToNextLevel = ComputeXPThreshold(CurrentLevel);
+
+            entityManager.SetComponentData(singletonEntity, new PlayerXP
+            {
+                CurrentLevel   = CurrentLevel,
+                CurrentXP      = CurrentXP,
+                XPToNextLevel  = XPToNextLevel,
+                LevelUpPending = false,
+            });
+
+            // Force OnXPChanged to fire on the next Update so the HUD bar
+            // snaps to 0/threshold immediately (without this it would only
+            // fire when an XP gem was picked up, leaving the bar showing
+            // last run's progress until then).
+            lastReportedXP = -1;
         }
 
         private void EnsureSingleton()

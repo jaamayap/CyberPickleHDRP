@@ -377,29 +377,43 @@ namespace CyberPickle.Shop.Equipment
         }
 
         /// <summary>
-        /// Ensures character data exists and has default equipment equipped
+        /// Ensures character data exists for the active profile. If new,
+        /// creates an empty progression record — does NOT auto-equip any
+        /// items.
+        ///
+        /// 2026-05-11 fix: previously, this method force-equipped every
+        /// equipment SO with <c>unlockedByDefault = true</c> into the
+        /// character's slots until MAX_HAND_WEAPONS was reached. Because
+        /// every weapon in the project ships with <c>unlockedByDefault: 1</c>
+        /// (intent was "unlocked in inventory"), this filled both hand-weapon
+        /// slots on character creation and silently REJECTED later user
+        /// equip attempts with "Cannot equip more than 2 hand weapons".
+        ///
+        /// Semantics now:
+        ///   - <c>unlockedByDefault</c> = "appears in inventory, ready for
+        ///     the player to equip" (matches the field name).
+        ///   - Equipment loadout is owned by the player via the EquipmentHub.
+        ///   - New characters start with empty slots; the hub prompts them
+        ///     to pick.
+        ///
+        /// For existing save data with auto-equipped items: the player can
+        /// open the EquipmentHub and unequip them via the slot UI. This
+        /// fix doesn't retroactively clear anything — it just stops the
+        /// auto-fill from happening on the NEXT character creation.
         /// </summary>
         private CharacterProgressionData EnsureCharacterDataWithDefaults(ProfileData profile, string characterId)
         {
-            // Check if character data exists
+            // Check if character data exists — return as-is if so.
             if (profile.CharacterProgress.TryGetValue(characterId, out var existingData))
             {
                 return existingData;
             }
 
-            // Create new character data
-            Debug.Log($"[EquipmentManager] Creating new character data for {characterId} with default equipment");
+            // Create new character data with EMPTY equipment slots. The
+            // player picks via EquipmentHub. `unlockedByDefault` on an SO
+            // means "available in inventory" — not "auto-equip me".
+            Debug.Log($"[EquipmentManager] Creating new character data for {characterId} (empty equipment — player picks in EquipmentHub).");
             var newCharacterData = new CharacterProgressionData(characterId);
-
-            // Equip default items (unlockedByDefault = true)
-            foreach (var equipment in equipmentDataLookup.Values)
-            {
-                if (equipment.unlockedByDefault)
-                {
-                    bool equipped = newCharacterData.EquipItem(equipment.equipmentId, equipment.slotType);
-                    Debug.Log($"[EquipmentManager] Auto-equipped default item: {equipment.displayName} ({equipment.equipmentId}) - Success: {equipped}");
-                }
-            }
 
             // Add to profile
             profile.UpdateCharacterProgress(characterId, newCharacterData);

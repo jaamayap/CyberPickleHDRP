@@ -39,6 +39,10 @@ namespace CyberPickle.Gameplay.Player
     [DisallowMultipleComponent]
     public class PlayerLoadoutLoader : MonoBehaviour
     {
+        [Header("Test Override (development only)")]
+        [Tooltip("If assigned, BYPASSES the EquipmentManager entirely and loads ONLY this one weapon at axis 0 (front mount). Use for isolated weapon testing — e.g., drop the sniper SO here to test pierce mechanics without messing with the EquipmentHub saved data. Leave empty for normal play (the loadout reads from the active profile's equipped weapons).")]
+        [SerializeField] private WeaponData forcedTestWeapon;
+
         [Header("Direct-Play Fallback (development only)")]
         [Tooltip("If true and no equipped weapons can be loaded (e.g., direct-Play in Game.unity without booting through Boot.unity), spawn the fallback prefab at the front mount.")]
         [SerializeField] private bool allowFallbackForDirectPlay = true;
@@ -108,17 +112,36 @@ namespace CyberPickle.Gameplay.Player
 
             int registered = 0;
 
-            EquipmentManager equipmentManager = EquipmentManager.Instance;
-            if (equipmentManager != null)
+            // Test-override path: when forcedTestWeapon is assigned, skip the
+            // EquipmentManager entirely and register JUST this one weapon at
+            // axis 0. Useful for isolated weapon testing — e.g., drop the
+            // sniper SO here to test pierce without touching the EquipmentHub
+            // saved data. Production play leaves this field null.
+            if (forcedTestWeapon != null && loadout != null)
             {
-                var equipped = equipmentManager.GetEquippedEquipment();
-                if (equipped != null && equipped.Count > 0)
-                    registered = RegisterEquipped(equipped, loadout);
+                Debug.Log($"<color=magenta>[PlayerLoadoutLoader]</color> TEST OVERRIDE — loading only '{forcedTestWeapon.displayName}' (EquipmentManager bypassed). Clear PlayerLoadoutLoader.forcedTestWeapon for normal play.");
+                if (loadout.TryAddWeapon(forcedTestWeapon, Rarity.Common, out _))
+                    registered = 1;
+                else
+                    Debug.LogWarning($"[PlayerLoadoutLoader] Loadout rejected test-override weapon '{forcedTestWeapon.displayName}'.");
             }
             else
             {
-                Debug.LogWarning("[PlayerLoadoutLoader] EquipmentManager.Instance is null (likely direct-play in Game.unity).");
+                EquipmentManager equipmentManager = EquipmentManager.Instance;
+                if (equipmentManager != null)
+                {
+                    var equipped = equipmentManager.GetEquippedEquipment();
+                    LogEquippedSnapshot(equipped);
+                    if (equipped != null && equipped.Count > 0)
+                        registered = RegisterEquipped(equipped, loadout);
+                }
+                else
+                {
+                    Debug.LogWarning("[PlayerLoadoutLoader] EquipmentManager.Instance is null (likely direct-play in Game.unity).");
+                }
             }
+
+            Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> LoadAndSpawn finished — {registered} weapon(s) registered with the loadout. Fallback will fire = {(registered == 0 && allowFallbackForDirectPlay && fallbackHandWeaponPrefab != null)}.");
 
             // Fallback: if nothing got registered, spawn the dev fallback
             // RAW prefab at the front mount. This path skips the loadout
@@ -141,6 +164,43 @@ namespace CyberPickle.Gameplay.Player
         }
 
         /// <summary>
+        /// Diagnostic: dumps the contents of the equipped-equipment snapshot
+        /// to the console so we can see exactly what the EquipmentManager
+        /// thinks is equipped at boot. Useful when "the player spawned with
+        /// the wrong weapon" symptoms appear — usually the saved data
+        /// contains different items than the player expects.
+        /// </summary>
+        private void LogEquippedSnapshot(Dictionary<EquipmentSlotType, List<EquipmentData>> equipped)
+        {
+            if (equipped == null)
+            {
+                Debug.LogWarning("[PlayerLoadoutLoader] GetEquippedEquipment() returned null.");
+                return;
+            }
+
+            var sb = new System.Text.StringBuilder(256);
+            sb.Append("<color=cyan>[PlayerLoadoutLoader]</color> EquipmentManager snapshot — ");
+            int total = 0;
+            foreach (var kvp in equipped)
+            {
+                if (kvp.Value == null || kvp.Value.Count == 0) continue;
+                sb.Append(kvp.Key).Append(": [");
+                for (int i = 0; i < kvp.Value.Count; i++)
+                {
+                    if (i > 0) sb.Append(", ");
+                    var e = kvp.Value[i];
+                    if (e == null) { sb.Append("<null>"); continue; }
+                    sb.Append($"{e.displayName} (id={e.equipmentId}, isWeaponData={e is WeaponData})");
+                    total++;
+                }
+                sb.Append("]  ");
+            }
+            sb.Append($"— {total} item(s) total.");
+            if (total == 0) sb.Append(" (NO ITEMS — fallback path will engage if enabled.)");
+            Debug.Log(sb.ToString());
+        }
+
+        /// <summary>
         /// Register each equipped weapon with the loadout runtime. The
         /// runtime appends each to its first empty axis and fires
         /// OnWeaponAdded — HandleWeaponAdded spawns the visual.
@@ -157,14 +217,19 @@ namespace CyberPickle.Gameplay.Player
             if (equipped.TryGetValue(EquipmentSlotType.BodyWeapon, out var bodies))
                 foreach (var w in bodies) if (w is WeaponData wd) ordered.Add(wd);
 
+            Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> RegisterEquipped — {ordered.Count} weapon(s) after WeaponData filter: [{string.Join(", ", ordered.ConvertAll(w => w != null ? w.displayName : "<null>"))}]");
+
             int count = 0;
             foreach (var weapon in ordered)
             {
                 if (weapon == null) continue;
                 if (loadout.TryAddWeapon(weapon, Rarity.Common, out _))
+                {
                     count++;
+                    Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> Loadout ACCEPTED '{weapon.displayName}'.");
+                }
                 else
-                    Debug.LogWarning($"[PlayerLoadoutLoader] Loadout rejected '{weapon.displayName}' (full?).");
+                    Debug.LogWarning($"[PlayerLoadoutLoader] Loadout REJECTED '{weapon.displayName}' (full or already present?).");
             }
             return count;
         }
@@ -208,6 +273,12 @@ namespace CyberPickle.Gameplay.Player
             // 0) and they'd all fight over axis 0's WeaponInstanceData.
             var firing = instance.GetComponentInChildren<WeaponFiring>(includeInactive: true);
             if (firing != null) firing.SetSlotIndex(axis);
+
+            // Same for WeaponTargeting (M9 PR C) — it now reads range +
+            // strategy + cone-angle + cluster-radius from the loadout slot's
+            // WeaponData, so it needs to know which slot is "its" data.
+            var targeting = instance.GetComponentInChildren<WeaponTargeting>(includeInactive: true);
+            if (targeting != null) targeting.SetSlotIndex(axis);
 
             Debug.Log($"<color=cyan>[PlayerLoadoutLoader]</color> Spawned '{added.weaponData.displayName}' at axis {axis} ({mount.name}).");
         }

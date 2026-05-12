@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
 using DG.Tweening;
+using CyberPickle.Shop.Equipment;
 using CyberPickle.Shop.Equipment.Data;
 using CyberPickle.UI.EquipmentHub.DragDrop;
 
@@ -417,12 +418,13 @@ namespace CyberPickle.UI.EquipmentHub
         {
             var draggedEquipment = draggable.GetDraggedEquipment();
 
+            bool accepted = false;
             if (!isOccupied)
             {
                 // Unequipping to empty slot - update visual and data without refresh
                 SetItem(draggedEquipment, 1);
                 inventoryController?.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
-                return true;
+                accepted = true;
             }
             else if (currentEquipment != null && draggedEquipment != null &&
                      currentEquipment.equipmentId == draggedEquipment.equipmentId)
@@ -432,7 +434,7 @@ namespace CyberPickle.UI.EquipmentHub
                 quantityText.text = currentQuantity.ToString();
                 quantityText.enabled = true;
                 inventoryController?.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
-                return true;
+                accepted = true;
             }
             else
             {
@@ -445,12 +447,24 @@ namespace CyberPickle.UI.EquipmentHub
                         // Place in the empty slot instead - update visual and data without refresh
                         emptySlot.SetItem(draggedEquipment, 1);
                         inventoryController.OnItemAdded(draggedEquipment, 1, false); // Don't refresh display
-                        return true;
+                        accepted = true;
                     }
                 }
             }
 
-            return false;
+            // Persist the unequip via EquipmentManager. CRITICAL: without
+            // this call, the item visually moves to inventory but the
+            // ProfileData still has it as equipped — the player spawns
+            // with it next time. (Same TODO-stub gap as the sibling fix
+            // in EquipmentSlotController.OnDropReceived.)
+            if (accepted && draggedEquipment != null && EquipmentManager.Instance != null)
+            {
+                bool unequipped = EquipmentManager.Instance.UnequipItem(draggedEquipment.equipmentId);
+                if (!unequipped)
+                    Debug.LogWarning($"[InventorySlotController] Persist failed: UnequipItem('{draggedEquipment.equipmentId}') returned false. Item shown in inventory but may still be equipped in saved data.");
+            }
+
+            return accepted;
         }
 
         public EquipmentData GetCurrentEquipment() => currentEquipment;

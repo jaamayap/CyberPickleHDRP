@@ -538,9 +538,77 @@ namespace CyberPickle.Gameplay.Weapons
 
             float3 spawnPos = fromMuzzle.position;
             quaternion spawnRot = fromMuzzle.rotation;
-            // Each muzzle's OWN forward — side muzzles authored with offset
-            // local rotations produce spread for free.
-            float3 velocity = ((float3)fromMuzzle.forward) * effectiveSpeed;
+
+            // Resolve trajectory and ballistic parameters up-front. Default
+            // = Straight (no gravity, no tumble, fixed speed along muzzle.forward).
+            // Parabolic computes a launch velocity that lands at the targeting
+            // system's locked target after WeaponData.flightBeats × 60/BPM
+            // seconds — naturally puts the impact on the snare beat
+            // (assuming the weapon's activeCellsPerLevel pattern places
+            // fires on the kick beats).
+            var resolvedData = ResolveWeaponData(instance);
+            var trajectory = resolvedData != null ? resolvedData.trajectory : ProjectileTrajectory.Straight;
+
+            float3 velocity;
+            float lifetime = projectileLifetime;
+            bool isParabolic = trajectory == ProjectileTrajectory.Parabolic;
+            float3 gravityAccel = float3.zero;
+
+            if (isParabolic && resolvedData != null)
+            {
+                // Parabolic: target lookup → shared v0 math on WeaponData.
+                // Same helper used by WeaponTargeting for the visual aim,
+                // so the weapon's gun model points along the actual launch
+                // direction (instead of resting flat).
+                float flightTime = resolvedData.GetParabolicFlightTimeSeconds();
+
+                Vector3 target;
+                if (targeting != null && targeting.HasTarget)
+                {
+                    // Target the ENEMY'S full 3D position — feet/ground
+                    // level. This is the OPPOSITE of the bullet fix:
+                    // bullets snap-XZ-preserve-Y so they hit at chest;
+                    // grenades go all the way down to the ground so the
+                    // explosion happens on the floor where it belongs.
+                    // The parabola arcs from chest (spawnPos) up to apex,
+                    // then DOWN to the ground at target.xz.
+                    target = targeting.TargetPosition;
+                }
+                else
+                {
+                    // No target — throw forward toward the ground at a
+                    // moderate distance so the grenade still lands somewhere
+                    // visible. Aim slightly downward so the parabola actually
+                    // descends to ground level.
+                    Vector3 forwardLanding = (Vector3)spawnPos + fromMuzzle.forward * Mathf.Max(1f, effectiveSpeed) * flightTime;
+                    forwardLanding.y = 0f; // ground
+                    target = forwardLanding;
+                }
+
+                Vector3 v0 = WeaponData.ComputeParabolicLaunchVelocity((Vector3)spawnPos, target, flightTime);
+                velocity = v0;
+                gravityAccel = new float3(0f, -WeaponData.ParabolicGravityMagnitude, 0f);
+
+                // Lifetime = exactly flightTime. ProjectileExplosionSystem
+                // detonates the grenade the tick its Lifetime hits zero —
+                // rhythm-locked to the snare beat (= fire-beat + flightBeats).
+                // No proximity-collision involvement; the grenade is a
+                // PURE TIMED BOMB. Whether it visually passes over enemies
+                // mid-arc is irrelevant — it commits to its scheduled
+                // detonation.
+                lifetime = flightTime;
+
+                // Initial rotation = aim direction. Tumble takes over per-tick.
+                if (math.lengthsq(velocity) > 0.0001f)
+                    spawnRot = quaternion.LookRotation(math.normalize(velocity), math.up());
+            }
+            else
+            {
+                // Straight: existing behavior — velocity along the muzzle's
+                // OWN forward at fixed speed. Side muzzles authored with
+                // offset local rotations produce spread for free.
+                velocity = ((float3)fromMuzzle.forward) * effectiveSpeed;
+            }
 
             // AddOrSet for all gameplay components. The user's element
             // prefabs (Hovl etc.) are pure visuals — no authoring on them.
@@ -554,7 +622,41 @@ namespace CyberPickle.Gameplay.Weapons
             AddOrSetComponent(projectile, LocalTransform.FromPositionRotation(spawnPos, spawnRot));
             AddOrSetComponent(projectile, new ProjectileVelocity { Value = velocity });
             AddOrSetComponent(projectile, new ProjectileDamage   { Value = effectiveDamage });
-            AddOrSetComponent(projectile, new Lifetime           { Remaining = projectileLifetime });
+            AddOrSetComponent(projectile, new Lifetime           { Remaining = lifetime });
+
+            // Parabolic-only components: gravity (drags the arc down),
+            // tumble (visual spin), AoE (explosion-style damage on impact).
+            if (isParabolic && resolvedData != null)
+            {
+                AddOrSetComponent(projectile, new ProjectileGravity { Acceleration = gravityAccel });
+
+                Vector3 tumbleDeg = resolvedData.tumbleRateDegreesPerSecond;
+                float3 tumbleRad = new float3(
+                    Mathf.Deg2Rad * tumbleDeg.x,
+                    Mathf.Deg2Rad * tumbleDeg.y,
+                    Mathf.Deg2Rad * tumbleDeg.z);
+                AddOrSetComponent(projectile, new ProjectileTumble { AnglesPerSecondRad = tumbleRad });
+
+                float aoeRadius = Mathf.Max(0.1f, resolvedData.baseAreaOfEffect);
+                AddOrSetComponent(projectile, new ProjectileAoE { Radius = aoeRadius });
+
+                Debug.Log($"<color=yellow>[WeaponFiring]</color> Parabolic launch: weapon='{resolvedData.displayName}' lifetime={lifetime:F2}s AoE radius={aoeRadius:F1}m. ProjectileExplosionSystem should detonate on Lifetime expiry.");
+            }
+            else if (resolvedData != null && resolvedData.trajectory == ProjectileTrajectory.Parabolic)
+            {
+                Debug.LogWarning($"[WeaponFiring] Weapon '{resolvedData.displayName}' has trajectory=Parabolic but isParabolic={isParabolic}, resolvedData null={resolvedData == null}. AoE will NOT be stamped → grenade will use proximity collision (the wrong path).");
+            }
+            else
+            {
+                // Belt-and-braces: ensure no stale parabolic components
+                // linger from a previous Instantiate of the same archetype.
+                if (entityManager.HasComponent<ProjectileGravity>(projectile))
+                    entityManager.RemoveComponent<ProjectileGravity>(projectile);
+                if (entityManager.HasComponent<ProjectileTumble>(projectile))
+                    entityManager.RemoveComponent<ProjectileTumble>(projectile);
+                if (entityManager.HasComponent<ProjectileAoE>(projectile))
+                    entityManager.RemoveComponent<ProjectileAoE>(projectile);
+            }
 
             // Tag + HitVFX ref required by the projectile systems.
             // ProjectileMovementSystem queries WithAll<ProjectileTag>;
@@ -585,10 +687,67 @@ namespace CyberPickle.Gameplay.Weapons
                 });
             }
 
+            // Pierce (M9 PR D). Computed from (level, rarity) via WeaponData.
+            // Non-pierce weapons (basePierceCount == 0) get Remaining = 0
+            // and the collision system destroys-on-first-hit as before —
+            // back-compat, no per-weapon scene migration needed. Pierce
+            // weapons ALSO get an empty hit-targets buffer so the collision
+            // system can dedup repeat hits on the same enemy across frames.
+            int pierceCount = 0;
+            if (resolvedData != null && instance != null && instance.IsValid)
+                pierceCount = resolvedData.GetPierceCountForLevelAndRarity(instance.level, instance.rarity);
+
+            // AoE projectiles ignore pierce — you can't pierce + explode.
+            if (isParabolic) pierceCount = 0;
+
+            AddOrSetComponent(projectile, new ProjectilePierce
+            {
+                Remaining = (byte)Mathf.Clamp(pierceCount, 0, 255),
+            });
+
+            if (pierceCount > 0)
+            {
+                // Freshly-instantiated projectiles don't carry the buffer
+                // from the prefab (we never authored it there). Add on
+                // first use; on subsequent same-archetype shots, clear the
+                // existing buffer so we don't leak last shot's hit list.
+                if (!entityManager.HasBuffer<ProjectileHitTarget>(projectile))
+                    entityManager.AddBuffer<ProjectileHitTarget>(projectile);
+                else
+                    entityManager.GetBuffer<ProjectileHitTarget>(projectile).Clear();
+            }
+
+            // (Trail-linger seconds USED to be stamped here from
+            // WeaponData.trailLingerSeconds. That field was removed — the
+            // fade duration is now read directly from the projectile
+            // PREFAB by ProjectileFadeOutSystem on the first dying-frame:
+            // CyberPickleProjectileVisual.GetTotalFadeDuration() for
+            // hybrid prefabs, or the longest particle lifetime in the
+            // Companion hierarchy for legacy fallback. The prefab owns
+            // its own timing because a weapon can fire many element-
+            // coupled variants with different particle timings.)
+
             if (entityManager.HasComponent<ProjectileSource>(projectile))
                 entityManager.SetComponentData(projectile, new ProjectileSource { WeaponId = idForSource });
             else
                 entityManager.AddComponentData(projectile, new ProjectileSource { WeaponId = idForSource });
+
+            // Hybrid visual tag (M9 follow-up). If the spawned projectile's
+            // Companion GameObject carries a CyberPickleProjectileVisual,
+            // tag the entity so DamageReportDrainSystem suppresses the
+            // parallel HitVfxApplier.Play call — Hovl's authored hit GO
+            // (fired by the script's OnHit) is the only hit visual.
+            // Prevents the "double hit at slightly different positions"
+            // weird behavior reported pre-fix.
+            if (entityManager.HasComponent<UnityEngine.Transform>(projectile))
+            {
+                var companionT = entityManager.GetComponentObject<UnityEngine.Transform>(projectile);
+                if (companionT != null && companionT.GetComponent<CyberPickleProjectileVisual>() != null)
+                {
+                    if (!entityManager.HasComponent<ProjectileHasHybridVisual>(projectile))
+                        entityManager.AddComponent<ProjectileHasHybridVisual>(projectile);
+                }
+            }
         }
 
         // ─── Muzzle flash (M9 PR A) ───────────────────────────────────────

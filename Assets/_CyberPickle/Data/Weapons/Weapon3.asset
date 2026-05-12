@@ -25,28 +25,24 @@ MonoBehaviour:
   requiredPlayerLevel: 1
   requiredAchievements: []
   maxUpgradeLevel: 5
-  weaponType: 0
   attackType: 0
   baseDamage: 50
-  baseFireRate: 2
-  baseProjectileSpeed: 15
-  baseAreaOfEffect: 1
+  baseProjectileSpeed: 10
+  baseAreaOfEffect: 0.1
   basePierceCount: 1
-  projectilePrefab: {fileID: 0}
-  fireSound: {fileID: 0}
-  hitSound: {fileID: 0}
-  hitEffectPrefab: {fileID: 0}
   baseRange: 20
-  muzzleFlashScale: 1.5
-  projectileScale: 1.5
-  hitVfxScale: 1.5
+  targetingStrategy: 3
+  targetingConeHalfAngleDeg: 8
+  muzzleFlashScale: 1
+  projectileScale: 1
+  hitVfxScale: 0.5
   hitVfxScalesWithAreaOfEffect: 0
   trajectory: 0
   flightBeats: 1
+  tumbleRateDegreesPerSecond: {x: 180, y: 90, z: 60}
   activeCellsPerLevel: 0100000002000000040000000800000010000000
   barCount: 4
   beatsPerBar: 4
-  baseBPM: 60
   finalForm: {fileID: 11400000, guid: 940d128a642062044b226dcb4b6d7b0c, type: 2}
   requiredPowerUpId: powerup_3
   defaultElement: 0

@@ -14629,11 +14629,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4999751882091942}
-  - component: {fileID: 114777770064651874}
   - component: {fileID: 108558352681175776}
-  - component: {fileID: 54729807578932012}
-  - component: {fileID: 135951470721667518}
   - component: {fileID: -5463653126745746564}
+  - component: {fileID: 8027058494618518586}
   m_Layer: 0
   m_Name: Projectile 4 fire
   m_TagString: Untagged
@@ -14657,32 +14655,6 @@ Transform:
   - {fileID: 2731805479082561101}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &114777770064651874
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1449260960837898}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 605a456cfc02f6b499a64717539a27e8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  speed: 25
-  hitOffset: 0.1
-  UseFirePointRotation: 0
-  rotationOffset: {x: 0, y: 0, z: 0}
-  hit: {fileID: 4735739497854622507}
-  hitPS: {fileID: 4863052723875787961}
-  flash: {fileID: 8436191768532481719}
-  rb: {fileID: 54729807578932012}
-  col: {fileID: 135951470721667518}
-  lightSourse: {fileID: 108558352681175776}
-  Detached:
-  - {fileID: 1112018524344104}
-  projectilePS: {fileID: 7124147602944830166}
-  notDestroy: 0
 --- !u!108 &108558352681175776
 Light:
   m_ObjectHideFlags: 0
@@ -14748,54 +14720,6 @@ Light:
   m_LightUnit: 0
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
---- !u!54 &54729807578932012
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1449260960837898}
-  serializedVersion: 5
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 0
-  m_IsKinematic: 0
-  m_Interpolate: 1
-  m_Constraints: 0
-  m_CollisionDetection: 1
---- !u!135 &135951470721667518
-SphereCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1449260960837898}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Radius: 0.1
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &-5463653126745746564
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -14937,6 +14861,28 @@ MonoBehaviour:
   m_AreaLightEmissiveMeshShadowCastingMode: 0
   m_AreaLightEmissiveMeshMotionVectorGenerationMode: 0
   m_AreaLightEmissiveMeshLayer: -1
+--- !u!114 &8027058494618518586
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1449260960837898}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63dacbff9cc1066469f09ba8f05292f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Weapons.CyberPickleProjectileVisual
+  hit: {fileID: 4735739497854622507}
+  hitPS: {fileID: 4863052723875787961}
+  hitOffset: 0.1
+  UseFirePointRotation: 0
+  rotationOffset: {x: 0, y: 0, z: 0}
+  flash: {fileID: 8436191768532481719}
+  lightSource: {fileID: 0}
+  projectilePS: {fileID: 7124147602944830166}
+  Detached:
+  - {fileID: 1112018524344104}
 --- !u!1 &1450556779679700
 GameObject:
   m_ObjectHideFlags: 0

@@ -36,14 +36,19 @@ namespace CyberPickle.Gameplay.Weapons
     {
         /// <summary>
         /// Spawn an element-tinted hit VFX at the given world position,
-        /// scaled and tinted per the damage + crit + weapon parameters.
+        /// scaled and tinted per the damage + crit + weapon parameters,
+        /// and oriented along the projectile's travel direction so the
+        /// burst's emission cone reads as a continuation of the bullet's
+        /// path (rather than the default world-up identity rotation,
+        /// which looks detached from the trajectory).
         /// </summary>
         /// <param name="weaponId">The source weapon's equipmentId (for WeaponData lookup). May be empty.</param>
         /// <param name="element">The element this hit carries (drives prefab pick + base tint).</param>
         /// <param name="hitPosition">World position where the hit occurred.</param>
+        /// <param name="hitDirection">Normalized direction the projectile was traveling when it hit. <c>Vector3.zero</c> if not available — VFX falls back to identity rotation.</param>
         /// <param name="damageDealt">Final damage applied (post-Power × crit). Drives the size scale.</param>
         /// <param name="isCrit">Whether the hit was a crit. Boosts size + brightens tint.</param>
-        public static void Play(string weaponId, ElementId element, Vector3 hitPosition, float damageDealt, bool isCrit)
+        public static void Play(string weaponId, ElementId element, Vector3 hitPosition, Vector3 hitDirection, float damageDealt, bool isCrit)
         {
             var lib = ElementVfxLibrary.Instance;
             if (lib == null) return;
@@ -79,7 +84,16 @@ namespace CyberPickle.Gameplay.Weapons
             // On crit, lerp 40% toward white for a "pop" of brightness.
             Color tint = isCrit ? Color.Lerp(elementColor, Color.white, 0.4f) : elementColor;
 
-            GameObject hit = Object.Instantiate(entry.hitPrefab, hitPosition, Quaternion.identity);
+            // Orient the hit VFX so its forward axis faces back along the
+            // projectile's direction of travel — splash + spark patterns
+            // emit "back at the shooter" which reads as a proper impact.
+            // Fall back to identity if no direction was provided (legacy
+            // call sites, or zero-velocity projectiles).
+            Quaternion hitRot = Quaternion.identity;
+            if (hitDirection.sqrMagnitude > 0.0001f)
+                hitRot = Quaternion.LookRotation(-hitDirection, Vector3.up);
+
+            GameObject hit = Object.Instantiate(entry.hitPrefab, hitPosition, hitRot);
             ApplyParticleModulation(hit, sizeScale, tint);
 
             // Auto-cleanup. Use the longest particle system duration + a

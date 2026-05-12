@@ -68,19 +68,40 @@ namespace CyberPickle.DOTS.Systems
                 // Awake order), in which case we drop the report rather than
                 // backing up the queue. Subsequent reports will land normally
                 // once the tracker is alive.
-                tracker?.RecordHit(report);
+                //
+                // Skip 0-damage reports for stats — those are visual-only
+                // markers (e.g., the central explosion VFX trigger that
+                // ProjectileExplosionSystem emits at the AoE epicenter, with
+                // DamageDealt=0 so it doesn't double-count actual per-enemy
+                // damage). Without this skip, every grenade explosion would
+                // inflate the hit count by +1 against the actual damaged
+                // enemies.
+                if (report.DamageDealt > 0f)
+                    tracker?.RecordHit(report);
 
                 // M9 PR F: spawn the Mono-side hit VFX. ElementVfxLibrary
                 // picks the right per-element prefab; HitVfxApplier scales
                 // particles by damage / crit / weapon scale / AoE; tints by
-                // element + crit. Silent if the library or prefab is missing.
-                ElementId element = (ElementId)report.Element;
-                HitVfxApplier.Play(
-                    weaponId:     report.WeaponId.ToString(),
-                    element:      element,
-                    hitPosition:  new Vector3(report.HitPosition.x, report.HitPosition.y, report.HitPosition.z),
-                    damageDealt:  report.DamageDealt,
-                    isCrit:       report.IsCrit);
+                // element + crit; orients the burst along the projectile's
+                // travel direction. Silent if the library or prefab is missing.
+                //
+                // SKIP this path when the projectile carried
+                // ProjectileHasHybridVisual — Hovl's authored hit GO is
+                // already spawning via CyberPickleProjectileVisual.OnHit on
+                // the LateSimulation tick. Running both produces two hit
+                // visuals at slightly offset positions ("weird behavior"
+                // pre-fix). The hybrid path takes precedence.
+                if (!report.SuppressDefaultHitVfx)
+                {
+                    ElementId element = (ElementId)report.Element;
+                    HitVfxApplier.Play(
+                        weaponId:     report.WeaponId.ToString(),
+                        element:      element,
+                        hitPosition:  new Vector3(report.HitPosition.x, report.HitPosition.y, report.HitPosition.z),
+                        hitDirection: new Vector3(report.HitDirection.x, report.HitDirection.y, report.HitDirection.z),
+                        damageDealt:  report.DamageDealt,
+                        isCrit:       report.IsCrit);
+                }
             }
         }
     }

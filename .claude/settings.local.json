@@ -36,7 +36,10 @@
       "mcp__unity-mcp__Unity_Profiler_GetFrameRangeTopTimeSummary",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\jaama\\\\OneDrive\\\\Documents\\\\6. Game\\\\CyberPickleHDRP\\\\Assets\\\\_CyberPickle\\\\Code\" -Recurse -Filter \"*.cs\")",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(Sort-Object)"
+      "Bash(Sort-Object)",
+      "WebFetch(domain:github.com)",
+      "Bash(cd /c/Users/jaama && find \"OneDrive/Documents/6. Game/CyberPickleHDRP/Assets/_CyberPickle/Code\" -type f -name \"*.cs\" | grep -E \"\\(DragDrop|EquipmentSlot|InventorySlot|EquipmentManager|ProfileData|PlayerLoadout\\)\" | head -20)",
+      "Bash(python3)"
     ],
     "deny": [],
     "ask": []

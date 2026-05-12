@@ -28,6 +28,13 @@ MonoBehaviour:
   - {fileID: 11400000, guid: cd5d2334d1b7a594491cc4c0fd7f85f2, type: 2}
   - {fileID: 11400000, guid: 176abefdce06bcd40a994d1f578029bd, type: 2}
   - {fileID: 11400000, guid: e52289ec4faa8284db18bd617e30a5ce, type: 2}
+  - {fileID: 11400000, guid: a4d7e8f3c2b91a544c8f9e2d617b0a45, type: 2}
+  - {fileID: 11400000, guid: b2c4a6e1d8f937624a9b5c3e0f1d28e7, type: 2}
+  - {fileID: 11400000, guid: c3a5b7d9e0f146834b1c2d4e5f607182, type: 2}
+  - {fileID: 11400000, guid: d4b6c8e0f1a2354904c3d5e6f708192a, type: 2}
+  - {fileID: 11400000, guid: e5c7d9f1a2b3465a14d4e6f708192a3b, type: 2}
+  - {fileID: 11400000, guid: f6d8e0a2b3c4576b24e5f708192a3b4c, type: 2}
+  - {fileID: 11400000, guid: 071e92b3c4d5687c34f608192a3b4c5d, type: 2}
   weightCommon: 60
   weightUncommon: 25
   weightRare: 10
