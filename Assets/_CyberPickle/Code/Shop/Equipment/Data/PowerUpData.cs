@@ -1,314 +1,155 @@
-// File: Assets/Code/Shop/Equipment/Data/PowerUpData.cs
+// File: Assets/_CyberPickle/Code/Shop/Equipment/Data/PowerUpData.cs
+// Namespace: CyberPickle.Shop.Equipment.Data
 //
-// Purpose: Defines the data structure for power-ups in Cyber Pickle.
-// Contains power-up effects and their scaling with upgrade levels.
-// Supports synergies with weapons to unlock final weapon forms.
+// Defines a power-up template — the design data for one type of stat
+// boost. Each power-up has TWO orthogonal characteristics:
 //
-// Created: 2025-02-25
-// Updated: 2025-02-25
+//   1. Stat type + magnitude curve (authored on the SO)
+//        Which PlayerStatType this power-up boosts, and by how much at
+//        each rarity tier. Magnitudes are decimal fractions (0.10 = +10%)
+//        per the AddPercent foot-gun rule (CLAUDE.md).
+//
+//   2. Element (rolled at draft time)
+//        Which of the 7 elements this card-instance carries. Same
+//        template ("Fire-Rate Boost") shows up as Fire / Lightning /
+//        Ice / etc. variants in the draft pool. The element confers to
+//        the WEAPON on the same loadout axis when slotted (and only
+//        applies if a weapon is present).
+//
+// The stat bonus is GLOBAL — applies to all weapons regardless of which
+// axis the power-up sits on. Element coupling is LOCAL to the axis.
+//
+// 2026-05-10 refactor (M8): the previous shape (effectType,
+// baseDuration / baseCooldown, GetXForLevel multipliers, IsCompatibleWithWeapon)
+// was the "old amulet/synergy" model dropped in GDD V0.7. All replaced
+// by: PlayerStatType + 5-element magnitudesByRarity[]. Element no longer
+// authored — rolled at draft time per weapon_rarity_v1.md.
 
 using UnityEngine;
-using System;
-using System.Collections.Generic;
+using CyberPickle.Core;
 using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Gameplay.Stats;
 
 namespace CyberPickle.Shop.Equipment.Data
 {
     /// <summary>
-    /// Defines the type of effect a power-up provides
-    /// </summary>
-    public enum PowerUpEffectType
-    {
-        StatBoost,      // Directly boosts a character stat
-        WeaponBoost,    // Enhances weapon performance
-        SpecialEffect,  // Provides a special gameplay effect
-        DefensiveAbility, // Provides a defensive ability
-        PassiveAbility  // Provides a passive ability
-    }
-
-    /// <summary>
-    /// Scriptable Object that defines data for power-up equipment
+    /// ScriptableObject defining one power-up template. The asset stores
+    /// the stat target + per-rarity magnitude curve; the element is rolled
+    /// at draft time onto a runtime <c>PowerUpInstanceData</c>.
     /// </summary>
     [CreateAssetMenu(fileName = "PowerUp", menuName = "CyberPickle/Equipment/PowerUpData")]
     public class PowerUpData : EquipmentData
     {
-        [Header("Power-Up Properties")]
-        [Tooltip("The type of effect this power-up provides")]
-        public PowerUpEffectType effectType = PowerUpEffectType.StatBoost;
+        [Header("Stat Boost (the GLOBAL effect applied to all weapons)")]
+        [Tooltip("Which player stat this power-up boosts. The bonus is global — it applies to every weapon, not just the weapon on the same axis. Element coupling (which IS per-axis) is rolled at draft time and lives on the runtime PowerUpInstanceData, not here.")]
+        public PlayerStatType affectedStat = PlayerStatType.Power;
 
-        [Tooltip("Duration of the effect in seconds (0 = permanent)")]
-        public float baseDuration = 0f;
+        [Tooltip(
+            "Magnitude per rarity tier as a DECIMAL FRACTION (0.10 = +10%).\n" +
+            "Index 0 = Common, 1 = Uncommon, 2 = Rare, 3 = Epic, 4 = Legendary.\n\n" +
+            "Per-stat curves are intentional: a Fire-Rate power-up at Legendary " +
+            "(+25%) is fine, but a Crit-Chance power-up at Legendary (+25%) is " +
+            "absurd. Each stat gets its own progression authored independently.\n\n" +
+            "If unset, defaults to {0.05, 0.08, 0.12, 0.18, 0.25} — a reasonable " +
+            "starting curve. Override per asset for stat-specific tuning.")]
+        public float[] magnitudesByRarity = new float[]
+        {
+            0.05f, // Common
+            0.08f, // Uncommon
+            0.12f, // Rare
+            0.18f, // Epic
+            0.25f, // Legendary
+        };
 
-        [Tooltip("Cooldown before the power-up can be activated again (0 = passive effect)")]
-        public float baseCooldown = 0f;
+        [Header("Visual & Audio (optional)")]
+        [Tooltip("VFX prefab spawned briefly when this power-up is slotted onto an axis. Optional — placeholder visuals work for prototyping.")]
+        public GameObject slotEffectPrefab;
 
-        [Tooltip("Is this power-up automatically activated or manually triggered?")]
-        public bool isPassive = true;
+        [Tooltip("Sound played when this power-up is slotted. Optional.")]
+        public AudioClip slotSound;
 
-        [Header("Stat Boosts")]
-        [Tooltip("The stat this power-up affects (if applicable)")]
-        public string affectedStat = "Power";
-
-        [Tooltip("Base amount to boost the stat by")]
-        public float baseStatBoost = 10f;
-
-        [Tooltip("Is the stat boost a flat value (false) or percentage (true)?")]
-        public bool isPercentageBased = true;
-
-        [Header("Weapon Enhancement")]
-        [Tooltip("Compatible weapon types for enhanced effects")]
-        public EquipmentSlotType[] compatibleWeaponTypes;
-
-        [Tooltip("Weapon IDs that have special synergy with this power-up")]
-        public string[] synergisticWeaponIds;
-
-        [Tooltip("Weapon properties affected by this power-up")]
-        public string[] affectedWeaponProperties;
-
-        [Tooltip("Base multiplier for weapon enhancement")]
-        public float baseWeaponEnhancementMultiplier = 1.2f;
-
-        [Header("Special Effects")]
-        [Tooltip("Description of special effects for level 1")]
-        [TextArea(2, 5)]
-        public string baseEffectDescription;
-
-        [Tooltip("Description of special effects for max level")]
-        [TextArea(2, 5)]
-        public string maxLevelEffectDescription;
-
-        [Header("Visual & Audio")]
-        [Tooltip("VFX prefab for when the power-up is active")]
-        public GameObject activeEffectPrefab;
-
-        [Tooltip("Sound effect for activation")]
-        public AudioClip activationSound;
-
-        [Header("Upgrade Scaling")]
-        [Tooltip("Effect strength increase per level (multiplier)")]
-        [Range(1f, 2f)]
-        public float effectStrengthUpgradeMultiplier = 1.2f;
-
-        [Tooltip("Duration increase per level (multiplier)")]
-        [Range(1f, 1.5f)]
-        public float durationUpgradeMultiplier = 1.15f;
-
-        [Tooltip("Cooldown reduction per level (multiplier)")]
-        [Range(0.5f, 1f)]
-        public float cooldownReductionMultiplier = 0.9f;
+        // ─── API ──────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Validates the power-up data when it's created or modified in the editor.
+        /// Returns the magnitude (decimal fraction; 0.10 = +10%) for the
+        /// given rarity tier. Falls back to a sensible default if the
+        /// authored array is the wrong length.
         /// </summary>
-        protected override void OnValidate()
+        public float GetMagnitudeForRarity(Rarity rarity)
         {
-            // Ensure correct slot type
-            slotType = EquipmentSlotType.PowerUp;
+            int idx = (int)rarity;
+            if (magnitudesByRarity != null && idx >= 0 && idx < magnitudesByRarity.Length)
+                return magnitudesByRarity[idx];
 
-            base.OnValidate();
-
-            // Additional power-up specific validation
-            ValidatePowerUpFields();
-        }
-
-        /// <summary>
-        /// Validates power-up specific fields
-        /// </summary>
-        private void ValidatePowerUpFields()
-        {
-            // Ensure base values are valid
-            baseDuration = Mathf.Max(0f, baseDuration);
-            baseCooldown = Mathf.Max(0f, baseCooldown);
-            baseStatBoost = Mathf.Max(0f, baseStatBoost);
-            baseWeaponEnhancementMultiplier = Mathf.Max(1f, baseWeaponEnhancementMultiplier);
-
-            // Ensure scaling multipliers are in valid ranges
-            effectStrengthUpgradeMultiplier = Mathf.Max(1f, effectStrengthUpgradeMultiplier);
-
-            if (baseDuration > 0)
-                durationUpgradeMultiplier = Mathf.Max(1f, durationUpgradeMultiplier);
-
-            if (baseCooldown > 0)
-                cooldownReductionMultiplier = Mathf.Clamp(cooldownReductionMultiplier, 0.5f, 1f);
-        }
-
-        /// <summary>
-        /// Gets the power-up's effect strength for a specified upgrade level
-        /// </summary>
-        /// <param name="level">Upgrade level of the power-up</param>
-        /// <returns>The effect strength value at that level</returns>
-        public float GetEffectStrengthForLevel(int level)
-        {
-            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
-
-            switch (effectType)
+            // Defensive fallback if the asset wasn't migrated to the new
+            // 5-entry format (e.g., post-refactor, before re-author).
+            return rarity switch
             {
-                case PowerUpEffectType.StatBoost:
-                    return baseStatBoost * Mathf.Pow(effectStrengthUpgradeMultiplier, level - 1);
-
-                case PowerUpEffectType.WeaponBoost:
-                    return baseWeaponEnhancementMultiplier + (0.1f * (level - 1));
-
-                default:
-                    return Mathf.Pow(effectStrengthUpgradeMultiplier, level - 1);
-            }
+                Rarity.Common    => 0.05f,
+                Rarity.Uncommon  => 0.08f,
+                Rarity.Rare      => 0.12f,
+                Rarity.Epic      => 0.18f,
+                Rarity.Legendary => 0.25f,
+                _                => 0.05f,
+            };
         }
 
         /// <summary>
-        /// Gets the power-up's duration for a specified upgrade level
-        /// </summary>
-        /// <param name="level">Upgrade level of the power-up</param>
-        /// <returns>The duration in seconds at that level</returns>
-        public float GetDurationForLevel(int level)
-        {
-            if (baseDuration <= 0) return 0f; // Permanent effect
-
-            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
-            return baseDuration * Mathf.Pow(durationUpgradeMultiplier, level - 1);
-        }
-
-        /// <summary>
-        /// Gets the power-up's cooldown for a specified upgrade level
-        /// </summary>
-        /// <param name="level">Upgrade level of the power-up</param>
-        /// <returns>The cooldown in seconds at that level</returns>
-        public float GetCooldownForLevel(int level)
-        {
-            if (baseCooldown <= 0) return 0f; // No cooldown
-
-            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
-            return baseCooldown * Mathf.Pow(cooldownReductionMultiplier, level - 1);
-        }
-
-        /// <summary>
-        /// Gets a formatted effect description for the specified level
-        /// </summary>
-        /// <param name="level">Upgrade level of the power-up</param>
-        /// <returns>A formatted description of the effect at that level</returns>
-        public string GetEffectDescriptionForLevel(int level)
-        {
-            level = Mathf.Clamp(level, 1, maxUpgradeLevel);
-
-            // For level 1, return the base description
-            if (level == 1)
-                return baseEffectDescription;
-
-            // For max level, return the max level description
-            if (level == maxUpgradeLevel && !string.IsNullOrEmpty(maxLevelEffectDescription))
-                return maxLevelEffectDescription;
-
-            // For intermediate levels, generate a description based on effect type
-            string description = baseEffectDescription;
-
-            // Replace placeholders with actual values
-            description = description.Replace("{strength}", GetEffectStrengthForLevel(level).ToString("F1"));
-            description = description.Replace("{duration}", GetDurationForLevel(level).ToString("F1"));
-            description = description.Replace("{cooldown}", GetCooldownForLevel(level).ToString("F1"));
-
-            return description;
-        }
-
-        /// <summary>
-        /// Gets the stats for the specified upgrade level
+        /// Returns the stats this power-up would impart at the given rarity,
+        /// for tooltip / hover display. The "Level" parameter is unused for
+        /// now — power-up scaling is rarity-only in the M8 model. Kept on
+        /// the override for EquipmentData parity.
         /// </summary>
         public override StatDescriptor[] GetStatsForLevel(int upgradeLevel)
         {
-            upgradeLevel = Mathf.Clamp(upgradeLevel, 1, maxUpgradeLevel);
-
-            List<StatDescriptor> stats = new List<StatDescriptor>();
-
-            // Add stats based on effect type
-            switch (effectType)
+            // 2026-05-10: rarity is the runtime axis, not authored on the asset.
+            // For preview-purposes (e.g., the equipment hub showing what a card
+            // *could* roll), we display the Common-tier magnitude as the
+            // baseline. Actual in-run cards display the rolled rarity's value.
+            float magnitude = GetMagnitudeForRarity(Rarity.Common);
+            return new[]
             {
-                case PowerUpEffectType.StatBoost:
-                    stats.Add(new StatDescriptor(
-                        affectedStat,
-                        GetEffectStrengthForLevel(upgradeLevel),
-                        isPercentageBased,
-                        true
-                    ));
-                    break;
-
-                case PowerUpEffectType.WeaponBoost:
-                    stats.Add(new StatDescriptor(
-                        "Weapon Boost",
-                        (GetEffectStrengthForLevel(upgradeLevel) - 1) * 100f,
-                        true,
-                        true
-                    ));
-                    break;
-
-                case PowerUpEffectType.SpecialEffect:
-                case PowerUpEffectType.DefensiveAbility:
-                case PowerUpEffectType.PassiveAbility:
-                    stats.Add(new StatDescriptor(
-                        "Effect Strength",
-                        GetEffectStrengthForLevel(upgradeLevel) * 100f,
-                        true,
-                        true
-                    ));
-                    break;
-            }
-
-            // Add duration if applicable
-            if (baseDuration > 0)
-            {
-                stats.Add(new StatDescriptor(
-                    "Duration",
-                    GetDurationForLevel(upgradeLevel),
-                    false,
-                    true
-                ));
-            }
-
-            // Add cooldown if applicable
-            if (baseCooldown > 0)
-            {
-                stats.Add(new StatDescriptor(
-                    "Cooldown",
-                    GetCooldownForLevel(upgradeLevel),
-                    false,
-                    false  // Lower is better for cooldown
-                ));
-            }
-
-            return stats.ToArray();
+                new StatDescriptor(
+                    affectedStat.ToString(),
+                    magnitude * 100f, // display as percentage
+                    isPercentage: true,
+                    higherIsBetter: true),
+            };
         }
 
-        /// <summary>
-        /// Determines if this power-up can enhance the specified weapon
-        /// </summary>
-        /// <param name="weaponId">The ID of the weapon to check</param>
-        /// <returns>True if compatible, false otherwise</returns>
-        public bool IsCompatibleWithWeapon(string weaponId)
-        {
-            if (string.IsNullOrEmpty(weaponId))
-                return false;
-
-            // Check if weapon is in synergistic list
-            for (int i = 0; i < synergisticWeaponIds.Length; i++)
-            {
-                if (synergisticWeaponIds[i] == weaponId)
-                    return true;
-            }
-
-            return false;
-        }
+        // ─── Editor validation ────────────────────────────────────────────
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validates required references are assigned in the editor
-        /// </summary>
-        public override bool ValidateReferences()
+        protected override void OnValidate()
         {
-            bool valid = base.ValidateReferences();
+            slotType = EquipmentSlotType.PowerUp;
+            base.OnValidate();
 
-            if (activationSound == null && !isPassive)
+            // Magnitudes are decimal fractions — anything > 1.0 is almost
+            // always a designer who typed "10" thinking "10%". Catch at
+            // edit time. Same foot-gun guard as UpgradeCardSO.OnValidate.
+            if (magnitudesByRarity == null) return;
+            for (int i = 0; i < magnitudesByRarity.Length; i++)
             {
-                Debug.LogWarning($"[PowerUpData] Activation sound is missing for non-passive power-up {displayName}");
+                if (Mathf.Abs(magnitudesByRarity[i]) > 1.0f)
+                {
+                    Debug.LogWarning(
+                        $"[PowerUpData] '{name}' magnitudesByRarity[{i}]={magnitudesByRarity[i]}. " +
+                        $"This is a DECIMAL FRACTION (0.10 = +10%); a value > 1.0 means > +100%, " +
+                        $"which is rarely intentional. If you meant +{magnitudesByRarity[i]}%, " +
+                        $"set the value to {magnitudesByRarity[i] / 100f:F2} instead.",
+                        this);
+                }
             }
 
-            return valid;
+            if (magnitudesByRarity.Length != 5)
+            {
+                Debug.LogWarning(
+                    $"[PowerUpData] '{name}' magnitudesByRarity has {magnitudesByRarity.Length} entries; " +
+                    $"5 are expected (one per rarity tier Common..Legendary). The runtime will fall " +
+                    $"back to the default curve for missing entries.",
+                    this);
+            }
         }
 #endif
     }

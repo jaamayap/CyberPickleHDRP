@@ -36,31 +36,49 @@ namespace CyberPickle.Gameplay.Progression
     /// <summary>
     /// What kind of card this is. Drives how it's applied when picked AND
     /// how it's weighted in the level-up draft pool. Per <c>weapon_rarity_v1.md</c>
-    /// §3 Path B, the draft pool offers a mix of types (50% LevelUp / 25%
-    /// PowerUp / 15% RarityUp / 10% SkillUnlock as project defaults).
+    /// §3 Path B, the draft pool offers a mix of types and the loadout-aware
+    /// filter in <see cref="UpgradePoolSO"/> hides any card that wouldn't
+    /// land on a valid target (e.g., NewWeapon when all weapon slots are
+    /// full, LevelUpWeapon when the target weapon isn't equipped).
     ///
     /// Stable byte values — DO NOT renumber. Existing card .asset files
     /// default to <see cref="StatModifier"/> (value 0).
+    ///
+    /// 2026-05-11 (M8 step 2): added NewWeapon / LevelUpPowerUp /
+    /// RarityUpPowerUp. Renamed LevelUp → LevelUpWeapon and RarityUp →
+    /// RarityUpWeapon for clarity (byte values unchanged so existing
+    /// assets continue to deserialize correctly). PowerUp (byte 2) was a
+    /// stub; repurposed as NewPowerUp now that PowerUpData has a real
+    /// shape.
     /// </summary>
     public enum CardType : byte
     {
-        /// <summary>Applies <c>modifiers[]</c> via <c>PlayerStats.AddModifier</c>. The original card behavior; default for back-compat with existing assets.</summary>
+        /// <summary>Applies <c>modifiers[]</c> via <c>PlayerStats.AddModifier</c>. The "Buff" card type — global stat boost, no slot picker. Default for back-compat with existing assets.</summary>
         StatModifier = 0,
 
-        /// <summary>Levels a specific weapon by 1 (or adds it to the loadout at L1 if not yet equipped). References <c>targetWeaponData</c>.</summary>
-        LevelUp = 1,
+        /// <summary>Levels a specific equipped weapon by 1. References <c>targetWeaponData</c>. Filtered out by the pool if the target isn't equipped or already at L5 (use Evolve for L5 → Evolved).</summary>
+        LevelUpWeapon = 1,
 
-        /// <summary>Applies a power-up of a specific type+element to a weapon. References <c>targetPowerUpId</c>. M9 work — currently a stub that logs only.</summary>
-        PowerUp = 2,
+        /// <summary>Adds a power-up to a chosen empty axis. Slot-picker required. References <c>targetPowerUpData</c>. Element + Rarity rolled at draft time onto the <c>DraftedCard</c> wrapper.</summary>
+        NewPowerUp = 2,
 
-        /// <summary>Bumps a specific weapon's rarity by +1 tier (clamped at Legendary). References <c>targetWeaponData</c>.</summary>
-        RarityUp = 3,
+        /// <summary>Bumps a specific equipped weapon's rarity by +1 tier (clamped at Legendary). References <c>targetWeaponData</c>. Filtered out by the pool if the target isn't equipped or already Legendary.</summary>
+        RarityUpWeapon = 3,
 
         /// <summary>Activates a run-scoped skill power (Banish, Lock, Forge access, etc.). References <c>targetSkillId</c>. M11 work — currently a stub that logs only.</summary>
         SkillUnlock = 4,
 
         /// <summary>Reserved — purely cosmetic cards (skins, palette swaps, kill-confirms). Never affects gameplay.</summary>
         Cosmetic = 5,
+
+        /// <summary>Adds a new weapon to a chosen empty axis. Slot-picker required. References <c>targetWeaponData</c>. Filtered out by the pool if all weapon axes are full. Rarity rolled at draft time.</summary>
+        NewWeapon = 6,
+
+        /// <summary>Levels a specific equipped power-up by 1. References <c>targetPowerUpData</c>. Filtered out by the pool if the target isn't equipped or already at L5.</summary>
+        LevelUpPowerUp = 7,
+
+        /// <summary>Bumps a specific equipped power-up's rarity by +1 tier. References <c>targetPowerUpData</c>. Filtered out by the pool if the target isn't equipped or already Legendary.</summary>
+        RarityUpPowerUp = 8,
     }
 
     [CreateAssetMenu(menuName = "CyberPickle/Progression/Upgrade Card", fileName = "Card_")]
@@ -94,14 +112,15 @@ namespace CyberPickle.Gameplay.Progression
         [Tooltip("Determines how this card is applied when picked. Default is StatModifier (the original behavior — applies the modifiers[] array). New types: LevelUp / RarityUp target a specific weapon; PowerUp / SkillUnlock are M9-M11 stubs that currently log only.")]
         public CardType cardType = CardType.StatModifier;
 
-        [Header("Targeting (used by LevelUp / RarityUp)")]
-        [Tooltip("Weapon this card affects. REQUIRED for LevelUp and RarityUp card types. LevelUp adds the weapon at L1 if not equipped, else levels it by 1. RarityUp bumps the equipped weapon's rarity by 1; if the weapon isn't equipped, the card is a no-op (won't appear in pool — see UpgradePoolSO eligibility filter).")]
+        [Header("Targeting — Weapon")]
+        [Tooltip("Weapon this card affects. REQUIRED for NewWeapon / LevelUpWeapon / RarityUpWeapon. The pool filter ensures the card only appears when its target is appropriate (equipped & below cap for level/rarity-up, empty axis available for new-weapon).")]
         public WeaponData targetWeaponData;
 
-        [Header("Targeting (M9-M11 stubs — wire when those systems land)")]
-        [Tooltip("Power-up identifier — used by CardType.PowerUp. M9 work; for now this just logs the intent.")]
-        public string targetPowerUpId;
+        [Header("Targeting — Power-up")]
+        [Tooltip("Power-up this card affects. REQUIRED for NewPowerUp / LevelUpPowerUp / RarityUpPowerUp. For NewPowerUp, the rolled element is set at draft time and lives on the DraftedCard wrapper, not on the asset.")]
+        public PowerUpData targetPowerUpData;
 
+        [Header("Targeting — Skill (M11 stub)")]
         [Tooltip("Skill node identifier — used by CardType.SkillUnlock. M11 work; for now this just logs the intent.")]
         public string targetSkillId;
 
@@ -176,15 +195,36 @@ namespace CyberPickle.Gameplay.Progression
         /// <summary>
         /// Universal apply dispatch. Routes the card's effect based on
         /// <see cref="cardType"/>. Caller passes both PlayerStats (for
-        /// stat modifiers) and WeaponLoadoutRuntime (for level/rarity-up
+        /// stat modifiers) and WeaponLoadoutRuntime (for weapon / power-up
         /// targeting); either may be null for cards that don't need it.
         ///
+        /// For cards with <c>RequiresSlotSelection == true</c> (NewWeapon,
+        /// NewPowerUp), this method picks the FIRST EMPTY axis. Use
+        /// <see cref="ApplyToAxis"/> for the slot-picker UI flow where
+        /// the player chose a specific axis.
+        ///
+        /// For NewPowerUp specifically, the rolled element is needed —
+        /// callers without a rolled element (test code, retro-applies)
+        /// pass <see cref="ElementId.None"/>. Production callers go
+        /// through <see cref="ApplyToAxis"/> with the DraftedCard's value.
+        ///
         /// Returns a short description of what was applied, useful for
-        /// the level-up confirmation log and analytics. Empty string
-        /// means "nothing applied" (e.g., card targeted a weapon that
-        /// isn't equipped, or referenced a stub system).
+        /// the level-up confirmation log and analytics.
         /// </summary>
         public string Apply(PlayerStats stats, WeaponLoadoutRuntime loadout)
+            => ApplyToAxis(stats, loadout, axisIndex: -1, rolledElement: ElementId.None, rolledRarity: rarity);
+
+        /// <summary>
+        /// Slot-picker-aware apply. Used by the level-up screen flow when
+        /// the card kind requires the player to pick an axis (NewWeapon,
+        /// NewPowerUp). Pre-targeted cards (LevelUpWeapon, RarityUpWeapon,
+        /// LevelUpPowerUp, RarityUpPowerUp, StatModifier, SkillUnlock,
+        /// Cosmetic) ignore <paramref name="axisIndex"/>.
+        ///
+        /// <paramref name="axisIndex"/> &lt; 0 means "first empty axis"
+        /// (auto-pick fallback for non-UI callers).
+        /// </summary>
+        public string ApplyToAxis(PlayerStats stats, WeaponLoadoutRuntime loadout, int axisIndex, ElementId rolledElement, Rarity rolledRarity)
         {
             switch (cardType)
             {
@@ -194,57 +234,75 @@ namespace CyberPickle.Gameplay.Progression
                     return applied > 0 ? $"applied {applied} modifier(s)" : "no modifiers";
                 }
 
-                case CardType.LevelUp:
+                case CardType.NewWeapon:
+                {
+                    if (loadout == null || targetWeaponData == null) return "no target weapon";
+                    bool ok = axisIndex >= 0
+                        ? loadout.TryAddWeaponAt(axisIndex, targetWeaponData, rolledRarity, out var addedAt)
+                        : loadout.TryAddWeapon(targetWeaponData, rolledRarity, out addedAt);
+                    return ok ? $"added '{addedAt.WeaponId}' to axis {addedAt.slotIndex} at {rolledRarity}"
+                              : "no empty weapon axis";
+                }
+
+                case CardType.LevelUpWeapon:
                 {
                     if (loadout == null || targetWeaponData == null) return "no target weapon";
                     var existing = loadout.FindByWeaponData(targetWeaponData);
-                    if (existing == null)
-                    {
-                        // Not yet equipped — add to loadout at Common (the
-                        // first-roll could be deferred to RarityRollService
-                        // with player Luck if we want richer behavior; for
-                        // now LevelUp adds at Common to keep semantics simple).
-                        if (loadout.TryAddWeapon(targetWeaponData, Rarity.Common, out var added))
-                            return $"added '{added.WeaponId}' to loadout (slot {added.slotIndex})";
-                        return "loadout full — add failed";
-                    }
-                    if (existing.level >= 5) return $"'{existing.WeaponId}' already at L5 (use evolution)";
+                    if (existing == null) return "weapon not equipped (filter bug)";
+                    if (existing.level >= 5) return $"'{existing.WeaponId}' already at L5";
                     bool ok = loadout.LevelUpWeapon(existing.slotIndex);
                     return ok ? $"'{existing.WeaponId}' L{existing.level - 1} → L{existing.level}" : "level-up failed";
                 }
 
-                case CardType.RarityUp:
+                case CardType.RarityUpWeapon:
                 {
                     if (loadout == null || targetWeaponData == null) return "no target weapon";
                     var existing = loadout.FindByWeaponData(targetWeaponData);
-                    if (existing == null) return "weapon not equipped";
+                    if (existing == null) return "weapon not equipped (filter bug)";
                     if (existing.rarity == Rarity.Legendary) return $"'{existing.WeaponId}' already Legendary";
                     var oldRarity = existing.rarity;
                     bool ok = loadout.UpgradeRarity(existing.slotIndex, 1);
                     return ok ? $"'{existing.WeaponId}' rarity {oldRarity} → {existing.rarity}" : "rarity-up failed";
                 }
 
-                case CardType.PowerUp:
+                case CardType.NewPowerUp:
                 {
-                    // M9 stub — when PowerUpData lands, this will:
-                    //   1. Look up PowerUpData by targetPowerUpId
-                    //   2. Apply its mechanical effect to stats / loadout
-                    //   3. If it triggers an evolution, call loadout.EvolveWeapon
-                    //      and lock in the power-up's element
-                    Debug.Log($"[UpgradeCardSO] PowerUp card '{cardId}' picked (target='{targetPowerUpId}'). Stub — M9 will implement.");
-                    return $"[stub] power-up '{targetPowerUpId}'";
+                    if (loadout == null || targetPowerUpData == null) return "no target power-up";
+                    bool ok = axisIndex >= 0
+                        ? loadout.TryAddPowerUpAt(axisIndex, targetPowerUpData, rolledElement, rolledRarity, out var addedPU)
+                        : loadout.TryAddPowerUp(targetPowerUpData, rolledElement, rolledRarity, out addedPU);
+                    return ok ? $"added power-up '{addedPU.PowerUpId}' to axis {addedPU.axisIndex} at {rolledRarity}/{rolledElement}"
+                              : "no empty power-up axis";
+                }
+
+                case CardType.LevelUpPowerUp:
+                {
+                    if (loadout == null || targetPowerUpData == null) return "no target power-up";
+                    var existing = loadout.FindByPowerUpData(targetPowerUpData);
+                    if (existing == null) return "power-up not equipped (filter bug)";
+                    if (existing.level >= 5) return $"'{existing.PowerUpId}' already at L5";
+                    bool ok = loadout.LevelUpPowerUp(existing.axisIndex);
+                    return ok ? $"'{existing.PowerUpId}' L{existing.level - 1} → L{existing.level}" : "level-up failed";
+                }
+
+                case CardType.RarityUpPowerUp:
+                {
+                    if (loadout == null || targetPowerUpData == null) return "no target power-up";
+                    var existing = loadout.FindByPowerUpData(targetPowerUpData);
+                    if (existing == null) return "power-up not equipped (filter bug)";
+                    if (existing.rarity == Rarity.Legendary) return $"'{existing.PowerUpId}' already Legendary";
+                    var oldRarity = existing.rarity;
+                    bool ok = loadout.UpgradePowerUpRarity(existing.axisIndex, 1);
+                    return ok ? $"'{existing.PowerUpId}' rarity {oldRarity} → {existing.rarity}" : "rarity-up failed";
                 }
 
                 case CardType.SkillUnlock:
                 {
-                    // M11 stub — when SkillTreeAllocation lands, this will
-                    // activate the named run-power (Banish, Lock, Forge access).
                     Debug.Log($"[UpgradeCardSO] SkillUnlock card '{cardId}' picked (target='{targetSkillId}'). Stub — M11 will implement.");
                     return $"[stub] skill '{targetSkillId}'";
                 }
 
                 case CardType.Cosmetic:
-                    // Cosmetics never affect gameplay.
                     return "cosmetic — no gameplay effect";
 
                 default:

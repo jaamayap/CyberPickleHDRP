@@ -47,6 +47,18 @@ namespace CyberPickle.Shop.Equipment.Data
     }
 
     /// <summary>
+    /// How a projectile moves between muzzle and impact (M9 PR A).
+    /// </summary>
+    public enum ProjectileTrajectory : byte
+    {
+        /// <summary>Linear flight along the muzzle's forward vector at <c>baseProjectileSpeed</c>. Default for pistol / shotgun / sniper.</summary>
+        Straight = 0,
+
+        /// <summary>Ballistic parabolic arc that lands at the target after <c>flightBeats × 60 / BPM</c> seconds. Real gravity drives the arc — launch angle is steep at close range, shallow at far range, apex height depends only on flight time. Grenade launcher.</summary>
+        Parabolic = 1,
+    }
+
+    /// <summary>
     /// ScriptableObject that defines data for weapon equipment
     /// </summary>
     [CreateAssetMenu(fileName = "Weapon", menuName = "CyberPickle/Equipment/WeaponData")]
@@ -74,8 +86,14 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Base pierce count (0 = no pierce). May be augmented by per-rarity-tier perks (e.g., Legendary 'pierces all').")]
         public int basePierceCount = 0;
 
-        [Header("Audio & VFX")]
-        [Tooltip("Prefab for projectile or attack VFX")]
+        [Header("Audio & VFX (legacy — moved to ElementVfxLibrary in M9)")]
+        [Tooltip(
+            "LEGACY — kept for back-compat with weapons authored before M9. " +
+            "Production weapons read their visual prefabs from the global " +
+            "ElementVfxLibrary (keyed by the rolled element on the loadout axis). " +
+            "This field is only consulted as a fallback when the library can't " +
+            "resolve a prefab for the current element. Leave assigned during the " +
+            "M9 transition; safe to clear once the library covers all elements.")]
         public GameObject projectilePrefab;
 
         [Tooltip("Sound effect for firing")]
@@ -84,8 +102,57 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Sound effect for hitting")]
         public AudioClip hitSound;
 
-        [Tooltip("VFX prefab for hit effect")]
+        [Tooltip("LEGACY — see projectilePrefab note. Fallback only. M9+ reads hit prefab from ElementVfxLibrary.")]
         public GameObject hitEffectPrefab;
+
+        // ─── M9: per-weapon behavior + VFX scaling ────────────────────────
+
+        [Header("Behavior & VFX Scaling (M9 — per-weapon variation layer)")]
+        [Tooltip(
+            "Maximum targeting range (world units). Used by WeaponTargeting to " +
+            "ignore enemies further than this. Per-weapon so pistols snap close " +
+            "(~12), shotguns very close (~8), sniper long (~25), grenade mid (~18).")]
+        [Min(1f)] public float baseRange = 15f;
+
+        [Tooltip(
+            "Uniform scale multiplier on the muzzle flash GameObject spawned at " +
+            "fire-time. The flash visual itself comes from ElementVfxLibrary " +
+            "(matching the weapon's currently-coupled element). Use this to make " +
+            "heavy weapons (grenade launcher) flash bigger, light weapons (pistol) " +
+            "flash subtler. 1.0 = library default.")]
+        [Min(0f)] public float muzzleFlashScale = 1f;
+
+        [Tooltip(
+            "Uniform scale multiplier on the projectile visual. Heavy weapons " +
+            "(grenade launcher) want bigger projectiles. 1.0 = library default.")]
+        [Min(0f)] public float projectileScale = 1f;
+
+        [Tooltip(
+            "Uniform scale multiplier on the hit VFX spawned on collision. " +
+            "Composed with damage-scale and crit-scale at hit time (M9 PR F). " +
+            "1.0 = library default.")]
+        [Min(0f)] public float hitVfxScale = 1f;
+
+        [Tooltip(
+            "If true, the hit VFX is ADDITIONALLY scaled by the runtime AoE " +
+            "radius (baseAreaOfEffect × PlayerStats.AreaOfEffect). Set true for " +
+            "weapons whose explosion should visibly fill the damage zone " +
+            "(grenade launcher). Leave false for point-impact weapons.")]
+        public bool hitVfxScalesWithAreaOfEffect = false;
+
+        [Tooltip(
+            "How the projectile moves through space. Straight = standard auto-aimed " +
+            "linear flight (pistol / shotgun / sniper). Parabolic = ballistic arc " +
+            "lobbed at a fixed flight time (grenade launcher). Parabolic uses the " +
+            "current music BPM via MusicConductor; flight time = flightBeats × 60 / BPM.")]
+        public ProjectileTrajectory trajectory = ProjectileTrajectory.Straight;
+
+        [Tooltip(
+            "Parabolic only — number of musical beats between launch and impact. " +
+            "Default 1 (fire on beat N, explode on beat N+1). Grenade launcher " +
+            "uses 2 (fire on beat 1, lands on beat 3 — the classic kick-kick " +
+            "tick-tock backbone of 4/4). Set higher (3, 4) for slow mortar arcs.")]
+        [Min(1)] public int flightBeats = 1;
 
         [Header("Pattern (Level → fire rate, see procedural_music_reference.md §22)")]
         [Tooltip("Active-cell count per weapon level (1..5). Index 0 = L1, index 4 = L5. Each entry is the number of cells with active=1 in the weapon's 4-bar × 32-subdivision pattern (max 128). Effective fire rate = activeCells / patternDuration, where patternDuration = barCount × beatsPerBar × 60 / BPM. Example: 4 active cells in a 4-bar pattern at 120 BPM → 4 / 8s = 0.5 shots/sec (very sparse, good for L1 of a heavy weapon).")]
@@ -107,8 +174,15 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Required power-up ID to unlock final form")]
         public string requiredPowerUpId;
 
-        [Header("Element (default — see procedural_music_reference.md §22.4)")]
-        [Tooltip("Default element this weapon enters the loadout with. Drives the weapon's pre-evolution musical mode (Fire = Phrygian Dominant, Ice = Aeolian, etc.). Locked to a new value at evolution if a power-up of a different element triggers it. ElementId.None means 'no element assigned' — used for elementally-neutral weapons or testing.")]
+        [Header("Element — TEST-ONLY (see procedural_music_reference.md §22.4)")]
+        [Tooltip(
+            "TEST-ONLY default element. Production weapons start NEUTRAL " +
+            "(ElementId.None) and only acquire an element when a power-up " +
+            "is slotted on the same loadout axis (M8 element coupling). " +
+            "This field exists for editor / preview / unit-test scenarios " +
+            "where you want a weapon to fire with a specific element without " +
+            "going through the full power-up coupling flow. Leave as None " +
+            "for any weapon shipping in a real run.")]
         public ElementId defaultElement = ElementId.None;
 
         // ─── Dual-axis: Rarity tier perks ─────────────────────────────────

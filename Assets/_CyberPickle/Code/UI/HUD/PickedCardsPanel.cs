@@ -90,13 +90,13 @@ namespace CyberPickle.UI.HUD
             }
         }
 
-        private void HandleCardApplied(UpgradeCardSO card)
+        private void HandleCardApplied(DraftedCard card)
         {
-            if (card == null || entryPrefab == null || entryParent == null) return;
+            if (!card.IsValid || entryPrefab == null || entryParent == null) return;
 
             var entry = Instantiate(entryPrefab, entryParent);
             entry.Bind(card);
-            entry.gameObject.name = $"PickedCard_{card.cardId}";
+            entry.gameObject.name = $"PickedCard_{card.source.cardId}";
 
             if (latestFirst) entry.transform.SetAsFirstSibling();
             // else: default — appended last via instantiate

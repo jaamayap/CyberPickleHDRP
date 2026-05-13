@@ -55,6 +55,9 @@ namespace CyberPickle.Gameplay.Audio
         // payload: card-id (string) — fires when the user picks a card
         CardPicked      = 32,
         CardBanished    = 33,
+        // payload: null — fired when the player skips an entire draft
+        // (no card picked). Adds +1 to LevelUpCoordinator.BankedRerolls.
+        CardSkipped     = 34,
         CardRerolled    = 34,
 
         // ─── Bosses ──────────────────────────────────────────────────────
@@ -84,5 +87,24 @@ namespace CyberPickle.Gameplay.Audio
         WeaponEvolved       = 63,
         // payload: null
         LoadoutCleared      = 64,
+
+        // payload: int axisIndex — fires when an axis's weapon element changes,
+        // typically because a power-up was slotted/removed on the same axis
+        // (M8 element-coupling). The music conductor maps element → mode for
+        // that axis's pattern playback per procedural_music_reference.md §22.4.
+        WeaponElementChanged = 65,
+
+        // ─── Power-ups (M8 — element coupling on the axis) ────────────────
+        // Per-axis slot-state changes. Mirrors the Weapon* events above so
+        // the music conductor can react symmetrically (a power-up's rarity
+        // determines its visual + audio bonus depth, level scales magnitude).
+        // payload: int axisIndex
+        PowerUpAdded         = 70,
+        // payload: int axisIndex
+        PowerUpRemoved       = 71,
+        // payload: int axisIndex
+        PowerUpLevelChanged  = 72,
+        // payload: int axisIndex
+        PowerUpRarityChanged = 73,
     }
 }
