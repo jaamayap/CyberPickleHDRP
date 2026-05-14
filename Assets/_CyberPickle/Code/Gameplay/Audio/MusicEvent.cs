@@ -59,6 +59,15 @@ namespace CyberPickle.Gameplay.Audio
         // (no card picked). Adds +1 to LevelUpCoordinator.BankedRerolls.
         CardSkipped     = 34,
         CardRerolled    = 34,
+        // payload: int levelsGained (>= 2) — fired BEFORE the individual
+        // LevelUp events when a single XP delta will cross multiple level
+        // thresholds in one Update tick. LevelUpCoordinator uses this to
+        // size the upcoming draft stack so the UI can render "k of N"
+        // progress and a "+N LEVELS GAINED" banner. Consumers should
+        // NOT use this for music stingers — use the per-level LevelUp
+        // event for stingers, this one is purely an "upcoming stack size"
+        // notification.
+        MultiLevelUp    = 35,
 
         // ─── Bosses ──────────────────────────────────────────────────────
         BossSpawn       = 40,
@@ -93,6 +102,13 @@ namespace CyberPickle.Gameplay.Audio
         // (M8 element-coupling). The music conductor maps element → mode for
         // that axis's pattern playback per procedural_music_reference.md §22.4.
         WeaponElementChanged = 65,
+
+        // payload: WeaponAimPayload (SlotIndex + HasTarget). Fired by
+        // WeaponFiring when its WeaponTargeting flips between "has target"
+        // and "no target". UI consumers (WeaponSlotBeatPulse) use this
+        // to hide anticipation visuals when the weapon has nothing to
+        // fire at, since no WeaponFire events flow during that period.
+        WeaponAimChanged = 66,
 
         // ─── Power-ups (M8 — element coupling on the axis) ────────────────
         // Per-axis slot-state changes. Mirrors the Weapon* events above so

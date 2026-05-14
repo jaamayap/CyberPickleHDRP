@@ -1,18 +1,30 @@
-// File: Assets/Code/Shop/Equipment/Data/WeaponData.cs
+// File: Assets/_CyberPickle/Code/Shop/Equipment/Data/WeaponData.cs
 //
-// Purpose: Defines the data structure for weapons in Cyber Pickle.
-// Contains weapon-specific properties like damage, fire rate, projectile
-// behavior, and special effects. Authored as a ScriptableObject so
-// designers can iterate without code changes.
+// Purpose: ScriptableObject design data for one weapon. Authored by
+// designers; consumed at runtime by WeaponFiring (damage/fire-rate/
+// muzzle-VFX), HitVfxApplier (hit-VFX scale), HUD tooltips, and the
+// equipment-hub preview.
 //
 // Created: 2025-02-25
-// Updated: 2026-05-10 — DUAL-AXIS REFACTOR
-//   - Damage scaling moved to the Rarity axis (Common→Legendary).
-//   - Fire-rate scaling moved to the LEVEL axis via authored rhythmic
-//     patterns (active-cell density × BPM, where BPM is driven by the
-//     Dexterity stat).
-//   - Removed deprecated upgrade-multiplier fields and per-level helpers
-//     (GetDamageForLevel, GetProjectileSpeedForLevel, etc.).
+// Updated:
+//   2026-05-10 — DUAL-AXIS REFACTOR
+//     - Damage scaling moved to the Rarity axis (Common→Legendary).
+//     - Fire-rate scaling moved to the LEVEL axis via authored rhythmic
+//       patterns (active-cell density × BPM, where BPM is driven globally
+//       by MusicConductor + Dexterity).
+//     - Removed deprecated upgrade-multiplier fields and per-level helpers.
+//   2026-05-11 — M9 PR G cleanup
+//     - Removed legacy fields: weaponType, baseFireRate, baseBPM,
+//       projectilePrefab, hitEffectPrefab, fireSound, hitSound.
+//     - BPM moved out of WeaponData entirely — sourced from
+//       MusicConductor.Instance.BPM (global musical tempo). Per-weapon
+//       BPM was a design violation: two weapons share a song.
+//     - ComputeBPM(dex) removed.
+//     - GetFireRateForLevel(level) — dex parameter dropped (BPM is the
+//       only downstream value, and BPM is now global).
+//     - Visual prefabs moved out (M9 ElementVfxLibrary):
+//       projectilePrefab → ProjectilePrefabSetupAuthoring buffer
+//       hitEffectPrefab + flashes → ElementVfxLibrary entries
 //
 // ─── DUAL-AXIS NOTE (READ BEFORE EDITING) ─────────────────────────────────
 //
@@ -26,17 +38,20 @@
 //   - LLM Knowledge Base/weapon_rarity_v1.md           (axis design)
 //   - LLM Knowledge Base/procedural_music_reference.md §22 (pattern math)
 //   - Assets/_CyberPickle/Code/Core/Rarity.cs          (rarity enum + scalars)
+//   - Assets/_CyberPickle/Code/Gameplay/Audio/MusicConductor.cs (BPM source)
 
 using UnityEngine;
 using System;
 using System.Collections.Generic;
 using CyberPickle.Core;
-using CyberPickle.Core.Services.Authentication.Data;
+using CyberPickle.Gameplay.Audio;
 
 namespace CyberPickle.Shop.Equipment.Data
 {
     /// <summary>
-    /// Defines possible weapon attack types
+    /// Categorical attack-type tag, used for equipment-hub UI labeling
+    /// (Projectile → "Projectile Speed" row; Beam → "Range" row; etc.).
+    /// Not consumed at gameplay runtime.
     /// </summary>
     public enum WeaponAttackType
     {
@@ -47,7 +62,7 @@ namespace CyberPickle.Shop.Equipment.Data
     }
 
     /// <summary>
-    /// How a projectile moves between muzzle and impact (M9 PR A).
+    /// How a projectile moves between muzzle and impact.
     /// </summary>
     public enum ProjectileTrajectory : byte
     {
@@ -59,103 +74,124 @@ namespace CyberPickle.Shop.Equipment.Data
     }
 
     /// <summary>
-    /// ScriptableObject that defines data for weapon equipment
+    /// How a weapon picks which enemy to aim at each re-target tick. Read by
+    /// <c>WeaponTargeting.FindBestTarget</c>. Byte-typed for stable ordering
+    /// in serialized assets — do not renumber.
+    /// </summary>
+    public enum TargetingStrategy : byte
+    {
+        /// <summary>Nearest enemy in range. Pistol / shotgun default — fastest to compute, snappiest in feel.</summary>
+        Closest = 0,
+
+        /// <summary>Lowest current HP. Useful for executing wounded enemies before they reach you.</summary>
+        Weakest = 1,
+
+        /// <summary>Highest current HP. Useful for prioritizing tanks / bosses over chaff.</summary>
+        Strongest = 2,
+
+        /// <summary>Enemy with the most OTHER enemies lined up behind them in a narrow cone (per <c>targetingConeHalfAngleDeg</c>). Sniper default — pierce shots chain naturally through the column. O(N²) — beat-throttled by WeaponTargeting.</summary>
+        MostInLine = 3,
+
+        /// <summary>Enemy with the most OTHER enemies within <c>baseAreaOfEffect</c> radius of them. Grenade default — the lob lands in a kill zone instead of singling out one target. O(N²) — beat-throttled by WeaponTargeting.</summary>
+        DensestCluster = 4,
+    }
+
+    /// <summary>
+    /// ScriptableObject that defines data for weapon equipment.
     /// </summary>
     [CreateAssetMenu(fileName = "Weapon", menuName = "CyberPickle/Equipment/WeaponData")]
     public class WeaponData : EquipmentData
     {
-        [Header("Weapon Properties")]
-        [Tooltip("The type of weapon - hand or body")]
-        public EquipmentSlotType weaponType = EquipmentSlotType.HandWeapon;
+        // ─── Core combat stats ────────────────────────────────────────────
 
-        [Tooltip("How this weapon attacks")]
+        [Header("Combat")]
+        [Tooltip("Categorical tag used for equipment-hub stat-row labels (Projectile / Beam / Area / Melee). Not consumed at gameplay runtime.")]
         public WeaponAttackType attackType = WeaponAttackType.Projectile;
 
-        [Tooltip("Base damage per attack/projectile. Final damage scales by Rarity (×1.0..×4.0) plus PlayerStats.Power and crit at hit time. See weapon_rarity_v1.md §2.")]
-        public float baseDamage = 10f;
+        [Tooltip("Base damage per shot. Final damage = baseDamage × Rarity.DamageMultiplier() × (1 + Power × 0.01) × critMul (per weapon_rarity_v1.md §2). Rarity scales damage; Level does not.")]
+        [Min(0.1f)] public float baseDamage = 10f;
 
-        [Tooltip("Fallback fire rate (shots/sec) used ONLY when activeCellsPerLevel is empty. Production weapons author the per-level pattern below; this field is a safety net for legacy / placeholder weapons.")]
-        public float baseFireRate = 2f;
+        [Tooltip("Projectile travel speed (world units/sec). Per-weapon constant. Heavier weapons (sniper) tend higher; mortar-style lobs (grenade) lower.")]
+        [Min(0.1f)] public float baseProjectileSpeed = 10f;
 
-        [Tooltip("Base projectile speed (if applicable). Currently a flat per-weapon constant; may scale with level in M9+ polish.")]
-        public float baseProjectileSpeed = 10f;
+        [Tooltip("Area-of-effect radius (world units) at L1 Common. This is the BASE — final radius = baseAreaOfEffect × aoeMultiplierPerLevel[level-1] × (1 + Area_stat × 0.01). Used by HitVfxApplier for hit-VFX size scaling (when hitVfxScalesWithAreaOfEffect is true), by area-damage queries (PR E grenade explosion), and by the grenade-launcher telegraph for the ring + disc size.")]
+        [Min(0.1f)] public float baseAreaOfEffect = 1f;
 
-        [Tooltip("Base area of effect radius (if applicable). Multiplied by PlayerStats.AreaOfEffect at runtime.")]
-        public float baseAreaOfEffect = 1f;
+        [Tooltip("Multiplier on baseAreaOfEffect per weapon level (index 0 = L1, 4 = L5). For percussion-family weapons (grenade launcher), Level is the characteristic axis: scaling AoE here is what makes leveling up feel like a power spike. Default = [1,1,1,1,1] (no level scaling) — opt in per weapon. Suggested for grenade launcher: [1.00, 1.15, 1.30, 1.45, 1.60] (L5 = 60% bigger than L1).")]
+        public float[] aoeMultiplierPerLevel = new float[] { 1f, 1f, 1f, 1f, 1f };
 
-        [Tooltip("Base pierce count (0 = no pierce). May be augmented by per-rarity-tier perks (e.g., Legendary 'pierces all').")]
-        public int basePierceCount = 0;
+        [Tooltip("Pierce count — how many enemies a projectile can pass through. 0 = stop on first hit. Sniper uses 1+ scaled by level/rarity (PR D).")]
+        [Min(0)] public int basePierceCount = 0;
 
-        [Header("Audio & VFX (legacy — moved to ElementVfxLibrary in M9)")]
-        [Tooltip(
-            "LEGACY — kept for back-compat with weapons authored before M9. " +
-            "Production weapons read their visual prefabs from the global " +
-            "ElementVfxLibrary (keyed by the rolled element on the loadout axis). " +
-            "This field is only consulted as a fallback when the library can't " +
-            "resolve a prefab for the current element. Leave assigned during the " +
-            "M9 transition; safe to clear once the library covers all elements.")]
-        public GameObject projectilePrefab;
-
-        [Tooltip("Sound effect for firing")]
-        public AudioClip fireSound;
-
-        [Tooltip("Sound effect for hitting")]
-        public AudioClip hitSound;
-
-        [Tooltip("LEGACY — see projectilePrefab note. Fallback only. M9+ reads hit prefab from ElementVfxLibrary.")]
-        public GameObject hitEffectPrefab;
-
-        // ─── M9: per-weapon behavior + VFX scaling ────────────────────────
-
-        [Header("Behavior & VFX Scaling (M9 — per-weapon variation layer)")]
-        [Tooltip(
-            "Maximum targeting range (world units). Used by WeaponTargeting to " +
-            "ignore enemies further than this. Per-weapon so pistols snap close " +
-            "(~12), shotguns very close (~8), sniper long (~25), grenade mid (~18).")]
+        [Tooltip("Maximum targeting range (world units). Used by WeaponTargeting to ignore enemies outside this radius. Pistols ~12, shotgun ~8, sniper ~25, grenade ~18.")]
         [Min(1f)] public float baseRange = 15f;
 
-        [Tooltip(
-            "Uniform scale multiplier on the muzzle flash GameObject spawned at " +
-            "fire-time. The flash visual itself comes from ElementVfxLibrary " +
-            "(matching the weapon's currently-coupled element). Use this to make " +
-            "heavy weapons (grenade launcher) flash bigger, light weapons (pistol) " +
-            "flash subtler. 1.0 = library default.")]
+        [Header("Targeting")]
+        [Tooltip("How the weapon picks which enemy to aim at each re-target tick. Closest is the default. MostInLine is the sniper's bread and butter (chains pierce through a column). DensestCluster lands grenades on tightly packed groups.")]
+        public TargetingStrategy targetingStrategy = TargetingStrategy.Closest;
+
+        [Tooltip("HALF-angle (degrees) of the 'in line' cone used by the MostInLine strategy. 8° = a ±8° wedge ≈ 16° total. Wider = easier to find lined targets but less sniper-like precision. Narrower = harder to find lineups but more dramatic when one happens. Ignored by non-MostInLine strategies.")]
+        [Range(1f, 45f)] public float targetingConeHalfAngleDeg = 8f;
+
+        // ─── VFX scaling (visuals come from ElementVfxLibrary) ────────────
+
+        [Header("VFX Scaling")]
+        [Tooltip("Scale multiplier on the muzzle flash spawned at fire time. Library default = 1.0. Heavy weapons (grenade) flash bigger, light weapons (pistol) subtler.")]
         [Min(0f)] public float muzzleFlashScale = 1f;
 
-        [Tooltip(
-            "Uniform scale multiplier on the projectile visual. Heavy weapons " +
-            "(grenade launcher) want bigger projectiles. 1.0 = library default.")]
+        [Tooltip("Scale multiplier on the projectile visual. Library default = 1.0.")]
         [Min(0f)] public float projectileScale = 1f;
 
-        [Tooltip(
-            "Uniform scale multiplier on the hit VFX spawned on collision. " +
-            "Composed with damage-scale and crit-scale at hit time (M9 PR F). " +
-            "1.0 = library default.")]
+        [Tooltip("Scale multiplier on the hit VFX spawned on collision. Composed at hit time with damage / crit / AoE multipliers (see HitVfxApplier).")]
         [Min(0f)] public float hitVfxScale = 1f;
 
-        [Tooltip(
-            "If true, the hit VFX is ADDITIONALLY scaled by the runtime AoE " +
-            "radius (baseAreaOfEffect × PlayerStats.AreaOfEffect). Set true for " +
-            "weapons whose explosion should visibly fill the damage zone " +
-            "(grenade launcher). Leave false for point-impact weapons.")]
+        [Tooltip("If true, hit VFX is ADDITIONALLY scaled by baseAreaOfEffect — the burst visually fills the damage radius. Set true for grenade launcher; leave false for point-impact weapons.")]
         public bool hitVfxScalesWithAreaOfEffect = false;
 
-        [Tooltip(
-            "How the projectile moves through space. Straight = standard auto-aimed " +
-            "linear flight (pistol / shotgun / sniper). Parabolic = ballistic arc " +
-            "lobbed at a fixed flight time (grenade launcher). Parabolic uses the " +
-            "current music BPM via MusicConductor; flight time = flightBeats × 60 / BPM.")]
+        [Tooltip("Optional style sheet for the grenade-launcher aim preview (parabolic arc + AoE ring + optional ground disc). Only used by parabolic weapons. Leave null to use the inspector default on the weapon's GrenadeTelegraph child. Create via Assets → Create → CyberPickle → VFX → Grenade Telegraph Style.")]
+        public CyberPickle.Gameplay.Weapons.GrenadeTelegraphStyleSO telegraphStyle;
+
+        // Note: trail-linger duration USED to live here as `trailLingerSeconds`.
+        // It's gone now — the fade-out duration is read directly from the
+        // projectile prefab itself (CyberPickleProjectileVisual.GetTotalFadeDuration
+        // or, for legacy non-hybrid projectiles, the longest particle's
+        // lifetime in the Companion hierarchy). A weapon can fire many
+        // element-coupled projectile variants, each with different
+        // particle timings — a single per-weapon value couldn't be right
+        // for all of them. The prefab owns its own timing.
+
+        // ─── Trajectory ───────────────────────────────────────────────────
+
+        [Header("Trajectory")]
+        [Tooltip("How the projectile moves. Straight = linear along muzzle.forward at baseProjectileSpeed (pistol / shotgun / sniper). Parabolic = ballistic arc landing at flightBeats × 60 / BPM seconds (grenade).")]
         public ProjectileTrajectory trajectory = ProjectileTrajectory.Straight;
 
         [Tooltip(
-            "Parabolic only — number of musical beats between launch and impact. " +
-            "Default 1 (fire on beat N, explode on beat N+1). Grenade launcher " +
-            "uses 2 (fire on beat 1, lands on beat 3 — the classic kick-kick " +
-            "tick-tock backbone of 4/4). Set higher (3, 4) for slow mortar arcs.")]
+            "PARABOLIC ONLY — number of musical beats from launch to impact. " +
+            "Ignored when trajectory = Straight. Default 1 (fire on beat N, " +
+            "explode on beat N+1). Grenade launcher uses 2 (kick-kick tick-" +
+            "tock on beats 1 and 3 of 4/4). Set higher (3, 4) for slow lobs.")]
         [Min(1)] public int flightBeats = 1;
 
-        [Header("Pattern (Level → fire rate, see procedural_music_reference.md §22)")]
-        [Tooltip("Active-cell count per weapon level (1..5). Index 0 = L1, index 4 = L5. Each entry is the number of cells with active=1 in the weapon's 4-bar × 32-subdivision pattern (max 128). Effective fire rate = activeCells / patternDuration, where patternDuration = barCount × beatsPerBar × 60 / BPM. Example: 4 active cells in a 4-bar pattern at 120 BPM → 4 / 8s = 0.5 shots/sec (very sparse, good for L1 of a heavy weapon).")]
+        [Tooltip(
+            "PARABOLIC ONLY — angular velocity per local axis (degrees per " +
+            "second) applied to the projectile during flight. Makes the " +
+            "grenade tumble visually. Default (180, 90, 60) is a chaotic-" +
+            "but-not-dizzying spin. Set to zero for a non-tumbling lob. " +
+            "Ignored when trajectory = Straight.")]
+        public Vector3 tumbleRateDegreesPerSecond = new Vector3(180f, 90f, 60f);
+
+        // ─── Fire-rate pattern (Level → shots/sec via active-cell density) ─
+
+        [Header("Pattern (Level → fire rate)")]
+        [Tooltip(
+            "Active-cell count per weapon level (1..5). Index 0 = L1, index 4 = L5. " +
+            "Effective fire rate = activeCells / patternDuration, where " +
+            "patternDuration = barCount × beatsPerBar × 60 / BPM, and BPM is " +
+            "read globally from MusicConductor.Instance.BPM (driven by " +
+            "Dexterity). Example: 4 active cells, 4-bar pattern, 120 BPM → " +
+            "4 / 8s = 0.5 shots/sec. Required — weapons with no pattern fire " +
+            "at 0 shots/sec.")]
         public int[] activeCellsPerLevel = new int[5] { 4, 8, 16, 32, 64 };
 
         [Tooltip("Bars per pattern. Default 4. Coprime values (5, 7) get the moiré effect described in procedural_music_reference.md §11.")]
@@ -164,17 +200,18 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Beats per bar (time signature numerator). Default 4 (4/4 time).")]
         [Min(1)] public int beatsPerBar = 4;
 
-        [Tooltip("Base BPM at Dexterity=0. Final BPM = baseBPM × (1 + Dex × 0.01), clamped to [60, 180]. Default 60 — slowest. Players raise Dex to speed up the weapon's fire rate.")]
-        [Min(30f)] public float baseBPM = 60f;
+        // ─── Evolution (M10 placeholder) ─────────────────────────────────
 
-        [Header("Final Form")]
-        [Tooltip("Final weapon form when fully upgraded with associated power-up")]
+        [Header("Evolution (M10 placeholder — inert)")]
+        [Tooltip("M10 PLACEHOLDER — the WeaponData this weapon evolves into when its L5-evolution trigger fires. Not wired yet.")]
         public WeaponData finalForm;
 
-        [Tooltip("Required power-up ID to unlock final form")]
+        [Tooltip("M10 PLACEHOLDER — power-up id that triggers evolution. Not wired yet.")]
         public string requiredPowerUpId;
 
-        [Header("Element — TEST-ONLY (see procedural_music_reference.md §22.4)")]
+        // ─── Element (test-only) ─────────────────────────────────────────
+
+        [Header("Element — TEST-ONLY")]
         [Tooltip(
             "TEST-ONLY default element. Production weapons start NEUTRAL " +
             "(ElementId.None) and only acquire an element when a power-up " +
@@ -185,22 +222,28 @@ namespace CyberPickle.Shop.Equipment.Data
             "for any weapon shipping in a real run.")]
         public ElementId defaultElement = ElementId.None;
 
-        // ─── Dual-axis: Rarity tier perks ─────────────────────────────────
-        // Per weapon_rarity_v1.md §2 each rarity tier (above Common) layers
-        // a per-weapon bonus perk on top of the global damage scalar. These
-        // are deterministic per-weapon — every Plasma Lance Legendary has
-        // the same Legendary keyword, but every WEAPON has its own.
-        //
-        // Designers fill the array left-to-right by tier:
-        //   [0] = Common     (typically empty — Common = baseline)
-        //   [1] = Uncommon   (+1 minor effect)
-        //   [2] = Rare       (+1 small effect)
-        //   [3] = Epic       (+1 unique major effect)
-        //   [4] = Legendary  (+1 build-defining keyword)
+        // ─── Rarity tier perks (dual-axis bonus per rarity) ──────────────
 
-        [Header("Rarity Tier Perks (dual-axis — see weapon_rarity_v1.md §2)")]
-        [Tooltip("Per-rarity-tier bonus perks. Index = (int)Rarity tier (0=Common..4=Legendary). Each entry adds an effect ON TOP of the global damage scalar applied via Rarity.DamageMultiplier(). Leave entries empty for tiers that don't grant a bonus perk for this weapon.")]
+        [Header("Rarity Tier Perks")]
+        [Tooltip(
+            "Per-rarity-tier bonus perks. Index = (int)Rarity (0=Common..4=Legendary). " +
+            "Each entry layers an effect ON TOP of the global damage scalar " +
+            "from Rarity.DamageMultiplier(). Leave entries empty for tiers " +
+            "that don't grant a bonus perk for this weapon.")]
         public RarityTierPerk[] rarityTierPerks = new RarityTierPerk[0];
+
+        // ─── Tunables — fallback BPM when MusicConductor isn't running ────
+
+        /// <summary>
+        /// Fallback BPM used by <see cref="GetFireRateForLevel"/> when no
+        /// <see cref="MusicConductor"/> singleton is present (editor preview,
+        /// pre-game-bootstrap, unit tests). Production play-through always
+        /// has the conductor available. 120 BPM is the neutral baseline
+        /// matching most rock / electronic 4/4 backbones.
+        /// </summary>
+        private const float FallbackBPM = 120f;
+
+        // ─── Debug helpers ────────────────────────────────────────────────
 
         [ContextMenu("Debug Weapon Data")]
         private void DebugWeaponData()
@@ -209,20 +252,13 @@ namespace CyberPickle.Shop.Equipment.Data
             Debug.Log($"ID: {equipmentId}");
             Debug.Log($"Icon assigned: {equipmentIcon != null}");
             if (equipmentIcon != null)
-            {
                 Debug.Log($"Icon name: {equipmentIcon.name}");
-                Debug.Log($"Icon instance ID: {equipmentIcon.GetInstanceID()}");
-            }
         }
 
-        /// <summary>
-        /// Validates the weapon data when it's created or modified in the editor.
-        /// </summary>
+        // ─── Editor validation ───────────────────────────────────────────
+
         protected override void OnValidate()
         {
-            // Set the slot type based on weapon type
-            slotType = weaponType;
-
             base.OnValidate();
             ValidateWeaponFields();
         }
@@ -230,19 +266,16 @@ namespace CyberPickle.Shop.Equipment.Data
         private void ValidateWeaponFields()
         {
             baseDamage = Mathf.Max(0.1f, baseDamage);
-            baseFireRate = Mathf.Max(0.1f, baseFireRate);
             baseProjectileSpeed = Mathf.Max(0.1f, baseProjectileSpeed);
             baseAreaOfEffect = Mathf.Max(0.1f, baseAreaOfEffect);
             basePierceCount = Mathf.Max(0, basePierceCount);
             barCount = Mathf.Max(1, barCount);
             beatsPerBar = Mathf.Max(1, beatsPerBar);
-            baseBPM = Mathf.Max(30f, baseBPM);
 
-            // Clamp pattern array length to a sensible range. We expect 5
-            // entries (one per level 1..5); fewer is allowed, more triggers
-            // a warning so designers know they've over-authored.
+            // Clamp pattern array entries to a sensible range. Max cell
+            // count = bars × 32 (the 32-subdiv master grid).
             if (activeCellsPerLevel == null) activeCellsPerLevel = new int[0];
-            int maxCells = barCount * 32; // 32-subdiv master grid
+            int maxCells = barCount * 32;
             for (int i = 0; i < activeCellsPerLevel.Length; i++)
                 activeCellsPerLevel[i] = Mathf.Clamp(activeCellsPerLevel[i], 0, maxCells);
         }
@@ -250,13 +283,10 @@ namespace CyberPickle.Shop.Equipment.Data
         // ─── Dual-axis API ────────────────────────────────────────────────
 
         /// <summary>
-        /// Effective damage per shot at the given Rarity. Per
-        /// <c>weapon_rarity_v1.md</c> §2 the Rarity axis drives damage
-        /// scaling — Level controls fire rate (via patterns), not damage.
-        ///
-        /// This is the canonical damage-formula building block. Combine
-        /// with player-side modifiers (Power, crit) at the call site:
-        /// <c>finalDamage = baseDamage × Rarity.DamageMultiplier() × (1 + Power*0.01) × critMul</c>.
+        /// Effective damage per shot at the given Rarity. Rarity scales
+        /// damage; Level controls fire rate (via patterns), not damage.
+        /// Combine with player-side modifiers (Power, crit) at the call
+        /// site: <c>finalDamage = baseDamage × Rarity.DamageMultiplier() × (1 + Power*0.01) × critMul</c>.
         /// </summary>
         public float GetDamageForRarity(Rarity rarity)
         {
@@ -264,32 +294,85 @@ namespace CyberPickle.Shop.Equipment.Data
         }
 
         /// <summary>
-        /// Effective fire rate (shots/sec) at the given level + Dexterity.
-        /// Computed from the pattern's active-cell count and the BPM
-        /// derived from Dexterity:
+        /// Effective AoE radius for this weapon at the given level + player
+        /// Area stat. Combines three axes:
+        ///   • baseAreaOfEffect             — per-weapon design constant
+        ///   • aoeMultiplierPerLevel[level] — per-weapon level scaling
+        ///   • (1 + areaStat × 0.01)        — player Area-of-Effect stat
+        ///                                    (decimal-percent convention,
+        ///                                     matches Power → damage).
+        ///
+        /// Level scaling is the *characteristic axis* for percussion weapons
+        /// (grenade launcher, future mortar). Projectile-family weapons keep
+        /// their default flat [1,1,1,1,1] curve and scale via fire-rate
+        /// density at level-up instead.
+        ///
+        /// Level is clamped to the array range — out-of-range levels use
+        /// the last entry, so future L6+ evolutions don't crash if the
+        /// array hasn't been extended yet.
+        /// </summary>
+        public float GetAreaOfEffectForLevel(int level, float areaStat = 0f)
+        {
+            float levelMul = 1f;
+            if (aoeMultiplierPerLevel != null && aoeMultiplierPerLevel.Length > 0)
+            {
+                int idx = Mathf.Clamp(level - 1, 0, aoeMultiplierPerLevel.Length - 1);
+                levelMul = aoeMultiplierPerLevel[idx];
+                if (levelMul < 0.01f) levelMul = 1f; // safety against bad inspector data
+            }
+            float statMul = 1f + areaStat * 0.01f;
+            return Mathf.Max(0.1f, baseAreaOfEffect * levelMul * statMul);
+        }
+
+        /// <summary>
+        /// Pierce count at the given (level, rarity) — number of ADDITIONAL
+        /// enemies the projectile can punch through after the first hit.
+        /// Formula: <c>basePierceCount + (level - 1) + (int)rarity</c>.
+        ///
+        /// Examples for a sniper with <c>basePierceCount = 1</c>:
+        ///   L1 Common    → 1 + 0 + 0 = 1   (hits 2 enemies total)
+        ///   L3 Rare      → 1 + 2 + 2 = 5   (hits 6 enemies total)
+        ///   L5 Legendary → 1 + 4 + 4 = 9   (hits 10 enemies total — chain mode)
+        ///
+        /// Returns 0 for any weapon with <c>basePierceCount = 0</c> when not
+        /// scaling — set <c>basePierceCount</c> to 0 to keep a weapon at
+        /// single-target regardless of level / rarity (pistol, shotgun).
+        /// Set to 1+ to unlock the pierce progression (sniper).
+        /// </summary>
+        public int GetPierceCountForLevelAndRarity(int level, Rarity rarity)
+        {
+            if (basePierceCount <= 0) return 0; // pierce disabled for this weapon
+            int levelBonus = Mathf.Max(0, level - 1);
+            int rarityBonus = (int)rarity; // Common=0..Legendary=4
+            return basePierceCount + levelBonus + rarityBonus;
+        }
+
+        /// <summary>
+        /// Effective fire rate (shots/sec) at the given level. Reads the
+        /// global BPM from <see cref="MusicConductor"/> — there's no
+        /// per-weapon BPM anymore (BPM is a song-level property; all
+        /// weapons in a run share it, driven by Dexterity → conductor).
+        ///
         /// <code>
-        ///   bpm = clamp(baseBPM × (1 + dexterity × 0.01), 60, 180)
+        ///   bpm = MusicConductor.Instance.BPM  (or 120 fallback)
         ///   patternDuration = barCount × beatsPerBar × (60 / bpm)
-        ///   fireRate = activeCells / patternDuration
+        ///   fireRate = activeCellsPerLevel[level - 1] / patternDuration
         /// </code>
         ///
-        /// Falls back to <see cref="baseFireRate"/> × Dex scaling when
-        /// <see cref="activeCellsPerLevel"/> isn't authored — that lets
-        /// legacy weapons keep working until they migrate to patterns.
+        /// Returns 0 if no pattern is authored — that signals the weapon
+        /// isn't fully configured and shouldn't fire. WeaponFiring logs a
+        /// warning in that case.
         /// </summary>
-        public float GetFireRateForLevel(int level, float dexterity = 0f)
+        public float GetFireRateForLevel(int level)
         {
             if (activeCellsPerLevel == null || activeCellsPerLevel.Length == 0)
-            {
-                // Legacy fallback — flat baseFireRate scaled additively by Dex.
-                return baseFireRate * (1f + dexterity * 0.01f);
-            }
+                return 0f;
 
             int idx = Mathf.Clamp(level - 1, 0, activeCellsPerLevel.Length - 1);
             int activeCells = activeCellsPerLevel[idx];
             if (activeCells <= 0) return 0f;
 
-            float bpm = ComputeBPM(dexterity);
+            float bpm = CurrentBPM();
             float patternDuration = barCount * beatsPerBar * (60f / bpm);
             if (patternDuration <= 0f) return 0f;
 
@@ -297,20 +380,129 @@ namespace CyberPickle.Shop.Equipment.Data
         }
 
         /// <summary>
-        /// Compute the active BPM for this weapon given the player's Dexterity.
-        /// Linear scaling: each Dex point adds 1% to the BPM, clamped to
-        /// the 60..180 range locked in CLAUDE.md ("Dexterity → tempo").
+        /// Read the current global BPM. Prefer <see cref="MusicConductor.Instance.BPM"/>;
+        /// fall back to <see cref="FallbackBPM"/> when no conductor exists
+        /// (editor preview, pre-bootstrap, unit tests).
         /// </summary>
-        public float ComputeBPM(float dexterity)
+        public static float CurrentBPM()
         {
-            return Mathf.Clamp(baseBPM * (1f + dexterity * 0.01f), 60f, 180f);
+            var conductor = MusicConductor.Instance;
+            return conductor != null ? conductor.BPM : FallbackBPM;
+        }
+
+        // ─── Parabolic launch math (shared by WeaponFiring + WeaponTargeting) ─
+
+        /// <summary>Gravity magnitude (m/s²) used by all parabolic launch math. World-standard 9.81. Centralised here so the projectile + the weapon's aim use the same value.</summary>
+        public const float ParabolicGravityMagnitude = 9.81f;
+
+        /// <summary>
+        /// Solves for the launch velocity (v0) such that a ballistic
+        /// projectile fired from <paramref name="start"/> will arrive at
+        /// <paramref name="target"/> after <paramref name="flightTimeSec"/>
+        /// seconds under standard gravity.
+        ///
+        /// Math: <c>x(t) = P0 + v0·t + 0.5·g·t²</c>; solving for v0 at
+        /// <c>x(T) = P1</c>:  <c>v0 = (P1 - P0)/T - 0.5·g·T</c>.
+        ///
+        /// Shared by WeaponFiring (uses v0 as the projectile's initial
+        /// velocity) and WeaponTargeting (uses v0 as the AIM DIRECTION
+        /// for the weapon's transform.LookRotation, so the gun visually
+        /// points along the lob).
+        /// </summary>
+        public static Vector3 ComputeParabolicLaunchVelocity(Vector3 start, Vector3 target, float flightTimeSec)
+        {
+            if (flightTimeSec <= 0.0001f) flightTimeSec = 0.0001f;
+            Vector3 g = new Vector3(0f, -ParabolicGravityMagnitude, 0f);
+            Vector3 delta = target - start;
+            return delta / flightTimeSec - 0.5f * g * flightTimeSec;
+        }
+
+        /// <summary>
+        /// Flight time in seconds for the parabolic projectile, given the
+        /// current global BPM. = <c>flightBeats × 60 / BPM</c>. Naturally
+        /// scales with Dexterity (which drives BPM via MusicConductor) —
+        /// faster Dex → tighter rhythm → shorter flight per beat.
+        /// </summary>
+        public float GetParabolicFlightTimeSeconds()
+        {
+            float bpm = CurrentBPM();
+            int beats = Mathf.Max(1, flightBeats);
+            return beats * (60f / bpm);
+        }
+
+        // ─── Grid-locked firing (phase-locked to MusicConductor) ─────────
+
+        /// <summary>
+        /// Total subdivisions in one pattern cycle at the conductor's grid
+        /// resolution. = <c>barCount × beatsPerBar × subdivisionsPerBeat</c>.
+        ///
+        /// Example: 1 bar × 4 beats × 4 subdivs/beat = 16 subdivisions
+        /// (the conductor's default 16th-note grid). 4-bar pattern at the
+        /// same grid = 64. WeaponFiring uses this together with
+        /// <see cref="GetFireCellsForLevel"/> to phase-lock every shot to
+        /// the master beat clock, eliminating float-cooldown drift between
+        /// weapons.
+        /// </summary>
+        public int GetTotalSubdivisions(int subdivisionsPerBeat)
+        {
+            return barCount * beatsPerBar * Mathf.Max(1, subdivisionsPerBeat);
+        }
+
+        /// <summary>
+        /// Returns the subdivision indices at which this weapon fires
+        /// within one pattern cycle, in the range [0, totalSubdivs - 1].
+        /// Cells are evenly distributed across the pattern via integer
+        /// Bresenham-style spacing: <c>cell[i] = i × totalSubdivs / activeCells</c>.
+        ///
+        /// Properties of this distribution:
+        ///   • Always includes subdiv 0 (first cell of pattern).
+        ///   • Sorted ascending (cells[i+1] >= cells[i]).
+        ///   • For activeCells that divides totalSubdivs evenly (e.g., 8 in
+        ///     16), gives clean integer intervals (every 2 subdivs). For
+        ///     non-clean cases (e.g., 5 in 16), distributes as evenly as
+        ///     integer math allows: {0, 3, 6, 9, 12}.
+        ///   • Two weapons sampling the same grid coincide at every
+        ///     common multiple of their intervals → mathematically cannot
+        ///     drift apart.
+        ///
+        /// When real composer-authored patterns land (procedural_music_
+        /// reference §22 — explicit cell array per level/element), this
+        /// method's body becomes a lookup into that authored array. The
+        /// API stays the same so WeaponFiring doesn't need to change.
+        ///
+        /// Returns empty array when no pattern is authored, totalSubdivs is
+        /// invalid, or activeCells == 0.
+        /// </summary>
+        public int[] GetFireCellsForLevel(int level, int totalSubdivs)
+        {
+            if (activeCellsPerLevel == null || activeCellsPerLevel.Length == 0)
+                return System.Array.Empty<int>();
+            if (totalSubdivs <= 0)
+                return System.Array.Empty<int>();
+
+            int idx = Mathf.Clamp(level - 1, 0, activeCellsPerLevel.Length - 1);
+            int activeCells = activeCellsPerLevel[idx];
+            if (activeCells <= 0)
+                return System.Array.Empty<int>();
+
+            // Saturate: a pattern can't have more fire-cells than grid
+            // subdivisions. Every subdiv fires.
+            if (activeCells >= totalSubdivs)
+            {
+                var all = new int[totalSubdivs];
+                for (int i = 0; i < totalSubdivs; i++) all[i] = i;
+                return all;
+            }
+
+            var cells = new int[activeCells];
+            for (int i = 0; i < activeCells; i++)
+                cells[i] = i * totalSubdivs / activeCells;
+            return cells;
         }
 
         /// <summary>
         /// Returns the bonus perk (if any) defined for the given rarity tier.
-        /// Returns null when no perk is configured for that tier — a valid
-        /// design choice (Common typically has no perk; rare weapons may
-        /// only define Legendary).
+        /// Returns null when no perk is configured for that tier.
         /// </summary>
         public RarityTierPerk GetPerkForRarity(Rarity rarity)
         {
@@ -324,19 +516,15 @@ namespace CyberPickle.Shop.Equipment.Data
         /// <summary>
         /// Returns stat descriptors for the equipment-hub preview at the
         /// given upgrade level. Damage shown at Common rarity (the floor);
-        /// fire rate shown at Dexterity=0. The actual in-run values are
-        /// computed by <see cref="GetDamageForRarity"/> and
-        /// <see cref="GetFireRateForLevel"/> with live PlayerStats.
+        /// fire rate shown at the current global BPM (whatever Dex drives).
         /// </summary>
         public override StatDescriptor[] GetStatsForLevel(int upgradeLevel)
         {
             upgradeLevel = Mathf.Clamp(upgradeLevel, 1, maxUpgradeLevel);
             var stats = new List<StatDescriptor>(6);
 
-            // Damage at Common rarity = baseDamage (rarity multiplier ×1.0).
             stats.Add(new StatDescriptor("Damage (Common)", baseDamage));
-            // Fire rate at Dex=0 (baseline).
-            stats.Add(new StatDescriptor("Fire Rate (Dex=0)", GetFireRateForLevel(upgradeLevel, 0f)));
+            stats.Add(new StatDescriptor("Fire Rate", GetFireRateForLevel(upgradeLevel)));
 
             switch (attackType)
             {
@@ -353,50 +541,28 @@ namespace CyberPickle.Shop.Equipment.Data
 
             return stats.ToArray();
         }
-
-#if UNITY_EDITOR
-        public override bool ValidateReferences()
-        {
-            bool valid = base.ValidateReferences();
-
-            if (projectilePrefab == null && attackType == WeaponAttackType.Projectile)
-            {
-                Debug.LogError($"[WeaponData] Projectile prefab is missing for {displayName}");
-                valid = false;
-            }
-
-            if (fireSound == null)
-            {
-                Debug.LogWarning($"[WeaponData] Fire sound is missing for {displayName}");
-            }
-
-            return valid;
-        }
-#endif
     }
 
     /// <summary>
     /// One per-rarity-tier bonus perk for a weapon. Drives the
-    /// "+1 minor effect" / "+1 keyword" tooltip line on hover and the
-    /// runtime application of the perk's effect (when wired in M9 — until
-    /// then it's data-only and surfaces in the tooltip).
+    /// "+1 minor effect" / "+1 keyword" tooltip line and the runtime
+    /// application of the perk's effect (when wired in a later milestone —
+    /// until then it's data-only and surfaces in the tooltip).
     ///
-    /// Why a class (not a struct): Unity serializes class arrays inside
-    /// ScriptableObjects more reliably than struct arrays for nullable-style
-    /// access (we want "this tier has no perk" to mean a null/empty entry,
-    /// not a default-initialised struct that looks valid).
+    /// Class (not struct) so "this tier has no perk" reads as null/empty
+    /// rather than a default-initialised struct.
     /// </summary>
     [Serializable]
     public class RarityTierPerk
     {
-        [Tooltip("Short label shown on the weapon tooltip (e.g., 'Pierces enemies', 'Crit triple', 'Plasma Lance: full line pierce'). Keep under ~40 chars.")]
+        [Tooltip("Short label shown on the weapon tooltip (e.g., 'Pierces enemies', 'Crit triple'). Keep under ~40 chars.")]
         public string title;
 
-        [Tooltip("Optional longer description shown in expanded tooltip / equipment hub view. Optional.")]
+        [Tooltip("Optional longer description shown in expanded tooltip / equipment hub view.")]
         [TextArea(2, 4)]
         public string description;
 
-        [Tooltip("Stable id for the perk's gameplay effect, used by runtime systems to apply the actual mechanic (e.g., 'pierce_all_in_line', 'crit_triple_first_hit'). Looked up by the rarity-perk effect dispatcher when implemented in M9. Leave empty for pure-flavor perks that only show in tooltips.")]
+        [Tooltip("Stable id for the perk's gameplay effect, used by the rarity-perk effect dispatcher when wired. Leave empty for pure-flavor perks that only show in tooltips.")]
         public string effectId;
     }
 }

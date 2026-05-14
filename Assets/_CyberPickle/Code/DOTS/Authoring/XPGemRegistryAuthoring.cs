@@ -2,78 +2,90 @@
 // Namespace: CyberPickle.DOTS.Authoring
 //
 // Multi-tier XP gem prefab registry. Place this on a GameObject in
-// EnemisSubScene (alongside EnemyPrefabRegistryAuthoring) and assign
-// the 5 tier configurations. The Baker registers each gemPrefab as a
-// baked Prefab-tagged entity and adds an XPGemPrefabBufferElement entry
-// to the registry singleton.
+// EnemisSubScene (alongside EnemyPrefabRegistryAuthoring) and assign a
+// single XPGemTierTableSO. That SO is the entire configuration — XP
+// values, colors, display names, AND per-tier prefab refs all live there.
 //
-// EnemyDeathSystem uses this buffer to look up which prefab to
-// Instantiate when a kill rolls a particular tier.
+// The Baker iterates the SO's tier entries, registers each prefab as a
+// baked Prefab-tagged entity, and writes the XPGemPrefabBufferElement
+// buffer on this singleton. EnemyDeathSystem reads that buffer at runtime
+// to look up which prefab to Instantiate when a kill rolls a particular
+// tier.
 //
-// Tier order matters: index 0 = Data Fragment (trash green), index 4 =
-// Sentinel Core (orange jackpot). Death roll cascade walks 4 -> 0.
+// Why we can put prefab refs on an SO (and why this Baker is the only
+// place that has to care): Bakers can resolve GameObject references no
+// matter how they reach them — direct field, SO field, doesn't matter.
+// `GetEntity(prefab)` takes any UnityEngine.GameObject. The only thing we
+// must remember is DependsOn(prefab) for each prefab in the SO; that
+// makes the SubScene re-bake when a prefab is edited (DependsOn(so) only
+// catches changes to the SO itself, not to assets it references).
+//
+// 2026-05-12: refactored — prefabs moved from this authoring's inline
+// array onto XPGemTierTableSO. The authoring is now a thin SO ref.
+// Variant tables (BossStage, Halloween, etc.) can swap entire visual sets
+// + values with a single drag.
 
-using System.Collections.Generic;
 using Unity.Entities;
 using UnityEngine;
 using CyberPickle.DOTS.Components;
+using CyberPickle.Gameplay.Progression;
 
 namespace CyberPickle.DOTS.Authoring
 {
     public class XPGemRegistryAuthoring : MonoBehaviour
     {
-        [Tooltip("5 entries — one per tier (index 0..4). Tier 0 is the trash-drop fallback (always something); Tier 4 is the rare jackpot. Each entry pairs a prefab with its XP value.")]
-        public TierConfig[] tiers = new TierConfig[5];
-
-        [System.Serializable]
-        public class TierConfig
-        {
-            [Tooltip("Designer label, shown in the Inspector. No runtime effect.")]
-            public string displayName = "Tier";
-
-            [Tooltip("Visible color for this tier — used by editor previews and as a quick reference for the prefab's emissive color. Doesn't directly tint the runtime material; that's set on the prefab itself.")]
-            public Color tierColor = Color.white;
-
-            [Tooltip("XP awarded when a gem of this tier is collected.")]
-            [Min(1)] public int xpValue = 1;
-
-            [Tooltip("Entity authoring prefab — small mesh + emissive material baked into entities-graphics rendering. No GameObject visual / SkinnedMeshRenderer / Animator needed; gems are pure ECS entities for performance.")]
-            public GameObject gemPrefab;
-        }
+        [Tooltip("The tier table SO — single source of truth for XP values, colors, display names, AND per-tier prefab references. REQUIRED. Create via Assets → Create → CyberPickle → XP → Tier Table.")]
+        public XPGemTierTableSO tierTable;
 
         public class Baker : Baker<XPGemRegistryAuthoring>
         {
             public override void Bake(XPGemRegistryAuthoring authoring)
             {
-                if (authoring.tiers == null || authoring.tiers.Length == 0)
+                if (authoring.tierTable == null)
                 {
-                    Debug.LogWarning($"[XPGemRegistryAuthoring] '{authoring.name}' has no tier entries — XP gems will not spawn.", authoring);
+                    Debug.LogError($"[XPGemRegistryAuthoring] '{authoring.name}' has no XPGemTierTableSO assigned — XP gems will not spawn. Assign a tier table SO and try again.", authoring);
+                    return;
+                }
+
+                // Re-bake when the SO itself changes (xpValue edits, color, etc.).
+                // Prefab-content changes are covered by DependsOn(prefab) below.
+                DependsOn(authoring.tierTable);
+
+                var tiers = authoring.tierTable.tiers;
+                if (tiers == null || tiers.Length == 0)
+                {
+                    Debug.LogWarning($"[XPGemRegistryAuthoring] '{authoring.name}': tier table has no entries — XP gems will not spawn.", authoring);
                     return;
                 }
 
                 Entity self = GetEntity(TransformUsageFlags.None);
                 var buffer = AddBuffer<XPGemPrefabBufferElement>(self);
 
-                for (int tier = 0; tier < authoring.tiers.Length; tier++)
+                for (int tier = 0; tier < tiers.Length; tier++)
                 {
-                    var entry = authoring.tiers[tier];
+                    var entry = tiers[tier];
                     if (entry == null)
                     {
-                        Debug.LogWarning($"[XPGemRegistryAuthoring] '{authoring.name}': tier {tier} entry is null.", authoring);
+                        Debug.LogWarning($"[XPGemRegistryAuthoring] '{authoring.name}': tier {tier} entry is null in the SO — skipped.", authoring);
                         continue;
                     }
                     if (entry.gemPrefab == null)
                     {
-                        Debug.LogWarning($"[XPGemRegistryAuthoring] '{authoring.name}': tier {tier} '{entry.displayName}' has no gemPrefab — skipped.", authoring);
+                        Debug.LogWarning($"[XPGemRegistryAuthoring] '{authoring.name}': tier {tier} '{entry.displayName}' has no gemPrefab — skipped. Drops rolling this tier will silently produce nothing.", authoring);
                         continue;
                     }
+
+                    // Re-bake this SubScene when this specific prefab is edited.
+                    // Critical: without this, designers editing T3's gem mesh
+                    // wouldn't see the change in entities until a manual bake.
+                    DependsOn(entry.gemPrefab);
 
                     Entity prefabEntity = GetEntity(entry.gemPrefab, TransformUsageFlags.Dynamic);
                     buffer.Add(new XPGemPrefabBufferElement
                     {
-                        Tier     = tier,
-                        Prefab   = prefabEntity,
-                        XPValue  = entry.xpValue,
+                        Tier    = tier,
+                        Prefab  = prefabEntity,
+                        XPValue = entry.xpValue,
                     });
                 }
             }

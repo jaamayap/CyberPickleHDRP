@@ -12,34 +12,45 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a4fe5b1b6ff0064c87660a7bdd7eac6, type: 3}
   m_Name: Weapon3
   m_EditorClassIdentifier: 
-  equipmentId: handweapon_shotgun
-  displayName: Shotgun
-  description: This is a placeholder shotgungun
+  equipmentId: handweapon_Sniper
+  displayName: Sniper Rifle
+  description: This is a placeholder Snipy
   slotType: 0
-  equipmentIcon: {fileID: 21300000, guid: 7def965e7d9a51d419db2530f8d66712, type: 3}
-  equipmentPrefab: {fileID: 0}
+  equipmentIcon: {fileID: 21300000, guid: 0dd733794e7c41c46b04b9ef5506ec89, type: 3}
+  equipmentPrefab: {fileID: 6268670166362507787, guid: 8793359de1df7e947b1096c697f742a7,
+    type: 3}
   neuralCreditCost: 0
   cyberCoinCost: 0
-  unlockedByDefault: 0
+  unlockedByDefault: 1
   requiredPlayerLevel: 1
   requiredAchievements: []
   maxUpgradeLevel: 5
-  weaponType: 0
   attackType: 0
-  baseDamage: 10
-  baseFireRate: 2
-  baseProjectileSpeed: 10
-  baseAreaOfEffect: 1
-  basePierceCount: 0
-  canCriticalHit: 0
-  baseCriticalChance: 0.05
-  criticalDamageMultiplier: 2
-  projectilePrefab: {fileID: 0}
-  fireSound: {fileID: 0}
-  hitSound: {fileID: 0}
-  hitEffectPrefab: {fileID: 0}
-  damageUpgradeMultiplier: 1.2
-  fireRateUpgradeMultiplier: 1.1
-  otherStatsUpgradeMultiplier: 1.15
+  baseDamage: 20
+  baseProjectileSpeed: 15
+  baseAreaOfEffect: 0.1
+  aoeMultiplierPerLevel:
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  basePierceCount: 1
+  baseRange: 20
+  targetingStrategy: 3
+  targetingConeHalfAngleDeg: 8
+  muzzleFlashScale: 1
+  projectileScale: 1
+  hitVfxScale: 0.2
+  hitVfxScalesWithAreaOfEffect: 0
+  telegraphStyle: {fileID: 0}
+  trajectory: 0
+  flightBeats: 1
+  tumbleRateDegreesPerSecond: {x: 180, y: 90, z: 60}
+  activeCellsPerLevel: 0100000002000000040000000800000010000000
+  barCount: 4
+  beatsPerBar: 4
   finalForm: {fileID: 11400000, guid: 940d128a642062044b226dcb4b6d7b0c, type: 2}
   requiredPowerUpId: powerup_3
+  defaultElement: 0
+  rarityTierPerks: []

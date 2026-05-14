@@ -6,13 +6,17 @@
 // magnet/collection system:
 //
 //   XPGemTag       — marker the systems query on
-//   XPGemValue     — XP awarded on collection (default 1; the registry
-//                    overwrites it per-tier when spawning, so any value
-//                    here just acts as a fallback)
+//   XPGemValue     — XP awarded on collection (sentinel value 1; the
+//                    registry overwrites it with the tier table's value
+//                    at spawn time, so the inline value is effectively
+//                    unused in normal gameplay)
 //   XPGemVelocity  — runtime motion vector (zeroed)
 //
-// The prefab's own MeshRenderer / MeshFilter / material are baked by the
-// standard entities-graphics path — no explicit authoring needed for them.
+// 2026-05-12: removed `defaultXPValue` Inspector field. The XPGemTierTableSO
+// (referenced by XPGemRegistryAuthoring) is now the only source of truth
+// for tier XP values. The bake here writes a sentinel of 1 so a gem dragged
+// into a scene for solo testing isn't worth 0; in the normal kill→drop
+// flow the registry stamps the real value over this on instantiation.
 
 using Unity.Entities;
 using Unity.Mathematics;
@@ -23,8 +27,11 @@ namespace CyberPickle.DOTS.Authoring
 {
     public class XPGemAuthoring : MonoBehaviour
     {
-        [Tooltip("Default XP value if the spawner doesn't override it. The registry stamps the tier's actual value at spawn time, so this is just a sane fallback for solo prefab testing.")]
-        [Min(1)] public int defaultXPValue = 1;
+        // Sentinel value. Overwritten at runtime by EnemyDeathSystem.SpawnGem
+        // using the tier value from XPGemTierTableSO. Don't add a designer
+        // field here — keeping data on the SO is the whole point of the
+        // refactor.
+        private const int SentinelXPValue = 1;
 
         public class Baker : Baker<XPGemAuthoring>
         {
@@ -33,7 +40,7 @@ namespace CyberPickle.DOTS.Authoring
                 Entity entity = GetEntity(TransformUsageFlags.Dynamic);
 
                 AddComponent<XPGemTag>(entity);
-                AddComponent(entity, new XPGemValue { Value = authoring.defaultXPValue });
+                AddComponent(entity, new XPGemValue { Value = SentinelXPValue });
                 AddComponent(entity, new XPGemVelocity { Value = float3.zero });
             }
         }

@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccb12d7f8fc104445819019a2e387768, type: 3}
+  m_Name: XPGemTierTable
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Progression.XPGemTierTableSO
+  tiers:
+  - displayName: 'Data Fragment '
+    tierColor: {r: 0, g: 1, b: 0, a: 1}
+    xpValue: 1
+    gemPrefab: {fileID: 3261133153455466549, guid: 7b8ac453d80c91744b4511997f1cc6ff,
+      type: 3}
+  - displayName: Code Crystal
+    tierColor: {r: 0, g: 1, b: 1, a: 1}
+    xpValue: 10
+    gemPrefab: {fileID: 4413795126497647924, guid: 25320c9b0189eaf4283626c8c5d9eb9f,
+      type: 3}
+  - displayName: 'Neural Shard '
+    tierColor: {r: 0, g: 0, b: 1, a: 1}
+    xpValue: 100
+    gemPrefab: {fileID: 4100328146784160852, guid: 56518892750bfc945ac2cdcc0444b936,
+      type: 3}
+  - displayName: Synth Spark
+    tierColor: {r: 1, g: 0, b: 1, a: 1}
+    xpValue: 1000
+    gemPrefab: {fileID: 1728639668279817213, guid: b2474a5810139424ebda9732b07616ac,
+      type: 3}
+  - displayName: Sentinel Core
+    tierColor: {r: 1, g: 0.5019608, b: 0, a: 1}
+    xpValue: 10000
+    gemPrefab: {fileID: 8207263384490327573, guid: 90b0fe2099e8c364db1ea059d6f58fb3,
+      type: 3}
+  - displayName: Sentinel Prime
+    tierColor: {r: 1, g: 1, b: 0, a: 1}
+    xpValue: 100000
+    gemPrefab: {fileID: 8207263384490327573, guid: e54b6e540ad5e434fbc9a2bef8233e22,
+      type: 3}

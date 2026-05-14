@@ -3577,6 +3577,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7d7df9c85f1b79e49aa66a53158e42f8, type: 2}
   - {fileID: 11400000, guid: 5868cd0a3c54dd24d95ddbd595b4d7a8, type: 2}
   - {fileID: 11400000, guid: 940d128a642062044b226dcb4b6d7b0c, type: 2}
+  - {fileID: 11400000, guid: 88b600775eab9e8469d0a6c91b7a280b, type: 2}
   availablePowerUps:
   - {fileID: 11400000, guid: 170f2367677308f4596b207e09ecf949, type: 2}
   - {fileID: 11400000, guid: de28818bf90e34844a8b01452e4660fd, type: 2}

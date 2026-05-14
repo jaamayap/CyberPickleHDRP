@@ -94,11 +94,7 @@ namespace CyberPickle.Gameplay.Enemies
         [Min(0)]
         public int neuralCreditsOnDeath = 1;
 
-        [Tooltip("[LEGACY — replaced by xpDropTable] Flat XP awarded on death. Kept for back-compat; new enemies should use the tier-based xpDropTable instead.")]
-        [Min(0)]
-        public int xpOnDeath = 1;
-
-        [Tooltip("Tiered XP drop probabilities — cascade roll picks one tier per kill. Bosses spawn a multi-drop burst on top.")]
+        [Tooltip("Tiered XP drop probabilities — cascade roll picks one tier per kill. Bosses spawn a multi-drop burst on top. XP values per tier come from XPGemTierTableSO (single source of truth); this field only carries per-enemy probabilities.")]
         public XPDropTable xpDropTable = XPDropTable.DefaultTrash;
 
         [Tooltip("Chance (0–100%) that a rare item drop fires on death. 0 = never. (M7+)")]
@@ -338,30 +334,38 @@ namespace CyberPickle.Gameplay.Enemies
     ///
     /// Bosses ignore the cascade and spawn `BossMultiDropCount` Tier 4 gems
     /// in a circle around the body for spectacle.
+    ///
+    /// XP VALUES per tier are NOT defined here — they live on the
+    /// XPGemTierTableSO, the single source of truth. This struct only
+    /// carries per-enemy probabilities of dropping each tier.
     /// </summary>
     [Serializable]
     public struct XPDropTable
     {
-        [Tooltip("Chance (0–1) of dropping Tier 1 (Code Crystal, 3 XP).")]
+        [Tooltip("Chance (0–1) of dropping Tier 1 (Code Crystal).")]
         [Range(0f, 1f)] public float tier1Chance;
 
-        [Tooltip("Chance (0–1) of dropping Tier 2 (Neural Shard, 10 XP).")]
+        [Tooltip("Chance (0–1) of dropping Tier 2 (Neural Shard).")]
         [Range(0f, 1f)] public float tier2Chance;
 
-        [Tooltip("Chance (0–1) of dropping Tier 3 (Synth Spark, 30 XP).")]
+        [Tooltip("Chance (0–1) of dropping Tier 3 (Synth Spark).")]
         [Range(0f, 1f)] public float tier3Chance;
 
-        [Tooltip("Chance (0–1) of dropping Tier 4 (Sentinel Core, 100 XP).")]
+        [Tooltip("Chance (0–1) of dropping Tier 4 (Sentinel Core).")]
         [Range(0f, 1f)] public float tier4Chance;
+
+        [Tooltip("Chance (0–1) of dropping Tier 5 (Sentinel Prime — jackpot). Keep extremely small (0.0001..0.005). This is the build-defining drop that triggers multi-level-up cascades.")]
+        [Range(0f, 1f)] public float tier5Chance;
 
         [Tooltip("Bosses spawn this many Tier 4 gems in a burst around their body, on top of the normal cascade. 0 = no burst (non-boss enemies).")]
         [Min(0)] public int bossMultiDropCount;
 
         // ─── Convenient defaults for designers to start from ───
 
-        /// <summary>Trash-mob baseline: 0 / 0 / 2% / 10% / 88%.</summary>
+        /// <summary>Trash-mob baseline: 0 / 0 / 0.5% / 2% / 10% / 87.5%.</summary>
         public static XPDropTable DefaultTrash => new XPDropTable
         {
+            tier5Chance = 0f,
             tier4Chance = 0f,
             tier3Chance = 0.005f,
             tier2Chance = 0.02f,
@@ -372,6 +376,7 @@ namespace CyberPickle.Gameplay.Enemies
         /// <summary>Mid-tier humanoid (skeleton / mutant): more upward bias.</summary>
         public static XPDropTable DefaultMidTier => new XPDropTable
         {
+            tier5Chance = 0f,
             tier4Chance = 0f,
             tier3Chance = 0.03f,
             tier2Chance = 0.08f,
@@ -379,9 +384,10 @@ namespace CyberPickle.Gameplay.Enemies
             bossMultiDropCount = 0,
         };
 
-        /// <summary>Big mutant / elite: occasional T4, lots of T2-T3.</summary>
+        /// <summary>Big mutant / elite: occasional T4, lots of T2-T3, vanishingly rare T5.</summary>
         public static XPDropTable DefaultElite => new XPDropTable
         {
+            tier5Chance = 0.001f,
             tier4Chance = 0.03f,
             tier3Chance = 0.10f,
             tier2Chance = 0.25f,
@@ -392,6 +398,7 @@ namespace CyberPickle.Gameplay.Enemies
         /// <summary>Boss: 100% T4 + multi-drop burst.</summary>
         public static XPDropTable DefaultBoss => new XPDropTable
         {
+            tier5Chance = 0f,
             tier4Chance = 1f,
             tier3Chance = 0f,
             tier2Chance = 0f,

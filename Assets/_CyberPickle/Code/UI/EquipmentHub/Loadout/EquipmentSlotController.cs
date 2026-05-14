@@ -281,14 +281,40 @@ namespace CyberPickle.UI.EquipmentHub
                 sourceEquipmentSlot.SetEquipment(previousEquipment);
             }
 
-            // Persist the change via the EquipmentManager
-            if (EquipmentManager.Instance != null)
+            // Persist the change via the EquipmentManager. CRITICAL: without
+            // these calls, the drag-drop only updates the UI visuals — the
+            // ProfileData.CharacterProgressionData still holds the OLD
+            // equipped IDs, so PlayerLoadoutLoader reads stale data at game
+            // start and spawns the wrong weapon. (Was a // TODO stub from
+            // an earlier milestone; landed as the M9 follow-up fix.)
+            //
+            // For inventory → equipment moves:
+            //   1. Unequip the previously-equipped item (if any) so the slot
+            //      has room in CharacterProgressionData's list.
+            //   2. Equip the newly-dropped item.
+            //
+            // For equipment → equipment swaps:
+            //   Both items remain equipped (just visually swapped slots).
+            //   No persist needed — the underlying List<string> doesn't
+            //   model "slot 1 vs slot 2" positions; both IDs are already
+            //   in the list. The swap is purely cosmetic until the data
+            //   model evolves to encode per-slot ordering.
+            if (EquipmentManager.Instance != null
+                && draggable.GetDragSourceType() == DragSourceType.Inventory)
             {
-                // This logic will need to be fully implemented to save the changes
-                // EquipmentManager.Instance.EquipItem(...);
+                if (previousEquipment != null)
+                {
+                    bool unequipped = EquipmentManager.Instance.UnequipItem(previousEquipment.equipmentId);
+                    if (!unequipped)
+                        Debug.LogWarning($"[EquipmentSlotController] Persist failed: UnequipItem('{previousEquipment.equipmentId}') returned false. The displaced item may stay equipped in saved data.");
+                }
+
+                bool equipped = EquipmentManager.Instance.EquipItem(draggedEquipment.equipmentId);
+                if (!equipped)
+                    Debug.LogError($"[EquipmentSlotController] Persist failed: EquipItem('{draggedEquipment.equipmentId}') returned false. The new item is shown in the UI but is NOT actually equipped in saved data — player will spawn with the previous item.");
             }
 
-            return true; // 
+            return true; //
         }
 
         public EquipmentData GetCurrentEquipment() => currentEquipment;

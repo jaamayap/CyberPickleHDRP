@@ -80,6 +80,16 @@ namespace CyberPickle.UI.Screens.LevelUp
         [Tooltip("Optional TMP shown during slot-picker mode (e.g. 'Pick a slot →').")]
         [SerializeField] private TextMeshProUGUI slotPickerHintLabel;
 
+        [Header("Multi-Level-Up Stack")]
+        [Tooltip("Optional GameObject (e.g. a panel) shown only when the player is in a multi-level-up burst (≥ 2 levels gained from one XP delta). Hidden during normal single level-ups.")]
+        [SerializeField] private GameObject stackIndicatorRoot;
+
+        [Tooltip("Optional TMP — rendered as 'PICK 2 OF 8' (or similar) during a multi-level burst. Auto-hidden when not in a stack.")]
+        [SerializeField] private TextMeshProUGUI stackProgressLabel;
+
+        [Tooltip("Optional TMP — rendered as '+8 LEVELS GAINED' during a multi-level burst. The total is set at the start of the stack and stays constant across all picks.")]
+        [SerializeField] private TextMeshProUGUI stackTotalLevelsLabel;
+
         [Header("Diagnostics")]
         [SerializeField] private bool verbose = true;
 
@@ -95,6 +105,17 @@ namespace CyberPickle.UI.Screens.LevelUp
         {
             SetPanelVisibility(0f, interactable: false);
             SetSlotPickerHint(false);
+            // Cards live under CardSpawnContainer (a separate canvas from
+            // this panel's CanvasGroup), so SetPanelVisibility(0) doesn't
+            // hide them. Without this, the placeholder card content
+            // ("NAME / Description / etc." authored in the scene) shows
+            // from the moment the Game scene loads until the first
+            // level-up. Hide on Awake; HandleCardsDrawn re-activates
+            // them when a draft fires.
+            HideAllCardSlots();
+            // Stack indicator starts hidden — only visible during a
+            // multi-level burst. HandleStackProgressChanged toggles it.
+            SetStackIndicatorVisible(false);
         }
 
         private void OnEnable()
@@ -106,7 +127,9 @@ namespace CyberPickle.UI.Screens.LevelUp
             {
                 coordinator.OnCardsDrawn          += HandleCardsDrawn;
                 coordinator.OnBankedRerollsChanged += HandleBankedRerollsChanged;
+                coordinator.OnStackProgressChanged += HandleStackProgressChanged;
                 HandleBankedRerollsChanged(coordinator.BankedRerolls); // initial paint
+                HandleStackProgressChanged(coordinator.StackCurrentPick, coordinator.StackTotalPicks); // initial paint
             }
             else
             {
@@ -137,6 +160,7 @@ namespace CyberPickle.UI.Screens.LevelUp
             {
                 coordinator.OnCardsDrawn          -= HandleCardsDrawn;
                 coordinator.OnBankedRerollsChanged -= HandleBankedRerollsChanged;
+                coordinator.OnStackProgressChanged -= HandleStackProgressChanged;
             }
             if (crossPanel != null)
             {
@@ -175,17 +199,66 @@ namespace CyberPickle.UI.Screens.LevelUp
 
             // Expand the cross — its center area becomes the visual stage
             // for these cards. The cross's Compact ↔ Expanded tween (DOTween,
-            // unscaled time) animates while the game is paused.
-            if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Expanded);
+            // unscaled time) animates while the game is paused. Calling
+            // SetState(Expanded) when already Expanded re-runs a zero-distance
+            // tween — visually fine, but skip it for cleanliness on
+            // stack continuations.
+            if (crossPanel != null && crossPanel.State != LoadoutCrossPanel.CrossState.Expanded)
+                crossPanel.SetState(LoadoutCrossPanel.CrossState.Expanded);
 
             StopAllCoroutines();
-            StartCoroutine(FadeIn());
+            // Skip the fade-in entirely if the panel is already visible — this
+            // is a multi-level-up stack continuation, where the previous draft's
+            // FadeIn already finished. Restarting the coroutine would snap
+            // alpha to ~0 on the first frame then ramp back to 1, producing
+            // a visible blink mid-stack. For first-draft / single-draft cases
+            // alpha is 0 and we fade in normally.
+            if (panelGroup == null || panelGroup.alpha < 0.99f)
+            {
+                StartCoroutine(FadeIn());
+            }
+            else
+            {
+                // Ensure the panel stays interactive even when we skip the
+                // fade — FadeIn would normally set this on entry.
+                panelGroup.interactable   = true;
+                panelGroup.blocksRaycasts = true;
+            }
         }
 
         private void HandleBankedRerollsChanged(int newCount)
         {
             if (rerollButton != null) rerollButton.interactable = newCount > 0;
             if (rerollLabel != null)  rerollLabel.text = newCount > 0 ? $"Reroll (×{newCount})" : "Reroll";
+        }
+
+        // Multi-level burst indicator — coordinator fires (currentIndex, totalInStack)
+        // each time a new draft is shown during a stack, and (0, 0) when the
+        // stack ends or run resets. The UI is hidden whenever total < 2.
+        private void HandleStackProgressChanged(int currentIndex, int totalInStack)
+        {
+            bool inStack = totalInStack >= 2;
+            SetStackIndicatorVisible(inStack);
+
+            if (!inStack) return;
+
+            if (stackProgressLabel != null)
+                stackProgressLabel.text = $"PICK {currentIndex} OF {totalInStack}";
+
+            if (stackTotalLevelsLabel != null)
+                stackTotalLevelsLabel.text = $"+{totalInStack} LEVELS GAINED";
+        }
+
+        private void SetStackIndicatorVisible(bool visible)
+        {
+            if (stackIndicatorRoot != null) stackIndicatorRoot.SetActive(visible);
+            // If the root isn't assigned but individual labels are, toggle
+            // them directly so a designer can wire either pattern.
+            if (stackIndicatorRoot == null)
+            {
+                if (stackProgressLabel != null)     stackProgressLabel.gameObject.SetActive(visible);
+                if (stackTotalLevelsLabel != null)  stackTotalLevelsLabel.gameObject.SetActive(visible);
+            }
         }
 
         // ─── Slot interactions → Coordinator ──────────────────────────────
@@ -260,7 +333,14 @@ namespace CyberPickle.UI.Screens.LevelUp
             // If we're mid-slot-pick, cancel that first.
             if (_pendingSlottableCard != null) HandleCancelSlotPickerClicked();
             coordinator.NotifyDraftSkipped();
-            // Skip resumes the run with no card applied — collapse the cross.
+
+            // Same multi-level guard as CommitPick — if the coordinator opened
+            // the next draft synchronously, HandleCardsDrawn already rebound
+            // the UI for it. Tearing down here would undo that.
+            if (coordinator.IsDrafting) return;
+
+            // Sequence complete — close down.
+            HideAllCardSlots();
             if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Compact);
             StopAllCoroutines();
             StartCoroutine(FadeOut());
@@ -299,10 +379,37 @@ namespace CyberPickle.UI.Screens.LevelUp
 
             coordinator.NotifyCardPicked(card, axisIndex);
 
-            // Collapse the cross + fade the panel as the run resumes.
+            // After NotifyCardPicked, the coordinator has either:
+            //   (a) Synchronously opened the next draft in a multi-level
+            //       stack — HandleCardsDrawn already ran, rebinding the
+            //       slots and keeping the cross expanded + panel visible.
+            //       Tearing down here would undo all of that. Bail.
+            //   (b) Resumed the run (queue empty) — IsDrafting is now false.
+            //       Close the panel + collapse the cross as before.
+            // Without this guard, every non-final pick in a stack would
+            // collapse the cross + fade out the panel + hide the cards
+            // that were just bound for the next pick.
+            if (coordinator.IsDrafting) return;
+
+            // Sequence complete — close down.
+            HideAllCardSlots();
             if (crossPanel != null) crossPanel.SetState(LoadoutCrossPanel.CrossState.Compact);
             StopAllCoroutines();
             StartCoroutine(FadeOut());
+        }
+
+        /// <summary>
+        /// Deactivate every card slot's GameObject. CardSlot.Bind(default)
+        /// hides itself via SetActive(false). On the next level-up,
+        /// HandleCardsDrawn re-Binds with fresh draft cards which re-enables
+        /// the GameObjects.
+        /// </summary>
+        private void HideAllCardSlots()
+        {
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] != null) slots[i].Bind(default);
+            }
         }
 
         /// <summary>

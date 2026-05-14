@@ -212,7 +212,7 @@ namespace CyberPickle.Gameplay.Progression
         /// the level-up confirmation log and analytics.
         /// </summary>
         public string Apply(PlayerStats stats, WeaponLoadoutRuntime loadout)
-            => ApplyToAxis(stats, loadout, axisIndex: -1, rolledElement: ElementId.None, rolledRarity: rarity);
+            => ApplyToAxis(stats, loadout, axisIndex: -1, rolledElement: ElementId.None, rolledRarity: rarity, resolvedWeaponOverride: null, resolvedPowerUpOverride: null);
 
         /// <summary>
         /// Slot-picker-aware apply. Used by the level-up screen flow when
@@ -223,9 +223,24 @@ namespace CyberPickle.Gameplay.Progression
         ///
         /// <paramref name="axisIndex"/> &lt; 0 means "first empty axis"
         /// (auto-pick fallback for non-UI callers).
+        ///
+        /// <paramref name="resolvedWeaponOverride"/> — when non-null,
+        /// supersedes the SO's <see cref="targetWeaponData"/>. Used by
+        /// TEMPLATE cards (asset has <c>targetWeaponData = null</c>); the
+        /// pool's draft logic resolves a concrete weapon at draft time and
+        /// stuffs it on the DraftedCard. LevelUpCoordinator passes it here
+        /// when applying.
+        ///
+        /// <paramref name="resolvedPowerUpOverride"/> — same idea for
+        /// power-up templates.
         /// </summary>
-        public string ApplyToAxis(PlayerStats stats, WeaponLoadoutRuntime loadout, int axisIndex, ElementId rolledElement, Rarity rolledRarity)
+        public string ApplyToAxis(PlayerStats stats, WeaponLoadoutRuntime loadout, int axisIndex, ElementId rolledElement, Rarity rolledRarity,
+                                  WeaponData resolvedWeaponOverride = null, PowerUpData resolvedPowerUpOverride = null)
         {
+            // Effective targets: prefer resolved (template) over authored (specific).
+            WeaponData effectiveWeapon  = resolvedWeaponOverride != null ? resolvedWeaponOverride : targetWeaponData;
+            PowerUpData effectivePowerUp = resolvedPowerUpOverride != null ? resolvedPowerUpOverride : targetPowerUpData;
+
             switch (cardType)
             {
                 case CardType.StatModifier:
@@ -236,18 +251,18 @@ namespace CyberPickle.Gameplay.Progression
 
                 case CardType.NewWeapon:
                 {
-                    if (loadout == null || targetWeaponData == null) return "no target weapon";
+                    if (loadout == null || effectiveWeapon == null) return "no target weapon";
                     bool ok = axisIndex >= 0
-                        ? loadout.TryAddWeaponAt(axisIndex, targetWeaponData, rolledRarity, out var addedAt)
-                        : loadout.TryAddWeapon(targetWeaponData, rolledRarity, out addedAt);
+                        ? loadout.TryAddWeaponAt(axisIndex, effectiveWeapon, rolledRarity, out var addedAt)
+                        : loadout.TryAddWeapon(effectiveWeapon, rolledRarity, out addedAt);
                     return ok ? $"added '{addedAt.WeaponId}' to axis {addedAt.slotIndex} at {rolledRarity}"
                               : "no empty weapon axis";
                 }
 
                 case CardType.LevelUpWeapon:
                 {
-                    if (loadout == null || targetWeaponData == null) return "no target weapon";
-                    var existing = loadout.FindByWeaponData(targetWeaponData);
+                    if (loadout == null || effectiveWeapon == null) return "no target weapon";
+                    var existing = loadout.FindByWeaponData(effectiveWeapon);
                     if (existing == null) return "weapon not equipped (filter bug)";
                     if (existing.level >= 5) return $"'{existing.WeaponId}' already at L5";
                     bool ok = loadout.LevelUpWeapon(existing.slotIndex);
@@ -256,8 +271,8 @@ namespace CyberPickle.Gameplay.Progression
 
                 case CardType.RarityUpWeapon:
                 {
-                    if (loadout == null || targetWeaponData == null) return "no target weapon";
-                    var existing = loadout.FindByWeaponData(targetWeaponData);
+                    if (loadout == null || effectiveWeapon == null) return "no target weapon";
+                    var existing = loadout.FindByWeaponData(effectiveWeapon);
                     if (existing == null) return "weapon not equipped (filter bug)";
                     if (existing.rarity == Rarity.Legendary) return $"'{existing.WeaponId}' already Legendary";
                     var oldRarity = existing.rarity;
@@ -267,18 +282,18 @@ namespace CyberPickle.Gameplay.Progression
 
                 case CardType.NewPowerUp:
                 {
-                    if (loadout == null || targetPowerUpData == null) return "no target power-up";
+                    if (loadout == null || effectivePowerUp == null) return "no target power-up";
                     bool ok = axisIndex >= 0
-                        ? loadout.TryAddPowerUpAt(axisIndex, targetPowerUpData, rolledElement, rolledRarity, out var addedPU)
-                        : loadout.TryAddPowerUp(targetPowerUpData, rolledElement, rolledRarity, out addedPU);
+                        ? loadout.TryAddPowerUpAt(axisIndex, effectivePowerUp, rolledElement, rolledRarity, out var addedPU)
+                        : loadout.TryAddPowerUp(effectivePowerUp, rolledElement, rolledRarity, out addedPU);
                     return ok ? $"added power-up '{addedPU.PowerUpId}' to axis {addedPU.axisIndex} at {rolledRarity}/{rolledElement}"
                               : "no empty power-up axis";
                 }
 
                 case CardType.LevelUpPowerUp:
                 {
-                    if (loadout == null || targetPowerUpData == null) return "no target power-up";
-                    var existing = loadout.FindByPowerUpData(targetPowerUpData);
+                    if (loadout == null || effectivePowerUp == null) return "no target power-up";
+                    var existing = loadout.FindByPowerUpData(effectivePowerUp);
                     if (existing == null) return "power-up not equipped (filter bug)";
                     if (existing.level >= 5) return $"'{existing.PowerUpId}' already at L5";
                     bool ok = loadout.LevelUpPowerUp(existing.axisIndex);
@@ -287,8 +302,8 @@ namespace CyberPickle.Gameplay.Progression
 
                 case CardType.RarityUpPowerUp:
                 {
-                    if (loadout == null || targetPowerUpData == null) return "no target power-up";
-                    var existing = loadout.FindByPowerUpData(targetPowerUpData);
+                    if (loadout == null || effectivePowerUp == null) return "no target power-up";
+                    var existing = loadout.FindByPowerUpData(effectivePowerUp);
                     if (existing == null) return "power-up not equipped (filter bug)";
                     if (existing.rarity == Rarity.Legendary) return $"'{existing.PowerUpId}' already Legendary";
                     var oldRarity = existing.rarity;

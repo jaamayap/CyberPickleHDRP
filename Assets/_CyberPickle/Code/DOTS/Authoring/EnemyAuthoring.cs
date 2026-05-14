@@ -17,6 +17,7 @@
 // EnemyData values wouldn't see updates in entities until manual bake.
 
 using Unity.Entities;
+using Unity.Mathematics;
 using UnityEngine;
 using CyberPickle.DOTS.Components;
 using CyberPickle.Gameplay.Enemies;
@@ -111,6 +112,7 @@ namespace CyberPickle.DOTS.Authoring
                     Tier2Chance        = drops.tier2Chance,
                     Tier3Chance        = drops.tier3Chance,
                     Tier4Chance        = drops.tier4Chance,
+                    Tier5Chance        = drops.tier5Chance,
                     BossMultiDropCount = drops.bossMultiDropCount,
                 });
 
@@ -122,6 +124,14 @@ namespace CyberPickle.DOTS.Authoring
                     DelayBeforeDissolve = authoring.data.corpseDelayBeforeDissolve,
                     DissolveDuration    = authoring.data.corpseDissolveDuration,
                 });
+
+                // Predicted velocity — single contract every AI / motion
+                // system updates with "where this enemy is heading next."
+                // Read by weapons that need target lead (grenades / parabolic
+                // launches). Starts at zero; the movement system overwrites
+                // it on its first tick so the very first frame's grenade
+                // launches don't try to lead a target with stale data.
+                AddComponent(entity, new EnemyPredictedVelocity { Value = float3.zero });
 
                 // ─── NOT baked yet (deferred to system-ship milestones): ───
                 // Defenses (armor, knockback/stun resistance, element mults) → M7

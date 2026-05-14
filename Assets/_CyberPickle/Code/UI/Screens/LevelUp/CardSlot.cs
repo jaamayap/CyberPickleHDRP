@@ -130,11 +130,19 @@ namespace CyberPickle.UI.Screens.LevelUp
                 iconImage.enabled = so.icon != null;
             }
 
+            // Template cards use {WEAPON} / {POWERUP} placeholders in their
+            // authored displayName/description. Substitute with the
+            // resolved target's actual name from WeaponData/PowerUpData.
+            // Non-templated cards' authored text passes through unchanged
+            // (no placeholders → no-op replace).
+            string resolvedName = ResolveCardText(so.displayName, card);
+            string resolvedDesc = ResolveCardText(so.description ?? string.Empty, card);
+
             if (nameText != null)
-                nameText.text = so.displayName;
+                nameText.text = resolvedName;
 
             if (descriptionText != null)
-                descriptionText.text = so.description ?? string.Empty;
+                descriptionText.text = resolvedDesc;
 
             if (rarityText != null)
                 rarityText.text = card.rolledRarity.ToString().ToUpperInvariant();
@@ -161,6 +169,42 @@ namespace CyberPickle.UI.Screens.LevelUp
             // container at the card's bottom edge per the "modifiers face
             // the core" visual concept.
             PopulateStatPips(card);
+        }
+
+        /// <summary>
+        /// Substitute placeholders in card text with resolved target names.
+        /// Placeholders supported:
+        ///   <c>{WEAPON}</c>  → DraftedCard's effective weapon target's
+        ///                       <c>displayName</c> (resolved template or
+        ///                       authored fallback). Empty string when no
+        ///                       weapon target applies.
+        ///   <c>{POWERUP}</c> → same for power-up template targets.
+        ///
+        /// Template cards (e.g., displayName = "{WEAPON}: Level Up") render
+        /// dynamically per draft. Non-template cards have no placeholders
+        /// in their authored text → this is a no-op for them.
+        /// </summary>
+        private static string ResolveCardText(string raw, DraftedCard card)
+        {
+            if (string.IsNullOrEmpty(raw)) return raw ?? string.Empty;
+
+            // Fast path: skip the work entirely when no placeholder appears.
+            bool hasWeaponPh  = raw.Contains("{WEAPON}");
+            bool hasPowerUpPh = raw.Contains("{POWERUP}");
+            if (!hasWeaponPh && !hasPowerUpPh) return raw;
+
+            string output = raw;
+            if (hasWeaponPh)
+            {
+                var w = card.EffectiveWeaponTarget;
+                output = output.Replace("{WEAPON}", w != null ? w.displayName : string.Empty);
+            }
+            if (hasPowerUpPh)
+            {
+                var p = card.EffectivePowerUpTarget;
+                output = output.Replace("{POWERUP}", p != null ? p.displayName : string.Empty);
+            }
+            return output;
         }
 
         private void PopulateStatPips(DraftedCard card)

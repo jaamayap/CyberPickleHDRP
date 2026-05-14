@@ -22,6 +22,16 @@
 // Excludes Dead enemies — corpses don't deal damage. Bosses + special
 // enemies use the same ContactDamage component, no special-case code.
 //
+// 2026-05-12: also excludes enemies WITHOUT HasVisualTag. The visual
+// GameObject is instantiated by EnemyVisualBindingSystem one phase later
+// (PresentationSystemGroup), so newly-spawned enemies have a 1-frame
+// "ghost" window where the entity has collision/damage but no visual.
+// At 60 FPS that's 16ms — barely noticeable. At 4 FPS during a hitch,
+// that's 250ms of invisible damage, and the user reports being killed
+// by enemies they never saw. Gating on HasVisualTag is a tiny grace
+// period that closes this window: an enemy can only damage you once
+// you've had a chance to see it.
+//
 // Performance: O(n) over enemies. With 500 enemies, ~5000 ops/frame at
 // 60fps ≈ trivial. If swarm sizes grow past ~2000, swap the foreach
 // for an IJobEntity parallel write into a per-thread accumulator —
@@ -67,7 +77,7 @@ namespace CyberPickle.DOTS.Systems
 
             foreach (var (transform, contact) in
                      SystemAPI.Query<RefRO<LocalTransform>, RefRO<ContactDamage>>()
-                              .WithAll<EnemyTag>()
+                              .WithAll<EnemyTag, HasVisualTag>()
                               .WithNone<Dead>())
             {
                 float3 toPlayer = playerPos - transform.ValueRO.Position;

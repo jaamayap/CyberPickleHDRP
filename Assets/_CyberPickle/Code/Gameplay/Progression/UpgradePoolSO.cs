@@ -37,6 +37,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using CyberPickle.Core;
 using CyberPickle.Gameplay.Weapons;
+using CyberPickle.Shop.Equipment.Data;
 
 namespace CyberPickle.Gameplay.Progression
 {
@@ -50,6 +51,18 @@ namespace CyberPickle.Gameplay.Progression
         [Header("Cards")]
         [Tooltip("Every card available in this pool. Order doesn't matter — drawing is weighted by rarity.")]
         public UpgradeCardSO[] cards;
+
+        [Header("Template Resolution — Weapon Pool")]
+        [Tooltip("The universe of weapons that TEMPLATE cards (NewWeapon / LevelUpWeapon / RarityUpWeapon with targetWeaponData = null) can resolve to. " +
+                 "For NewWeapon templates: random pick from this list excluding currently-equipped. " +
+                 "For LevelUp / RarityUp templates: resolves to a random equipped weapon from this list. " +
+                 "Set this to the full roster of unlockable weapons for the run; if empty, weapon templates are filtered out of the draft.")]
+        public WeaponData[] weaponTemplatePool;
+
+        [Header("Template Resolution — Power-Up Pool")]
+        [Tooltip("The universe of power-ups that TEMPLATE cards (NewPowerUp / LevelUpPowerUp / RarityUpPowerUp with targetPowerUpData = null) can resolve to. " +
+                 "Same pattern as weaponTemplatePool. Set when M10 power-up cards land; safe to leave empty until then.")]
+        public PowerUpData[] powerUpTemplatePool;
 
         [Header("Rarity Weights (default; Luck modulates these at draw time)")]
         [Tooltip("Relative draw weight for Common cards. Higher = more frequent. Defaults sum to 100 for sanity but absolute values don't matter — only ratios.")]
@@ -170,13 +183,37 @@ namespace CyberPickle.Gameplay.Progression
                 }
 
                 var pickedSo = eligible[picked];
+
+                // Template resolution: if the card is a weapon template
+                // (targetWeaponData == null), pick a concrete weapon from
+                // the loadout / template pool now. The same templated
+                // card SO can appear multiple times in a draft pulling
+                // DIFFERENT resolved weapons each draw — natural variance
+                // without authoring N variants. Returns null if no valid
+                // target — we filter out and try the next pick.
+                WeaponData resolvedWeapon = ResolveTemplateWeapon(pickedSo, loadout);
+                if (IsWeaponTemplate(pickedSo) && resolvedWeapon == null)
+                {
+                    // No valid target after eligibility passed (race condition
+                    // between filter + roll). Skip this pick, retry next loop.
+                    totalWeight -= weights[picked];
+                    eligible.RemoveAt(picked);
+                    weights[picked] = picked < eligible.Count ? weights[eligible.Count] : 0f;
+                    draw--; // give back the draw slot
+                    continue;
+                }
+
+                PowerUpData resolvedPowerUp = ResolveTemplatePowerUp(pickedSo, loadout);
+
                 var drafted = new DraftedCard
                 {
-                    source        = pickedSo,
-                    rolledRarity  = pickedSo.rarity, // authored rarity is the roll for now; future: re-roll on draft
-                    rolledElement = pickedSo.cardType == CardType.NewPowerUp
-                                       ? ROLLABLE_ELEMENTS[Random.Range(0, ROLLABLE_ELEMENTS.Length)]
-                                       : ElementId.None,
+                    source                = pickedSo,
+                    rolledRarity          = pickedSo.rarity, // authored rarity is the roll for now; future: re-roll on draft
+                    rolledElement         = pickedSo.cardType == CardType.NewPowerUp
+                                                ? ROLLABLE_ELEMENTS[Random.Range(0, ROLLABLE_ELEMENTS.Length)]
+                                                : ElementId.None,
+                    resolvedTargetWeapon  = resolvedWeapon,
+                    resolvedTargetPowerUp = resolvedPowerUp,
                 };
                 result.Add(drafted);
 
@@ -194,8 +231,12 @@ namespace CyberPickle.Gameplay.Progression
         /// Per-type filter: returns true if the card would land on a valid
         /// target given the current loadout. Implements the user's "only
         /// show what's relevant" rule.
+        ///
+        /// Now also handles TEMPLATE cards (target* fields null) — checks
+        /// the corresponding weaponTemplatePool / powerUpTemplatePool for
+        /// at least one eligible candidate.
         /// </summary>
-        private static bool IsEligibleForLoadout(UpgradeCardSO card, WeaponLoadoutRuntime loadout)
+        private bool IsEligibleForLoadout(UpgradeCardSO card, WeaponLoadoutRuntime loadout)
         {
             // Without a loadout reference (e.g., test code), everything that
             // doesn't strictly require one passes through. Loadout-dependent
@@ -215,46 +256,240 @@ namespace CyberPickle.Gameplay.Progression
                     return true; // no loadout dependency
 
                 case CardType.NewWeapon:
-                    return card.targetWeaponData != null
-                        && !loadout.AreWeaponSlotsFull
-                        && loadout.FindByWeaponData(card.targetWeaponData) == null; // not already equipped
+                    if (loadout.AreWeaponSlotsFull) return false;
+                    if (card.targetWeaponData != null)
+                        return loadout.FindByWeaponData(card.targetWeaponData) == null;
+                    // Template: at least one weapon in the pool not yet equipped
+                    return HasAnyUnequippedWeaponInPool(loadout);
 
                 case CardType.LevelUpWeapon:
                 {
-                    if (card.targetWeaponData == null) return false;
-                    var w = loadout.FindByWeaponData(card.targetWeaponData);
-                    return w != null && w.level < 5;
+                    if (card.targetWeaponData != null)
+                    {
+                        var w = loadout.FindByWeaponData(card.targetWeaponData);
+                        return w != null && w.level < 5;
+                    }
+                    return HasAnyEquippedWeaponBelowLevel(loadout, 5);
                 }
 
                 case CardType.RarityUpWeapon:
                 {
-                    if (card.targetWeaponData == null) return false;
-                    var w = loadout.FindByWeaponData(card.targetWeaponData);
-                    return w != null && w.rarity != Rarity.Legendary;
+                    if (card.targetWeaponData != null)
+                    {
+                        var w = loadout.FindByWeaponData(card.targetWeaponData);
+                        return w != null && w.rarity != Rarity.Legendary;
+                    }
+                    return HasAnyEquippedWeaponBelowRarity(loadout, Rarity.Legendary);
                 }
 
                 case CardType.NewPowerUp:
-                    return card.targetPowerUpData != null
-                        && !loadout.ArePowerUpSlotsFull
-                        && loadout.FindByPowerUpData(card.targetPowerUpData) == null;
+                    if (loadout.ArePowerUpSlotsFull) return false;
+                    if (card.targetPowerUpData != null)
+                        return loadout.FindByPowerUpData(card.targetPowerUpData) == null;
+                    return HasAnyUnequippedPowerUpInPool(loadout);
 
                 case CardType.LevelUpPowerUp:
                 {
-                    if (card.targetPowerUpData == null) return false;
-                    var p = loadout.FindByPowerUpData(card.targetPowerUpData);
-                    return p != null && p.level < 5;
+                    if (card.targetPowerUpData != null)
+                    {
+                        var p = loadout.FindByPowerUpData(card.targetPowerUpData);
+                        return p != null && p.level < 5;
+                    }
+                    return HasAnyEquippedPowerUpBelowLevel(loadout, 5);
                 }
 
                 case CardType.RarityUpPowerUp:
                 {
-                    if (card.targetPowerUpData == null) return false;
-                    var p = loadout.FindByPowerUpData(card.targetPowerUpData);
-                    return p != null && p.rarity != Rarity.Legendary;
+                    if (card.targetPowerUpData != null)
+                    {
+                        var p = loadout.FindByPowerUpData(card.targetPowerUpData);
+                        return p != null && p.rarity != Rarity.Legendary;
+                    }
+                    return HasAnyEquippedPowerUpBelowRarity(loadout, Rarity.Legendary);
                 }
 
                 default:
                     return false;
             }
+        }
+
+        // ─── Template resolution + eligibility helpers ──────────────────
+
+        private static bool IsWeaponTemplate(UpgradeCardSO card)
+        {
+            return card.targetWeaponData == null && (
+                card.cardType == CardType.NewWeapon ||
+                card.cardType == CardType.LevelUpWeapon ||
+                card.cardType == CardType.RarityUpWeapon);
+        }
+
+        private static bool IsPowerUpTemplate(UpgradeCardSO card)
+        {
+            return card.targetPowerUpData == null && (
+                card.cardType == CardType.NewPowerUp ||
+                card.cardType == CardType.LevelUpPowerUp ||
+                card.cardType == CardType.RarityUpPowerUp);
+        }
+
+        /// <summary>Pick a concrete weapon for a template card from the loadout / weaponTemplatePool. Returns null for non-templates or when no valid target exists.</summary>
+        private WeaponData ResolveTemplateWeapon(UpgradeCardSO card, WeaponLoadoutRuntime loadout)
+        {
+            if (!IsWeaponTemplate(card) || loadout == null) return null;
+
+            switch (card.cardType)
+            {
+                case CardType.NewWeapon:
+                {
+                    // Pool entries not currently equipped.
+                    if (weaponTemplatePool == null || weaponTemplatePool.Length == 0) return null;
+                    var candidates = new List<WeaponData>(weaponTemplatePool.Length);
+                    for (int i = 0; i < weaponTemplatePool.Length; i++)
+                    {
+                        var w = weaponTemplatePool[i];
+                        if (w == null) continue;
+                        if (loadout.FindByWeaponData(w) != null) continue; // already equipped
+                        candidates.Add(w);
+                    }
+                    return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : null;
+                }
+
+                case CardType.LevelUpWeapon:
+                {
+                    // Currently equipped weapons below L5.
+                    var candidates = new List<WeaponData>(loadout.AxisCount);
+                    for (int i = 0; i < loadout.AxisCount; i++)
+                    {
+                        var w = loadout.GetSlot(i);
+                        if (w != null && w.IsValid && w.weaponData != null && w.level < 5)
+                            candidates.Add(w.weaponData);
+                    }
+                    return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : null;
+                }
+
+                case CardType.RarityUpWeapon:
+                {
+                    var candidates = new List<WeaponData>(loadout.AxisCount);
+                    for (int i = 0; i < loadout.AxisCount; i++)
+                    {
+                        var w = loadout.GetSlot(i);
+                        if (w != null && w.IsValid && w.weaponData != null && w.rarity != Rarity.Legendary)
+                            candidates.Add(w.weaponData);
+                    }
+                    return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : null;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>Same as ResolveTemplateWeapon but for power-up templates. Mirrors the three branches.</summary>
+        private PowerUpData ResolveTemplatePowerUp(UpgradeCardSO card, WeaponLoadoutRuntime loadout)
+        {
+            if (!IsPowerUpTemplate(card) || loadout == null) return null;
+
+            switch (card.cardType)
+            {
+                case CardType.NewPowerUp:
+                {
+                    if (powerUpTemplatePool == null || powerUpTemplatePool.Length == 0) return null;
+                    var candidates = new List<PowerUpData>(powerUpTemplatePool.Length);
+                    for (int i = 0; i < powerUpTemplatePool.Length; i++)
+                    {
+                        var p = powerUpTemplatePool[i];
+                        if (p == null) continue;
+                        if (loadout.FindByPowerUpData(p) != null) continue;
+                        candidates.Add(p);
+                    }
+                    return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : null;
+                }
+
+                case CardType.LevelUpPowerUp:
+                {
+                    var candidates = new List<PowerUpData>(loadout.AxisCount);
+                    for (int i = 0; i < loadout.AxisCount; i++)
+                    {
+                        var p = loadout.GetPowerUp(i);
+                        if (p != null && p.IsValid && p.powerUpData != null && p.level < 5)
+                            candidates.Add(p.powerUpData);
+                    }
+                    return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : null;
+                }
+
+                case CardType.RarityUpPowerUp:
+                {
+                    var candidates = new List<PowerUpData>(loadout.AxisCount);
+                    for (int i = 0; i < loadout.AxisCount; i++)
+                    {
+                        var p = loadout.GetPowerUp(i);
+                        if (p != null && p.IsValid && p.powerUpData != null && p.rarity != Rarity.Legendary)
+                            candidates.Add(p.powerUpData);
+                    }
+                    return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : null;
+                }
+            }
+            return null;
+        }
+
+        // Cheap eligibility checks used by IsEligibleForLoadout for templates.
+        private bool HasAnyUnequippedWeaponInPool(WeaponLoadoutRuntime loadout)
+        {
+            if (weaponTemplatePool == null) return false;
+            for (int i = 0; i < weaponTemplatePool.Length; i++)
+            {
+                var w = weaponTemplatePool[i];
+                if (w != null && loadout.FindByWeaponData(w) == null) return true;
+            }
+            return false;
+        }
+
+        private static bool HasAnyEquippedWeaponBelowLevel(WeaponLoadoutRuntime loadout, int maxLevel)
+        {
+            for (int i = 0; i < loadout.AxisCount; i++)
+            {
+                var w = loadout.GetSlot(i);
+                if (w != null && w.IsValid && w.level < maxLevel) return true;
+            }
+            return false;
+        }
+
+        private static bool HasAnyEquippedWeaponBelowRarity(WeaponLoadoutRuntime loadout, Rarity maxRarity)
+        {
+            for (int i = 0; i < loadout.AxisCount; i++)
+            {
+                var w = loadout.GetSlot(i);
+                if (w != null && w.IsValid && w.rarity != maxRarity) return true;
+            }
+            return false;
+        }
+
+        private bool HasAnyUnequippedPowerUpInPool(WeaponLoadoutRuntime loadout)
+        {
+            if (powerUpTemplatePool == null) return false;
+            for (int i = 0; i < powerUpTemplatePool.Length; i++)
+            {
+                var p = powerUpTemplatePool[i];
+                if (p != null && loadout.FindByPowerUpData(p) == null) return true;
+            }
+            return false;
+        }
+
+        private static bool HasAnyEquippedPowerUpBelowLevel(WeaponLoadoutRuntime loadout, int maxLevel)
+        {
+            for (int i = 0; i < loadout.AxisCount; i++)
+            {
+                var p = loadout.GetPowerUp(i);
+                if (p != null && p.IsValid && p.level < maxLevel) return true;
+            }
+            return false;
+        }
+
+        private static bool HasAnyEquippedPowerUpBelowRarity(WeaponLoadoutRuntime loadout, Rarity maxRarity)
+        {
+            for (int i = 0; i < loadout.AxisCount; i++)
+            {
+                var p = loadout.GetPowerUp(i);
+                if (p != null && p.IsValid && p.rarity != maxRarity) return true;
+            }
+            return false;
         }
 
         // ─── Internals ────────────────────────────────────────────────────

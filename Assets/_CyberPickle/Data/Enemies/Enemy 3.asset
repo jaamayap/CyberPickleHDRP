@@ -14,24 +14,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   enemyId: Enemy 3
   displayName: Enemy 3
-  isBoss: 0
+  isBoss: 1
   visualPrefab: {fileID: 206938308158213139, guid: 1ca48de47b1da8d42b9d222aaa00ab4f,
     type: 3}
   visualType: 1
-  maxHealth: 25
-  moveSpeed: 2.5
+  maxHealth: 50000
+  moveSpeed: 2
   contactDamage: 30
   bodyRadius: 0.6
   corpseDelayBeforeDissolve: 3
   corpseDissolveDuration: 1.5
   neuralCreditsOnDeath: 1
-  xpOnDeath: 4
   xpDropTable:
     tier1Chance: 0.2
     tier2Chance: 0.25
     tier3Chance: 0.1
     tier4Chance: 0.03
-    bossMultiDropCount: 0
+    tier5Chance: 0.01
+    bossMultiDropCount: 200
   rareDropChance: 0
   rareDropTable: []
   armor: 0

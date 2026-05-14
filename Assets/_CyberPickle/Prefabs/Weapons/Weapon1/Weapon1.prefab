@@ -72,22 +72,22 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
       propertyPath: m_LocalRotation.w
-      value: -0.5783988
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.8157542
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
@@ -97,7 +97,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: -109.324
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
@@ -111,12 +111,17 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -7511558181221131132, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
+      propertyPath: m_RayTracingMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: 77e63eedfde4dd3478d264190e057869,
+        type: 3}
       propertyPath: m_LightProbeUsage
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -7511558181221131132, guid: 77e63eedfde4dd3478d264190e057869,
         type: 3}
-      propertyPath: m_Materials.Array.data[0]
+      propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 64c5301f598ba8c47b22bf8ecf63219f, type: 2}
     - target: {fileID: 919132149155446097, guid: 77e63eedfde4dd3478d264190e057869,
@@ -180,8 +185,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4f43298028cf4044a1e0d5211bef9d2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  weaponData: {fileID: 0}
+  slotIndex: 0
   fireRate: 2
-  muzzle: {fileID: 1874816583303769313}
   projectileSpeed: 20
   projectileDamage: 5
+  muzzle: {fileID: 1874816583303769313}
+  muzzleTransforms:
+  - {fileID: 1874816583303769313}
   projectileLifetime: 3
+  weaponId: 
+  verboseLogging: 0

@@ -14,27 +14,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   enemyId: Enemy 2
   displayName: Enemy 2
-  isBoss: 0
+  isBoss: 1
   visualPrefab: {fileID: 4756028820122807905, guid: 3c41358e45be86745975ed2dd576b8a8,
     type: 3}
   visualType: 1
-  maxHealth: 20
-  moveSpeed: 1
-  contactDamage: 20
+  maxHealth: 5000
+  moveSpeed: 1.5
+  contactDamage: 50
   bodyRadius: 0.4
   corpseDelayBeforeDissolve: 3
   corpseDissolveDuration: 1.5
   neuralCreditsOnDeath: 1
-  xpOnDeath: 4
   xpDropTable:
     tier1Chance: 1
-    tier2Chance: 0.15
-    tier3Chance: 0.05
-    tier4Chance: 0.01
-    bossMultiDropCount: 0
+    tier2Chance: 0.2
+    tier3Chance: 0.1
+    tier4Chance: 0.05
+    tier5Chance: 0.01
+    bossMultiDropCount: 500
   rareDropChance: 0
   rareDropTable: []
-  armor: 0
+  armor: 2
   knockbackResistance: 0
   stunResistance: 0
   elementResistances:
@@ -61,7 +61,7 @@ MonoBehaviour:
   icon: {fileID: 0}
   description: 
   threatLevel: 1
-  bossTitle: 
+  bossTitle: REAPER
   bossMusicEvent: 
   phaseHealthThresholds: []
   phaseAbilityIds: []

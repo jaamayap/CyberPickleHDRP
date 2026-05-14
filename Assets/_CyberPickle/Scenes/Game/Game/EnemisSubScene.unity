@@ -207,32 +207,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 933092ad184f5de458efcb09191692a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.DOTS.Authoring.XPGemRegistryAuthoring
-  tiers:
-  - displayName: Tier 0
-    tierColor: {r: 0, g: 1, b: 0, a: 1}
-    xpValue: 1
-    gemPrefab: {fileID: 3261133153455466549, guid: 7b8ac453d80c91744b4511997f1cc6ff,
-      type: 3}
-  - displayName: Tier 1
-    tierColor: {r: 0, g: 1, b: 1, a: 1}
-    xpValue: 3
-    gemPrefab: {fileID: 4413795126497647924, guid: 25320c9b0189eaf4283626c8c5d9eb9f,
-      type: 3}
-  - displayName: Tier 2
-    tierColor: {r: 0, g: 0.003921569, b: 1, a: 1}
-    xpValue: 10
-    gemPrefab: {fileID: 4100328146784160852, guid: 56518892750bfc945ac2cdcc0444b936,
-      type: 3}
-  - displayName: Tier 3
-    tierColor: {r: 1, g: 0, b: 1, a: 1}
-    xpValue: 30
-    gemPrefab: {fileID: 1728639668279817213, guid: b2474a5810139424ebda9732b07616ac,
-      type: 3}
-  - displayName: Tier 4
-    tierColor: {r: 1, g: 0.45490196, b: 0, a: 1}
-    xpValue: 300
-    gemPrefab: {fileID: 8207263384490327573, guid: 90b0fe2099e8c364db1ea059d6f58fb3,
-      type: 3}
+  tierTable: {fileID: 11400000, guid: f8406fbbc7deaf34e82e5569111763b9, type: 2}
 --- !u!1 &785783799
 GameObject:
   m_ObjectHideFlags: 0
@@ -262,8 +237,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0bd827eec44a4ab4d846b01e9073e330, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  projectilePrefab: {fileID: 1569979447995748, guid: de79adfa69af17a4a8392603753976a1,
-    type: 3}
+  entries:
+  - element: 0
+    prefab: {fileID: 1574263468501362, guid: 4d33f2b10ef002b4881097633277e50c, type: 3}
+  - element: 1
+    prefab: {fileID: 1449260960837898, guid: cdd2ba6c00d631b44b5fe5b05f719d18, type: 3}
+  - element: 2
+    prefab: {fileID: 1887302512045466, guid: cd8973864474ec448affdff663af1805, type: 3}
+  - element: 3
+    prefab: {fileID: 1018882707796302, guid: be7ea0ecbecb38d4ea88f960e4c833ac, type: 3}
+  - element: 4
+    prefab: {fileID: 1698648575761504, guid: 02e1804a832cbed44a4be77f15dae547, type: 3}
+  - element: 5
+    prefab: {fileID: 1569979447995748, guid: afd94db6d54b7c44394c743cce5d557e, type: 3}
+  - element: 6
+    prefab: {fileID: 1034045548656336, guid: 8daf522d5b4a360448d6391944e0e32d, type: 3}
+  - element: 7
+    prefab: {fileID: 1128728136785006, guid: 55780487f86c0c04991d0b2e85707497, type: 3}
+  projectilePrefab: {fileID: 0}
 --- !u!4 &785783801
 Transform:
   m_ObjectHideFlags: 0
@@ -316,9 +307,9 @@ MonoBehaviour:
     y: -0.5
     z: 0
   m_PrimitiveSize:
-    x: 200
+    x: 2000
     y: 1
-    z: 200
+    z: 2000
   m_PrimitiveOrientation:
     Value:
       x: -0
@@ -326,15 +317,15 @@ MonoBehaviour:
       z: 0
     RotationOrder: 4
   m_Capsule:
-    Height: 200
-    Radius: 100
+    Height: 2000
+    Radius: 1000
     Axis: 2
   m_Cylinder:
     Height: 1
-    Radius: 100
+    Radius: 1000
     Axis: 1
   m_CylinderSideCount: 20
-  m_SphereRadius: 100
+  m_SphereRadius: 1000
   m_MinimumSkinnedVertexWeight: 0.1
   m_ConvexHullGenerationParameters:
     m_SimplificationTolerance: 0.14999999
