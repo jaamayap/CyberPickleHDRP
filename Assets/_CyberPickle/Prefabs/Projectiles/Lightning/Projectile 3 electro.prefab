@@ -259,7 +259,7 @@ MonoBehaviour:
   UseFirePointRotation: 0
   rotationOffset: {x: 0, y: 0, z: 0}
   flash: {fileID: 6059006775796481643}
-  lightSource: {fileID: 0}
+  lightSource: {fileID: 108934438232879496}
   projectilePS: {fileID: 7034209625910339156}
   Detached: []
 --- !u!1 &6963821842538284480

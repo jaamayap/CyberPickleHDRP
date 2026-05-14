@@ -52,8 +52,28 @@ namespace CyberPickle.Gameplay.Combat
         internal readonly Queue<(float time, float damage)> rollingSamples
             = new Queue<(float, float)>(capacity: 256);
 
-        /// <summary>Damage / second over the rolling window (default 5s).</summary>
+        /// <summary>
+        /// Damage / second over the rolling window (default 5s). Reflects
+        /// LIVE firing — drops fast when the player stops firing this
+        /// weapon, spikes during crit volleys. Useful for short-term feel,
+        /// poor as a "how is this weapon doing in the run" headline.
+        /// </summary>
         public float RollingDps;
+
+        /// <summary>
+        /// Cumulative damage / total run time. Stable, matches the "Run:"
+        /// cumulative kill / hit counters. This is the headline DPS used
+        /// on the slot label and the tooltip's run row — the rolling-window
+        /// metric is too noisy to display as a "Run:" stat. Read via the
+        /// helper <see cref="GetTotalRunDps"/> so we can divide by an
+        /// externally-supplied run time without each consumer having to
+        /// reach into RunStateManager.
+        /// </summary>
+        public float GetTotalRunDps(float runTimeSeconds)
+        {
+            if (runTimeSeconds <= 0.001f) return 0f;
+            return TotalDamageDealt / runTimeSeconds;
+        }
 
         /// <summary>Crit rate as a 0..1 fraction. Returns 0 if no hits yet.</summary>
         public float CritRate => TotalHits > 0 ? (float)TotalCrits / TotalHits : 0f;

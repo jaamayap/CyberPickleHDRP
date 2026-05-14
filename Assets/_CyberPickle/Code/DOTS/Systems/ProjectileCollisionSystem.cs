@@ -98,6 +98,20 @@ namespace CyberPickle.DOTS.Systems
             // that don't tag), we report a default weapon id. WeaponFiring always
             // tags its spawns so this is the common path.
             var sourceLookup = SystemAPI.GetComponentLookup<ProjectileSource>(isReadOnly: true);
+            // Health is RW via ComponentLookup so successive hits in the
+            // same frame see each other's writes. Previously we used
+            // GetComponent + ecb.SetComponent — that meant two projectiles
+            // hitting the same enemy in the same frame each read the SAME
+            // stale health value, both decided whether they "killed" it
+            // based on that stale read, and the last ECB write won
+            // (silently overwriting earlier writes). Net effect: damage
+            // got lost AND multiple weapons could each claim the kill,
+            // inflating PerWeaponStatsTracker.TotalKills above
+            // RunStatsTracker.EnemiesKilled. Direct ComponentLookup writes
+            // are immediate — each subsequent hit reads the post-previous-
+            // hit value, KilledTarget is true for AT MOST one hit per kill,
+            // and damage accumulates correctly.
+            var healthLookup = SystemAPI.GetComponentLookup<Health>(isReadOnly: false);
             // M9 PR F: per-projectile element tag (optional — defaults to
             // None for projectiles without it, e.g., future spawn paths).
             var elementLookup = SystemAPI.GetComponentLookup<WeaponElement>(isReadOnly: true);
@@ -218,7 +232,23 @@ namespace CyberPickle.DOTS.Systems
                     float dz = projPos.z - enemyPos.z;
                     if (dx * dx + dz * dz > HitRadiusSq) continue;
 
-                    Health health = SystemAPI.GetComponent<Health>(enemyEntity);
+                    // Read CURRENT (post-previous-hit) health via the RW
+                    // lookup — see the lookup declaration above for the
+                    // reasoning. If two projectiles hit the same enemy this
+                    // frame, the second one sees the first one's damage
+                    // already applied, so its KilledTarget evaluation is
+                    // accurate and the total damage accumulates correctly.
+                    Health health = healthLookup[enemyEntity];
+
+                    // CAPTURE pre-hit health so we can detect "this hit
+                    // crossed zero" rather than "this hit ended up at <= 0."
+                    // Without this, a hit that strikes an ALREADY-dead enemy
+                    // (e.g., killed by a previous projectile this same frame,
+                    // not yet Dead-tagged) would still report KilledTarget=true,
+                    // and a second weapon would get a free kill credit. The
+                    // RW lookup correctly applies damage to the corpse but
+                    // we DO NOT want the kill counter to credit this hit.
+                    float preHitCurrent = health.Current;
 
                     // Apply damage formula: base × (1 + Power%) × critMultiplier.
                     // Element / weapon-upgrade / equipment / skill multipliers
@@ -228,7 +258,7 @@ namespace CyberPickle.DOTS.Systems
                     float finalDamage = projDamage.ValueRO.Value * powerMultiplier * critMultiplier;
 
                     health.Current -= finalDamage;
-                    ecb.SetComponent(enemyEntity, health);
+                    healthLookup[enemyEntity] = health;
 
                     // Enqueue a per-hit report for PerWeaponStatsTracker. Burst
                     // can't call into managed code; the queue is the bridge.
@@ -275,7 +305,17 @@ namespace CyberPickle.DOTS.Systems
                             WeaponId             = weaponId,
                             DamageDealt          = finalDamage,
                             IsCrit               = isCrit,
-                            KilledTarget         = health.Current <= 0f,
+                            // KILL ATTRIBUTION: only the hit that CROSSED
+                            // zero gets kill credit. A late hit on an
+                            // already-dead corpse (same frame, before
+                            // Dead-tagging) reports KilledTarget=false.
+                            // Without this, two projectiles hitting an
+                            // enemy with low HP would both claim the kill
+                            // (one brings it from 10→-50, the next finds
+                            // it at -50 and writes -100; both saw their
+                            // POST-state as <=0). The crossing-zero check
+                            // makes kill credit unique per enemy death.
+                            KilledTarget         = preHitCurrent > 0f && health.Current <= 0f,
                             HitPosition          = reportHitPos,
                             Element              = element,
                             HitDirection         = hitDir,

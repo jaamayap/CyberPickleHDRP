@@ -258,12 +258,16 @@ namespace CyberPickle.DOTS.Systems
 
         /// <summary>
         /// Walks the cascade highest -> lowest. Returns tier 0 if nothing higher
-        /// triggers (so something always drops).
+        /// triggers (so something always drops). Tier 5 (Sentinel Prime — jackpot)
+        /// is checked first so its small probability gets a clean slice off the
+        /// 0..1 roll before the lower tiers consume the rest.
         /// </summary>
         private static int RollDropTier(EnemyXPDropChances c)
         {
             float roll = URandom.value; // 0..1
-            float threshold = c.Tier4Chance;
+            float threshold = c.Tier5Chance;
+            if (roll < threshold) return 5;
+            threshold += c.Tier4Chance;
             if (roll < threshold) return 4;
             threshold += c.Tier3Chance;
             if (roll < threshold) return 3;

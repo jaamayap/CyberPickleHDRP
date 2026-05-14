@@ -49,13 +49,36 @@ namespace CyberPickle.UI.HUD
         // Slot index is set by the parent WeaponSlotsPanel based on array position.
         private int _slotIndex;
 
+        // Cached instance from the last Refresh — used by Update() to
+        // periodically re-format the DPS label without the parent panel
+        // having to call Refresh() every frame. The parent only calls
+        // Refresh on loadout-change events (weapon added / leveled / etc.),
+        // which would otherwise leave the DPS number frozen at whatever
+        // value it had on the last upgrade. The poll loop below keeps the
+        // DPS number current as the player fires.
+        private WeaponInstanceData _cachedInstance;
+        private float _dpsRefreshTimer;
+        private const float DpsRefreshInterval = 0.5f;
+
         public void SetSlotIndex(int idx) => _slotIndex = idx;
+
+        /// <summary>
+        /// Read-only access to the slot index this UI represents. Used by
+        /// sibling components (e.g. WeaponSlotBeatPulse) that want to
+        /// inherit the same index without requiring the parent panel to
+        /// wire them up in a second array.
+        /// </summary>
+        public int SlotIndex => _slotIndex;
 
         // ─── Refresh from current loadout state ───────────────────────────
 
         public void Refresh(WeaponInstanceData instance)
         {
             bool valid = instance != null && instance.IsValid;
+
+            // Cache for the Update() poll so DPS keeps refreshing between
+            // explicit Refresh() calls (which only fire on loadout changes).
+            _cachedInstance = valid ? instance : null;
 
             if (labelText != null)
             {
@@ -103,7 +126,37 @@ namespace CyberPickle.UI.HUD
             var tracker = PerWeaponStatsTracker.Instance;
             if (tracker == null) return string.Empty;
             var stats = tracker.GetStats(instance.WeaponId);
-            return stats != null ? $"DPS {stats.RollingDps:F1}" : "DPS —";
+            if (stats == null) return "DPS —";
+
+            // Show TOTAL-RUN DPS, not rolling-window. The rolling value is
+            // noisy (a sniper firing once per 4 beats fluctuates ±50% as
+            // shots enter/exit the 5s window) and reads as a "live"
+            // metric — but the slot label is glanced at periodically, not
+            // watched continuously, so a stable cumulative number is more
+            // useful AND matches the tooltip's "Run:" row exactly. Both
+            // values come from the same per-weapon stats.
+            float runTime = CyberPickle.Gameplay.RunState.RunStateManager.Instance != null
+                ? CyberPickle.Gameplay.RunState.RunStateManager.Instance.RunTime
+                : 0f;
+            return $"DPS {stats.GetTotalRunDps(runTime):F1}";
+        }
+
+        // Poll the DPS label every DpsRefreshInterval seconds. Without this,
+        // the DPS text only updates on loadout changes (the parent panel's
+        // event-driven refresh model) and stays frozen at the last-upgrade
+        // value through the rest of the run. Unscaled time so the label
+        // stays current even while paused (no harm — DPS doesn't change
+        // during pause, but the math is cheap).
+        private void Update()
+        {
+            if (dpsText == null) return;
+            _dpsRefreshTimer -= Time.unscaledDeltaTime;
+            if (_dpsRefreshTimer > 0f) return;
+            _dpsRefreshTimer = DpsRefreshInterval;
+
+            dpsText.text = (_cachedInstance != null && _cachedInstance.IsValid)
+                ? FormatLiveDps(_cachedInstance)
+                : string.Empty;
         }
 
         // ─── Tooltip content ──────────────────────────────────────────────
@@ -161,7 +214,10 @@ namespace CyberPickle.UI.HUD
 
             float avgDmg = perShotNoCrit * (1f - critChance) + perShotCrit * critChance;
             float expectedDps = avgDmg * fireRate;
-            sb.AppendLine($"<b>DPS</b>  <color=#ffd66e>{expectedDps:F1}</color>");
+            // Label clearly so the player understands this is the THEORETICAL
+            // ceiling (every shot lands, current Power + crit, current BPM),
+            // not the actual cumulative DPS that the "Run:" row shows below.
+            sb.AppendLine($"<b>Expected DPS</b>  <color=#ffd66e>{expectedDps:F1}</color>  <size=80%><i>(theoretical max)</i></size>");
 
             // Per-tier bonus perk (if authored on the WeaponData).
             var perk = instance.weaponData.GetPerkForRarity(instance.rarity);
@@ -176,8 +232,19 @@ namespace CyberPickle.UI.HUD
             var live = tracker != null ? tracker.GetStats(instance.WeaponId) : null;
             if (live != null)
             {
+                // Use TotalRunDps (total damage / run time) so this number is
+                // (a) stable across consecutive tooltip refreshes, and
+                // (b) consistent with the slot label, which uses the same
+                //     calculation.
+                // Previously this used RollingDps — its noisy nature made
+                // it look like "Run:" was wrong (slot showed 83, tooltip showed
+                // 64.1 at the same instant). Now both render the same number.
+                float runTime = CyberPickle.Gameplay.RunState.RunStateManager.Instance != null
+                    ? CyberPickle.Gameplay.RunState.RunStateManager.Instance.RunTime
+                    : 0f;
+                float runDps = live.GetTotalRunDps(runTime);
                 sb.AppendLine();
-                sb.AppendLine($"Run: <b>{live.TotalKills}</b> kills · {live.TotalHits} hits · {live.RollingDps:F1} DPS");
+                sb.AppendLine($"Run: <b>{live.TotalKills}</b> kills · {live.TotalHits} hits · {runDps:F1} DPS");
             }
 
             return new TooltipContent

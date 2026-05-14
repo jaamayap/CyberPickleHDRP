@@ -23,6 +23,9 @@ namespace CyberPickle.UI.HUD
         [Tooltip("Four child WeaponSlotUI components, one per loadout slot. Index = slotIndex. Required.")]
         [SerializeField] private WeaponSlotUI[] slots = new WeaponSlotUI[WeaponLoadoutRuntime.MaxSlots];
 
+        [Tooltip("Optional — four child WeaponSlotBeatPulse components, one per loadout slot, same ordering as `slots`. Drives the per-shot dance + fuse-ring anticipation visuals. Leave empty if you don't want beat-pulses on a particular layout.")]
+        [SerializeField] private WeaponSlotBeatPulse[] beatPulses = new WeaponSlotBeatPulse[WeaponLoadoutRuntime.MaxSlots];
+
         [Header("Diagnostics")]
         [SerializeField] private bool verbose;
 
@@ -33,10 +36,15 @@ namespace CyberPickle.UI.HUD
         {
             // Stamp slot indices on the children so they don't have to be
             // configured by hand. Designer just orders the array; index
-            // comes from array position.
+            // comes from array position. Same rule applies to the parallel
+            // beatPulses array — index in the array IS the slot index.
             for (int i = 0; i < slots.Length; i++)
             {
                 if (slots[i] != null) slots[i].SetSlotIndex(i);
+            }
+            for (int i = 0; i < beatPulses.Length; i++)
+            {
+                if (beatPulses[i] != null) beatPulses[i].SetSlotIndex(i);
             }
         }
 

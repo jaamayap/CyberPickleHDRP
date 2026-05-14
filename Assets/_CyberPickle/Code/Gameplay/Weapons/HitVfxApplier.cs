@@ -26,14 +26,35 @@
 //   - The element has no hitPrefab authored
 //   - The weapon's hitVfxScale is zero (designer explicitly disabled)
 
+using Unity.Entities;
 using UnityEngine;
 using CyberPickle.Core;
+using CyberPickle.DOTS.Components;
 using CyberPickle.Shop.Equipment.Data;
 
 namespace CyberPickle.Gameplay.Weapons
 {
     public static class HitVfxApplier
     {
+        /// <summary>
+        /// Read the player's AreaOfEffect stat from the ECS singleton.
+        /// Returns 0 (neutral, no bonus) when the singleton isn't ready
+        /// or the default world doesn't exist (early frames / scene-test
+        /// setups). Used here so hit-VFX scales by the same scaled AoE
+        /// formula that WeaponFiring uses to stamp ProjectileAoE.Radius
+        /// and drive the telegraph — keeps visuals consistent with the
+        /// actual blast.
+        /// </summary>
+        private static float ReadAreaStatStatic()
+        {
+            var w = World.DefaultGameObjectInjectionWorld;
+            if (w == null) return 0f;
+            using var query = w.EntityManager.CreateEntityQuery(typeof(PlayerStatsData));
+            if (query.CalculateEntityCount() == 0) return 0f;
+            return query.GetSingleton<PlayerStatsData>().AreaOfEffect;
+        }
+
+
         /// <summary>
         /// Spawn an element-tinted hit VFX at the given world position,
         /// scaled and tinted per the damage + crit + weapon parameters,
@@ -68,7 +89,12 @@ namespace CyberPickle.Gameplay.Weapons
                 if (instance != null && instance.IsValid && instance.weaponData != null)
                 {
                     weaponData = instance.weaponData;
-                    aoeRadius = Mathf.Max(1f, weaponData.baseAreaOfEffect);
+                    // Use the scaled AoE (level + area stat) so hit-VFX
+                    // size matches the actual blast radius this shot
+                    // produced. WeaponFiring computed exactly this for the
+                    // ProjectileAoE.Radius stamp + the telegraph preview.
+                    float areaStat = ReadAreaStatStatic();
+                    aoeRadius = Mathf.Max(1f, weaponData.GetAreaOfEffectForLevel(instance.level, areaStat));
                 }
             }
 

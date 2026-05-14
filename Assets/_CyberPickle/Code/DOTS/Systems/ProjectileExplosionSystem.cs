@@ -78,6 +78,12 @@ namespace CyberPickle.DOTS.Systems
             var elementLookup  = SystemAPI.GetComponentLookup<WeaponElement>(isReadOnly: true);
             var velocityLookup = SystemAPI.GetComponentLookup<ProjectileVelocity>(isReadOnly: true);
             var hybridLookup   = SystemAPI.GetComponentLookup<ProjectileHasHybridVisual>(isReadOnly: true);
+            // Health is RW so the AoE radial loop sees each enemy's
+            // updated health between iterations (and so any two grenades
+            // detonating on overlapping enemies in the same frame
+            // accumulate damage correctly). Same rationale as
+            // ProjectileCollisionSystem — see comment there.
+            var healthLookup = SystemAPI.GetComponentLookup<Health>(isReadOnly: false);
 
             // Enemy snapshot — same query shape as ProjectileCollisionSystem.
             EntityQuery enemyQuery = SystemAPI.QueryBuilder()
@@ -146,14 +152,23 @@ namespace CyberPickle.DOTS.Systems
                     if (dx * dx + dz * dz > radiusSq) continue;
 
                     Entity enemyEntity = enemies[j];
-                    Health health = SystemAPI.GetComponent<Health>(enemyEntity);
+                    // RW lookup so successive enemies in the same blast,
+                    // and overlapping blasts in the same frame, see
+                    // each other's writes. See lookup comment above.
+                    Health health = healthLookup[enemyEntity];
+
+                    // Capture pre-hit so KilledTarget below uses the
+                    // crossing-zero criterion — see ProjectileCollisionSystem
+                    // for the rationale (prevents an AoE that re-damages an
+                    // already-dead enemy from claiming a second kill credit).
+                    float preHitCurrent = health.Current;
 
                     bool isCrit = _random.NextFloat() < critChance;
                     float critMul = isCrit ? 2f : 1f;
                     float aoeDamage = damage.ValueRO.Value * powerMultiplier * critMul;
 
                     health.Current -= aoeDamage;
-                    ecb.SetComponent(enemyEntity, health);
+                    healthLookup[enemyEntity] = health;
 
                     if (queueExists)
                     {
@@ -168,7 +183,9 @@ namespace CyberPickle.DOTS.Systems
                             WeaponId              = weaponId,
                             DamageDealt           = aoeDamage,
                             IsCrit                = isCrit,
-                            KilledTarget          = health.Current <= 0f,
+                            // Crossing-zero only — see ProjectileCollisionSystem
+                            // for the kill attribution rationale.
+                            KilledTarget          = preHitCurrent > 0f && health.Current <= 0f,
                             HitPosition           = reportPos,
                             Element               = element,
                             HitDirection          = hitDir,

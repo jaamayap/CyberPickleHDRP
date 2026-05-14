@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eed9819a0a1f2914ba11fbb5034bb9dc, type: 3}
+  m_Name: Card_RarityUpWeapon_Template
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Progression.UpgradeCardSO
+  cardId: rarity_up_weapon_template
+  displayName: '{WEAPON}: Rarity Up'
+  description: Bumps {WEAPON}'s rarity by +1 tier (more damage per shot).
+  icon: {fileID: 0}
+  tintColor: {r: 1, g: 0.6, b: 0.4, a: 1}
+  rarity: 1
+  cardType: 3
+  targetWeaponData: {fileID: 0}
+  targetPowerUpData: {fileID: 0}
+  targetSkillId:
+  modifiers: []
+  previewPrefab: {fileID: 0}
+  hoverStingerEventId:
+  elementTags: []
+  prerequisiteCardIds: []

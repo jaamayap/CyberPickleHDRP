@@ -29,16 +29,24 @@ MonoBehaviour:
   baseDamage: 5
   baseProjectileSpeed: 10
   baseAreaOfEffect: 0.1
+  aoeMultiplierPerLevel:
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
   basePierceCount: 0
   baseRange: 10
   targetingStrategy: 0
   targetingConeHalfAngleDeg: 8
-  muzzleFlashScale: 0.5
-  projectileScale: 0.5
-  hitVfxScale: 0.5
+  muzzleFlashScale: 0.1
+  projectileScale: 0.1
+  hitVfxScale: 0.1
   hitVfxScalesWithAreaOfEffect: 0
+  telegraphStyle: {fileID: 0}
   trajectory: 0
   flightBeats: 1
+  tumbleRateDegreesPerSecond: {x: 180, y: 90, z: 60}
   activeCellsPerLevel: 0400000008000000100000002000000040000000
   barCount: 4
   beatsPerBar: 4

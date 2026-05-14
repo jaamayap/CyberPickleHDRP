@@ -81,11 +81,34 @@ namespace CyberPickle.Gameplay.Progression
         /// <summary>Fires when banked rerolls change (UI updates the Reroll button label).</summary>
         public event Action<int> OnBankedRerollsChanged;
 
+        /// <summary>
+        /// Fires when the multi-level-up stack state changes (start, advance, end).
+        /// Arguments: (currentIndex, totalInStack). currentIndex is 1-based.
+        /// When totalInStack <= 1 the UI should hide the stack indicator.
+        /// </summary>
+        public event Action<int, int> OnStackProgressChanged;
+
         /// <summary>Current number of banked rerolls.</summary>
         public int BankedRerolls { get; private set; }
 
         /// <summary>Cap on banked rerolls (inspector-configured).</summary>
         public int BankedRerollsCap => bankedRerollsCap;
+
+        /// <summary>Total picks expected in the currently-running multi-level-up stack. 0 or 1 = not in a stack.</summary>
+        public int StackTotalPicks => _stackPlannedSize;
+
+        /// <summary>1-based index of the currently-shown draft within the stack. 0 when no stack is active.</summary>
+        public int StackCurrentPick => _stackPicksMade + 1;
+
+        /// <summary>
+        /// True when a level-up draft is currently being shown to the player
+        /// (panel up, run paused). UI controllers read this AFTER calling
+        /// NotifyCardPicked / NotifyDraftSkipped to decide whether to tear
+        /// down their visuals: if another draft already opened synchronously
+        /// (multi-level stack continuation), the UI should stay put and let
+        /// HandleCardsDrawn rebind it — tearing down would undo that work.
+        /// </summary>
+        public bool IsDrafting => _screenActive;
 
         // ─── Public API for the UI to call back into ──────────────────────
 
@@ -114,7 +137,16 @@ namespace CyberPickle.Gameplay.Progression
             }
 
             var loadout = WeaponLoadoutRuntime.Instance;
-            string applyResult = card.source.ApplyToAxis(playerStats, loadout, axisIndex, card.rolledElement, card.rolledRarity);
+            // Pass resolved targets from the DraftedCard wrapper. For
+            // TEMPLATE cards (source.targetWeaponData == null) the pool's
+            // draft logic stuffed the resolved weapon onto the wrapper; the
+            // card's Apply prefers it over the SO's authored target. For
+            // legacy specific cards these are null and Apply uses the SO's
+            // authored target as before.
+            string applyResult = card.source.ApplyToAxis(
+                playerStats, loadout, axisIndex,
+                card.rolledElement, card.rolledRarity,
+                card.resolvedTargetWeapon, card.resolvedTargetPowerUp);
             _ownedCardIds.Add(card.source.cardId);
             if (verbose)
                 Debug.Log($"[LevelUpCoordinator] Picked '{card.source.cardId}' ({card.source.cardType}, {card.rolledRarity}/{card.rolledElement}, axis={axisIndex}): {applyResult}.");
@@ -122,8 +154,8 @@ namespace CyberPickle.Gameplay.Progression
             MusicEventBus.Fire(MusicEvent.CardPicked, card.source.cardId);
             OnCardApplied?.Invoke(card);
 
-            ResumeRun();
-            ProcessNextPendingLevelUp();
+            AdvanceStackProgress();
+            AdvanceToNextDraftOrResume();
         }
 
         /// <summary>
@@ -147,8 +179,8 @@ namespace CyberPickle.Gameplay.Progression
             OnBankedRerollsChanged?.Invoke(BankedRerolls);
             MusicEventBus.Fire(MusicEvent.CardSkipped, null);
 
-            ResumeRun();
-            ProcessNextPendingLevelUp();
+            AdvanceStackProgress();
+            AdvanceToNextDraftOrResume();
         }
 
         /// <summary>
@@ -200,6 +232,13 @@ namespace CyberPickle.Gameplay.Progression
         private readonly Queue<int> _pendingLevels = new Queue<int>();
         private bool _screenActive;
 
+        // Multi-level-up stack tracking. Set by MultiLevelUp event when a
+        // burst is about to land; advanced on each pick / skip. Reset to 0
+        // when the stack completes. Used by the UI to render "k of N"
+        // progress on the level-up screens.
+        private int _stackPlannedSize;
+        private int _stackPicksMade;
+
         // ─── Lifecycle ────────────────────────────────────────────────────
 
         private void OnEnable()
@@ -219,6 +258,20 @@ namespace CyberPickle.Gameplay.Progression
                 case MusicEvent.RunStart:
                     CachePlayerRefs();
                     ResetRunScopedState();
+                    break;
+
+                case MusicEvent.MultiLevelUp:
+                    // Fired by PlayerXPBridge BEFORE the per-level events
+                    // when a single XP delta will cross multiple thresholds.
+                    // Pre-sizes the stack so the very first draft screen
+                    // can render "1 of N" instead of "1 of ?".
+                    int totalLevels = payload is int n ? n : 0;
+                    if (totalLevels >= 2)
+                    {
+                        _stackPlannedSize = totalLevels;
+                        _stackPicksMade = 0;
+                        if (verbose) Debug.Log($"[LevelUpCoordinator] Multi-level-up stack starting: {totalLevels} picks.");
+                    }
                     break;
 
                 case MusicEvent.LevelUp:
@@ -245,6 +298,10 @@ namespace CyberPickle.Gameplay.Progression
             _banishedCardIds.Clear();
             _pendingLevels.Clear();
             _screenActive = false;
+            _stackPlannedSize = 0;
+            _stackPicksMade = 0;
+            // Notify any UI listeners that the stack indicator should hide.
+            OnStackProgressChanged?.Invoke(0, 0);
 
             if (BankedRerolls != 0)
             {
@@ -279,6 +336,32 @@ namespace CyberPickle.Gameplay.Progression
             ShowLevelUpScreen(level);
         }
 
+        /// <summary>
+        /// Drives the transition between drafts. If more levels are queued,
+        /// show the next draft directly (stays in LevelUpPaused, fires
+        /// OnCardsDrawn so the UI rebinds). If the queue is empty, resume
+        /// the run.
+        ///
+        /// Critical: ProcessNext must run BEFORE ResumeRun so we don't briefly
+        /// flip the run state Running→LevelUpPaused mid-stack — that would
+        /// fire phase-change events to the music conductor twice per stack
+        /// transition and re-trigger anything that listens for run resume.
+        /// </summary>
+        private void AdvanceToNextDraftOrResume()
+        {
+            if (_pendingLevels.Count > 0)
+            {
+                // Stack continuation — keep _screenActive true throughout.
+                // ShowLevelUpScreen sets it true again (idempotent) and the
+                // same-state phase transition is guarded in ShowLevelUpScreen.
+                ProcessNextPendingLevelUp();
+            }
+            else
+            {
+                ResumeRun();
+            }
+        }
+
         private void ShowLevelUpScreen(int newLevel)
         {
             if (pool == null)
@@ -287,7 +370,11 @@ namespace CyberPickle.Gameplay.Progression
                 return;
             }
 
-            if (RunStateManager.Instance != null)
+            // Guard same-state transition during multi-level stacks — we'd
+            // otherwise fire OnPhaseChanged for LevelUpPaused → LevelUpPaused
+            // on every continuation, which double-pings every consumer of
+            // the phase event (music conductor, HUD, etc.).
+            if (RunStateManager.Instance != null && RunStateManager.Instance.CurrentPhase != RunStatePhase.LevelUpPaused)
                 RunStateManager.Instance.TransitionTo(RunStatePhase.LevelUpPaused);
 
             // Card count: Luck-driven via RarityRollService.CardsVisibleForLuck.
@@ -320,7 +407,36 @@ namespace CyberPickle.Gameplay.Progression
             }
 
             _screenActive = true;
+
+            // Tell the UI which slot of the stack this draft represents.
+            // For non-stacked level-ups (single level gained) we still emit
+            // (1, 1) so the UI can decide whether to show or hide based on
+            // total > 1.
+            int totalForUI = _stackPlannedSize >= 2 ? _stackPlannedSize : 1;
+            int currentForUI = _stackPicksMade + 1;
+            OnStackProgressChanged?.Invoke(currentForUI, totalForUI);
+
             OnCardsDrawn?.Invoke(cards);
+        }
+
+        /// <summary>
+        /// Advance the stack counter and broadcast the new progress to UI.
+        /// Called from NotifyCardPicked and NotifyDraftSkipped — NOT from
+        /// NotifyRerollRequested (rerolls don't move the stack forward).
+        /// When all picks land, resets the stack state to (0,0).
+        /// </summary>
+        private void AdvanceStackProgress()
+        {
+            if (_stackPlannedSize < 2) return; // not in a multi-level stack
+
+            _stackPicksMade++;
+            if (_stackPicksMade >= _stackPlannedSize)
+            {
+                if (verbose) Debug.Log($"[LevelUpCoordinator] Multi-level-up stack complete ({_stackPlannedSize} picks).");
+                _stackPlannedSize = 0;
+                _stackPicksMade = 0;
+                OnStackProgressChanged?.Invoke(0, 0);
+            }
         }
 
         private void ResumeRun()

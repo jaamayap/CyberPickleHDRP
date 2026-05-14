@@ -26,19 +26,27 @@ MonoBehaviour:
   requiredAchievements: []
   maxUpgradeLevel: 5
   attackType: 0
-  baseDamage: 10
-  baseProjectileSpeed: 5
+  baseDamage: 2.5
+  baseProjectileSpeed: 10
   baseAreaOfEffect: 0.1
+  aoeMultiplierPerLevel:
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
   basePierceCount: 0
   baseRange: 5
   targetingStrategy: 0
   targetingConeHalfAngleDeg: 8
-  muzzleFlashScale: 0.5
-  projectileScale: 0.5
-  hitVfxScale: 0.5
+  muzzleFlashScale: 0.15
+  projectileScale: 0.15
+  hitVfxScale: 0.15
   hitVfxScalesWithAreaOfEffect: 0
+  telegraphStyle: {fileID: 0}
   trajectory: 0
   flightBeats: 1
+  tumbleRateDegreesPerSecond: {x: 180, y: 90, z: 60}
   activeCellsPerLevel: 0200000004000000080000001000000020000000
   barCount: 4
   beatsPerBar: 4

@@ -138,6 +138,38 @@ namespace CyberPickle.Gameplay.Weapons
         private WeaponTargeting targeting;
         private FixedString64Bytes _weaponIdFixed;
 
+        // Persistent aim-preview telegraph (parabolic weapons only).
+        // Created lazily in Awake when WeaponData.trajectory == Parabolic.
+        // Updated each frame from UpdateTelegraph() so the arc + ring
+        // follow the current target's predicted-future-position live.
+        // Hidden when targeting.HasTarget is false.
+        private GrenadeTelegraph _telegraph;
+
+        // Impact-lock state — when a grenade fires, we snapshot the
+        // landing point + remaining flight time. While the timer is alive,
+        // UpdateTelegraph keeps the ring + disc fixed at the snapshotted
+        // landing (matching where the grenade is actually heading) but
+        // continues to start the arc at the CURRENT muzzle each frame, so
+        // the line stays visually attached to the gun as the player moves.
+        // When the timer expires (grenade detonates), the lock releases
+        // and the telegraph resumes following the live target.
+        private Vector3 _lockedLanding;
+        private float   _lockedRemaining;
+
+        // Targeting state polling — fires MusicEvent.WeaponAimChanged on
+        // flips so UI consumers (WeaponSlotBeatPulse) can hide their
+        // anticipation visuals when the weapon has no target. Without
+        // this, the fuse animates toward fires that never happen
+        // because HandleSubdivision returns early on no target.
+        private bool _lastReportedHasTarget;
+        private bool _lastReportedHasTargetInitialized;
+
+        // Diagnostic — last element observed in UpdateTelegraph. Used to
+        // log only on element CHANGES (not every frame) when verboseLogging
+        // is on, so the user can confirm the telegraph is seeing the
+        // element flip when a power-up couples to this weapon's axis.
+        private ElementId _lastTelegraphElement = (ElementId)255;
+
         private World world;
         private EntityManager entityManager;
         private Entity prefabEntity = Entity.Null;        // legacy single-prefab cache
@@ -172,6 +204,52 @@ namespace CyberPickle.Gameplay.Weapons
             // > GameObject name. FixedString64Bytes is Burst-compatible.
             string id = ResolveWeaponId();
             _weaponIdFixed = new FixedString64Bytes(id);
+
+            // Lazy-create the aim preview for parabolic weapons. Non-parabolic
+            // weapons skip this entirely so we don't allocate LineRenderers
+            // for pistols/snipers that don't need them.
+            EnsureTelegraph();
+        }
+
+        /// <summary>
+        /// Create the persistent GrenadeTelegraph child for parabolic weapons.
+        /// Skipped for non-parabolic weapons. Idempotent — safe to call
+        /// multiple times. The Mono lives as a child of the weapon GameObject
+        /// so its hierarchy stays organized; the LineRenderers themselves
+        /// use world space (so visuals don't transform with the weapon's
+        /// local frame even though the GameObject does).
+        ///
+        /// CRITICAL: this is called from BOTH Awake AND UpdateTelegraph
+        /// because the WeaponData reference is sometimes set via the
+        /// runtime loadout (PlayerLoadoutLoader writes WeaponInstanceData
+        /// AFTER Awake of weapon prefabs). The inspector `weaponData`
+        /// field may be null at Awake time — we have to retry each frame
+        /// until the loadout populates the instance so we can resolve
+        /// data from it. The early-out at the top makes the retry cheap.
+        /// </summary>
+        private void EnsureTelegraph()
+        {
+            if (_telegraph != null) return;
+
+            // Resolve WeaponData from the loadout instance first (the
+            // production path for runtime-spawned weapons), then fall
+            // back to the inspector field (scene-test setups).
+            var instance = GetCurrentInstance();
+            var data = ResolveWeaponData(instance);
+            if (data == null) return;
+            if (data.trajectory != ProjectileTrajectory.Parabolic) return;
+
+            var go = new GameObject("AimTelegraph");
+            go.transform.SetParent(transform, worldPositionStays: false);
+            _telegraph = go.AddComponent<GrenadeTelegraph>();
+            // Push the per-weapon style if WeaponData has one assigned;
+            // otherwise the telegraph uses whatever inspector default it
+            // has (or sensible fallback line renderers).
+            if (data.telegraphStyle != null)
+                _telegraph.SetStyle(data.telegraphStyle);
+
+            if (verboseLogging)
+                Debug.Log($"[WeaponFiring] AimTelegraph created on '{name}' (parabolic weapon '{data.displayName}', style={(data.telegraphStyle != null ? data.telegraphStyle.name : "null")}).");
         }
 
         private string ResolveWeaponId()
@@ -278,6 +356,16 @@ namespace CyberPickle.Gameplay.Weapons
 
         private void Update()
         {
+            // Aim telegraph (parabolic weapons only) — driven every frame
+            // regardless of whether firing is grid-locked or fallback-ticked.
+            // The telegraph hides itself when there's no target.
+            UpdateTelegraph();
+
+            // Broadcast target state changes so UI consumers know when
+            // anticipation visuals should be active. Cheap (one bool
+            // compare per frame, one event per flip).
+            PollTargetingState();
+
             // Grid path handles firing when subscribed; nothing to do here.
             if (_gridSubscribed) return;
 
@@ -295,6 +383,142 @@ namespace CyberPickle.Gameplay.Weapons
 
             float effectiveRate = GetEffectiveFireRate(instance);
             _fallbackCooldown = 1f / Mathf.Max(0.01f, effectiveRate);
+        }
+
+        /// <summary>
+        /// Drives the persistent aim-preview telegraph for parabolic weapons.
+        /// Mirrors the Fire() path's launch math (same lead, same v0, same
+        /// AoE radius) so the player's preview matches the actual grenade
+        /// that fires when the rhythm tick lands.
+        ///
+        /// Cheap (~20 LOC, no allocation in steady state) so it's fine to
+        /// run every frame.
+        /// </summary>
+        private void UpdateTelegraph()
+        {
+            // Lazy re-attempt creation each frame — Awake's first try may
+            // have bailed because the loadout hadn't populated the instance
+            // yet. EnsureTelegraph is idempotent and cheap (early-out when
+            // _telegraph != null), so calling it every frame is fine.
+            EnsureTelegraph();
+
+            if (_telegraph == null) return;
+
+            // Decrement the impact-lock timer regardless of whether we
+            // end up using it this frame — once it hits zero, the lock
+            // is released and we resume following the live target.
+            bool locked = _lockedRemaining > 0f;
+            if (locked) _lockedRemaining -= Time.deltaTime;
+
+            // In LIVE mode (no lock active) we need a target to draw.
+            // In LOCKED mode we always have a target — the snapshotted
+            // landing position from the most recent fire.
+            if (!locked && (targeting == null || !targeting.HasTarget))
+            {
+                _telegraph.Hide();
+                return;
+            }
+
+            var instance = GetCurrentInstance();
+            var data = ResolveWeaponData(instance);
+            if (data == null || data.trajectory != ProjectileTrajectory.Parabolic)
+            {
+                _telegraph.Hide();
+                return;
+            }
+
+            // Lazily init DOTS world if the prediction lookup needs it.
+            // Same code ResolvePrefab uses — duplicated here so we don't
+            // have to fully ResolvePrefab just for the prediction read.
+            if (world == null)
+            {
+                world = World.DefaultGameObjectInjectionWorld;
+                if (world != null) entityManager = world.EntityManager;
+            }
+
+            Transform fromMuzzle = muzzle != null ? muzzle : transform;
+            // SPAWN is ALWAYS the live muzzle (even during a lock) —
+            // this is the "muzzle attached to the arc" behaviour. The
+            // arc start tracks where the gun currently is; only the
+            // landing point is frozen during a lock.
+            Vector3 spawnPos = fromMuzzle.position;
+            float flightTime = data.GetParabolicFlightTimeSeconds();
+
+            // AoE scales with weapon level (per-WeaponData curve) and the
+            // player's AreaOfEffect stat (currently unused outside this
+            // path — wiring it here activates skill/equipment/power-up
+            // contributions automatically). Telegraph + actual explosion
+            // use the SAME formula → preview matches reality.
+            float areaStat = ReadAreaStat();
+            int currentLevel = (instance != null && instance.IsValid) ? instance.level : 1;
+            float aoeRadius  = data.GetAreaOfEffectForLevel(currentLevel, areaStat);
+
+            // Resolve target position depending on lock state.
+            Vector3 targetPos;
+            if (locked)
+            {
+                // Lock active — use the snapshotted landing from the most
+                // recent shot. No re-lead, no live target query: the
+                // grenade is already in flight, the impact point is what
+                // it is. The ring + disc stay anchored here while the
+                // gun (spawnPos) moves.
+                targetPos = _lockedLanding;
+            }
+            else
+            {
+                // Live mode — same target-lead math the Fire() path uses.
+                // See the Fire branch for the lead clamp rationale.
+                targetPos = targeting.TargetPosition;
+                if (world != null
+                    && targeting.CurrentTarget != Entity.Null
+                    && entityManager.Exists(targeting.CurrentTarget)
+                    && entityManager.HasComponent<EnemyPredictedVelocity>(targeting.CurrentTarget))
+                {
+                    var pred = entityManager.GetComponentData<EnemyPredictedVelocity>(targeting.CurrentTarget);
+                    Vector3 leadOffset = new Vector3(pred.Value.x, 0f, pred.Value.z) * flightTime;
+                    float maxLead = aoeRadius * 2f;
+                    if (leadOffset.sqrMagnitude > maxLead * maxLead)
+                        leadOffset = leadOffset.normalized * maxLead;
+                    targetPos += leadOffset;
+                }
+            }
+
+            // v0 is RECOMPUTED each frame from current spawn → resolved
+            // target. During a lock, the target is fixed but the spawn
+            // moves with the player, so the arc visually "swings" while
+            // its endpoints stay correctly anchored. During live aiming,
+            // both move and the arc tracks the target normally.
+            Vector3 v0 = WeaponData.ComputeParabolicLaunchVelocity(spawnPos, targetPos, flightTime);
+
+            // Element colour from the live loadout instance — this is what
+            // makes Ice grenades show a cyan arc, Fire grenades orange, etc.
+            // When the weapon has no element (None — pre-power-up coupling),
+            // we pass Color.clear (alpha = 0). ResolveColor in the style SO
+            // skips the lerp on zero-alpha, so the telegraph shows pure
+            // baseColor (the SO's "no element" yellow default).
+            Color elementColor;
+            ElementId currentElement = (instance != null && instance.IsValid) ? instance.element : ElementId.None;
+            if (currentElement != ElementId.None)
+                elementColor = currentElement.DisplayColor();
+            else
+                elementColor = Color.clear;
+
+            // Diagnostic — log when the element flips so we can confirm
+            // the telegraph is seeing power-up coupling. One-shot per
+            // change; not per-frame spam.
+            if (verboseLogging && currentElement != _lastTelegraphElement)
+            {
+                _lastTelegraphElement = currentElement;
+                Debug.Log($"[WeaponFiring] Telegraph element → {currentElement} (color={elementColor}, slot={slotIndex}).");
+            }
+
+            _telegraph.ShowAim(
+                spawnPos:         spawnPos,
+                v0:               v0,
+                gravityMagnitude: WeaponData.ParabolicGravityMagnitude,
+                flightTime:       flightTime,
+                aoeRadius:        aoeRadius,
+                elementColor:     elementColor);
         }
 
         // ─── Effective stat helpers ───────────────────────────────────────
@@ -327,6 +551,49 @@ namespace CyberPickle.Gameplay.Weapons
             if (weaponData != null) return weaponData;
             if (instance != null && instance.IsValid) return instance.weaponData;
             return null;
+        }
+
+        /// <summary>
+        /// Detect changes in WeaponTargeting.HasTarget and broadcast them
+        /// via MusicEvent.WeaponAimChanged. Once-per-frame, edge-triggered:
+        /// only fires on actual flips, never as a continuous stream. UI
+        /// consumers (WeaponSlotBeatPulse) listen for this to know when
+        /// to hide anticipation visuals (no target) and when to re-start
+        /// the anticipation cycle (target acquired).
+        /// </summary>
+        private void PollTargetingState()
+        {
+            if (targeting == null) return;
+            bool current = targeting.HasTarget;
+            if (_lastReportedHasTargetInitialized && current == _lastReportedHasTarget) return;
+            _lastReportedHasTarget = current;
+            _lastReportedHasTargetInitialized = true;
+            MusicEventBus.Fire(MusicEvent.WeaponAimChanged, new WeaponAimPayload
+            {
+                SlotIndex = slotIndex,
+                HasTarget = current,
+            });
+        }
+
+        /// <summary>
+        /// Read the player's AreaOfEffect stat from the ECS singleton.
+        /// Returns 0 (neutral, no bonus) when the singleton isn't ready
+        /// (very early frames before PlayerStatsBridge runs). Used by
+        /// GetAreaOfEffectForLevel to scale the AoE radius — skill nodes,
+        /// equipment, and power-ups that contribute to PlayerStatType
+        /// .AreaOfEffect all flow through this read.
+        /// </summary>
+        private float ReadAreaStat()
+        {
+            if (world == null)
+            {
+                world = World.DefaultGameObjectInjectionWorld;
+                if (world == null) return 0f;
+                entityManager = world.EntityManager;
+            }
+            using var query = entityManager.CreateEntityQuery(typeof(PlayerStatsData));
+            if (query.CalculateEntityCount() == 0) return 0f;
+            return query.GetSingleton<PlayerStatsData>().AreaOfEffect;
         }
 
         /// <summary>
@@ -513,14 +780,19 @@ namespace CyberPickle.Gameplay.Weapons
                 Debug.Log($"<color=cyan>[WeaponFiring]</color> Slot {slotIndex} '{idForSource}' fired ×{muzzleCount} muzzle(s) — L{lvl} {rar} dmg={effectiveDamage:F1} spd={effectiveSpeed:F1}.");
             }
 
-            // Broadcast to the audio bus. Stage 0: a Debug.Log entry per shot
-            // (only when VerboseLogging is on — off by default to avoid log
-            // flood). Stage 2 (M9 Wwise): this becomes the per-shot Ak event
-            // post that schedules the weapon's musical note on the next grid
-            // boundary. The payload will eventually carry weapon-id + element
-            // so the conductor can pick the right pitch/sample; for the stub
-            // we just signal that A shot happened.
-            MusicEventBus.Fire(MusicEvent.WeaponFire, gameObject.name);
+            // Broadcast to the audio bus with a typed payload (slot index +
+            // weapon id). UI consumers (WeaponSlotBeatPulse) filter on
+            // SlotIndex so each slot only reacts to its own shots. Future
+            // Wwise stage 2 will map WeaponId → musical note / sample.
+            MusicEventBus.Fire(MusicEvent.WeaponFire, new WeaponFirePayload
+            {
+                SlotIndex = slotIndex,
+                // idForSource is FixedString64Bytes (Burst-safe in the
+                // projectile attribution path); convert to managed string
+                // for the payload since WeaponFirePayload is a managed
+                // struct consumed by Mono UI code.
+                WeaponId  = idForSource.ToString(),
+            });
         }
 
         /// <summary>
@@ -573,6 +845,34 @@ namespace CyberPickle.Gameplay.Weapons
                     // The parabola arcs from chest (spawnPos) up to apex,
                     // then DOWN to the ground at target.xz.
                     target = targeting.TargetPosition;
+
+                    // ─── TARGET LEAD via EnemyPredictedVelocity ────────
+                    // Read the AI's "where this enemy is heading next"
+                    // intent from the predicted-velocity component and
+                    // offset the impact point by predictedVel × flightTime
+                    // so the grenade lands where the enemy WILL be when it
+                    // arrives. Clamp the offset to a sane max (we use the
+                    // weapon's AoE radius × 2) so a sprinting target
+                    // doesn't lead the grenade somewhere absurd.
+                    //
+                    // Defensive: if the target entity is gone, has no
+                    // prediction component, or has zero predicted velocity,
+                    // fall through to current-position aim — same as before.
+                    if (targeting.CurrentTarget != Entity.Null
+                        && entityManager.Exists(targeting.CurrentTarget)
+                        && entityManager.HasComponent<EnemyPredictedVelocity>(targeting.CurrentTarget))
+                    {
+                        var pred = entityManager.GetComponentData<EnemyPredictedVelocity>(targeting.CurrentTarget);
+                        Vector3 leadOffset = new Vector3(pred.Value.x, 0f, pred.Value.z) * flightTime;
+                        // Scaled AoE (level + area stat) so the lead clamp
+                        // matches the actual blast radius this shot will have.
+                        int curLevel    = (instance != null && instance.IsValid) ? instance.level : 1;
+                        float fireAoE   = resolvedData.GetAreaOfEffectForLevel(curLevel, ReadAreaStat());
+                        float maxLead   = fireAoE * 2f;
+                        if (leadOffset.sqrMagnitude > maxLead * maxLead)
+                            leadOffset = leadOffset.normalized * maxLead;
+                        target += leadOffset;
+                    }
                 }
                 else
                 {
@@ -588,6 +888,20 @@ namespace CyberPickle.Gameplay.Weapons
                 Vector3 v0 = WeaponData.ComputeParabolicLaunchVelocity((Vector3)spawnPos, target, flightTime);
                 velocity = v0;
                 gravityAccel = new float3(0f, -WeaponData.ParabolicGravityMagnitude, 0f);
+
+                // ─── Impact-lock the telegraph for this shot's flight ───
+                // The telegraph normally follows the live target each
+                // frame. While this grenade is in flight, we want the
+                // landing position to STAY where the grenade is actually
+                // going — so the ring + disc anchor here. The arc still
+                // recomputes from the current muzzle each frame, so it
+                // looks attached to the gun as the player moves.
+                _lockedLanding   = target;
+                _lockedRemaining = flightTime;
+
+                // (Telegraph visuals are owned by the persistent
+                //  GrenadeTelegraph child on this weapon, driven by
+                //  UpdateTelegraph() every frame.)
 
                 // Lifetime = exactly flightTime. ProjectileExplosionSystem
                 // detonates the grenade the tick its Lifetime hits zero —
@@ -637,7 +951,12 @@ namespace CyberPickle.Gameplay.Weapons
                     Mathf.Deg2Rad * tumbleDeg.z);
                 AddOrSetComponent(projectile, new ProjectileTumble { AnglesPerSecondRad = tumbleRad });
 
-                float aoeRadius = Mathf.Max(0.1f, resolvedData.baseAreaOfEffect);
+                // Scaled AoE (level + area stat) stamped on the projectile —
+                // ProjectileExplosionSystem reads ProjectileAoE.Radius at
+                // detonation, so the actual blast matches what the telegraph
+                // previewed.
+                int aoeLevel = (instance != null && instance.IsValid) ? instance.level : 1;
+                float aoeRadius = resolvedData.GetAreaOfEffectForLevel(aoeLevel, ReadAreaStat());
                 AddOrSetComponent(projectile, new ProjectileAoE { Radius = aoeRadius });
 
                 Debug.Log($"<color=yellow>[WeaponFiring]</color> Parabolic launch: weapon='{resolvedData.displayName}' lifetime={lifetime:F2}s AoE radius={aoeRadius:F1}m. ProjectileExplosionSystem should detonate on Lifetime expiry.");

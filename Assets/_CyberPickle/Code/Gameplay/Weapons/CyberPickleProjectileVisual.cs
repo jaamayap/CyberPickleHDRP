@@ -101,24 +101,81 @@ namespace CyberPickle.Gameplay.Weapons
         ///
         /// Idempotent — repeated calls are safely ignored. ECS shouldn't
         /// call this more than once per kill, but defensive.
+        ///
+        /// SELF-SUFFICIENT vs. Hovl: Hovl-authored prefabs often leave
+        /// `lightSource` null and have ParticleSystems that aren't wired
+        /// into `Detached[]` or `projectilePS`. Hovl masked this by
+        /// destroying the bullet ~1s after hit — the unwired components
+        /// died with the GO. We keep the entity alive for the fade-out
+        /// window, so we have to explicitly shut down EVERY Light and PS
+        /// in the prefab on hit (except those under `hit`, which provide
+        /// the impact visuals). This makes the script robust against
+        /// inconsistent prefab wiring.
         /// </summary>
         public void OnHit(Vector3 contactPoint, Vector3 contactNormal)
         {
             if (_hitFired) return;
             _hitFired = true;
 
-            // Light off.
+            // ─── Light cleanup ──────────────────────────────────────────
+            // Explicit reference first (cheap, well-defined).
             if (lightSource != null) lightSource.enabled = false;
 
-            // Main projectile particles → CLEAR (the bullet head vanishes
-            // instantly so the frozen bullet doesn't have a static cloud).
+            // Then defensively disable ANY other Light components in
+            // children — Hovl prefabs often have an HDR Light at intensity
+            // 40+ that's not wired to lightSource. Without this, a frozen
+            // bullet keeps blasting bright light at the contact point for
+            // the entire fade-out duration. Skip any Light parented to the
+            // `hit` GO so the impact burst can still illuminate the scene.
+            var allLights = GetComponentsInChildren<Light>(includeInactive: false);
+            for (int i = 0; i < allLights.Length; i++)
+            {
+                var lt = allLights[i];
+                if (lt == null) continue;
+                if (hit != null && lt.transform.IsChildOf(hit.transform)) continue;
+                lt.enabled = false;
+            }
+
+            // ─── Particle cleanup ───────────────────────────────────────
+            // Main projectile particles → CLEAR (head vanishes instantly,
+            // no static cloud at the freeze position).
             if (projectilePS != null)
                 projectilePS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
-            // Position + play the hit VFX per the authored rotation mode.
-            // This is the bit that makes hit VFXes feel CONNECTED to the
-            // bullet — the hit GO is positioned at the EXACT contact point
-            // with the offset Hovl's authors tuned per-prefab.
+            // Every other PS in the prefab (except those under `hit` and
+            // the explicit projectilePS already handled above) gets a soft
+            // Stop — emission stops but existing particles complete their
+            // startLifetime, giving trails / glow halos a natural fade.
+            // This catches loop-emitters not wired into Detached[].
+            var allPS = GetComponentsInChildren<ParticleSystem>(includeInactive: false);
+            for (int i = 0; i < allPS.Length; i++)
+            {
+                var ps = allPS[i];
+                if (ps == null) continue;
+                if (ps == hitPS) continue;                                         // impact burst — needs to play
+                if (ps == projectilePS) continue;                                  // already cleared above
+                if (hit != null && ps.transform.IsChildOf(hit.transform)) continue; // anything under hit GO
+                ps.Stop(); // StopEmitting (default) — existing particles complete
+            }
+
+            // Detached trails → same soft Stop pattern (no-op if already
+            // stopped by the loop above, but kept for explicit clarity and
+            // safety on prefabs where Detached entries are parents of
+            // ParticleSystem children rather than carrying one themselves).
+            if (Detached != null)
+            {
+                for (int i = 0; i < Detached.Length; i++)
+                {
+                    if (Detached[i] == null) continue;
+                    var ps = Detached[i].GetComponent<ParticleSystem>();
+                    if (ps != null) ps.Stop();
+                }
+            }
+
+            // ─── Position + play the hit VFX (unchanged) ────────────────
+            // Per the authored rotation mode — this is what makes the
+            // impact feel connected to the bullet at the exact point the
+            // designer tuned for this projectile.
             if (hit != null)
             {
                 Quaternion rot = Quaternion.FromToRotation(Vector3.up, contactNormal);
@@ -140,18 +197,6 @@ namespace CyberPickle.Gameplay.Weapons
                 }
 
                 if (hitPS != null) hitPS.Play();
-            }
-
-            // Detached trails → Stop (let particles complete their
-            // startLifetime; smooth fade in world space).
-            if (Detached != null)
-            {
-                for (int i = 0; i < Detached.Length; i++)
-                {
-                    if (Detached[i] == null) continue;
-                    var ps = Detached[i].GetComponent<ParticleSystem>();
-                    if (ps != null) ps.Stop();
-                }
             }
         }
 
@@ -178,48 +223,48 @@ namespace CyberPickle.Gameplay.Weapons
         {
             float maxDuration = 0f;
 
-            // Hit VFX: hitPS plays out at OnHit. The entity needs to live
-            // through hitPS.duration + the longest particle's lifetime so
-            // the burst isn't cut off.
+            // Hit VFX duration: hitPS plays out at OnHit. Live at least
+            // through hitPS.duration + the longest particle's startLifetime
+            // so the impact burst isn't cut off.
             if (hitPS != null)
             {
                 var main = hitPS.main;
                 maxDuration = Mathf.Max(maxDuration, main.duration + main.startLifetime.constantMax);
-                // Also consider any nested PS under the hit GO (some Hovl
-                // hit prefabs nest sub-effects).
-                if (hit != null)
-                {
-                    var nested = hit.GetComponentsInChildren<ParticleSystem>(includeInactive: true);
-                    for (int i = 0; i < nested.Length; i++)
-                    {
-                        var m = nested[i].main;
-                        float d = m.duration + m.startLifetime.constantMax;
-                        if (d > maxDuration) maxDuration = d;
-                    }
-                }
             }
-
-            // Detached trails: after Stop() with no Clear, existing
-            // particles complete their startLifetime. Entity should live
-            // at least that long so the trail fades smoothly.
-            if (Detached != null)
+            // Plus any sub-PS nested under the hit GO.
+            if (hit != null)
             {
-                for (int i = 0; i < Detached.Length; i++)
+                var nested = hit.GetComponentsInChildren<ParticleSystem>(includeInactive: true);
+                for (int i = 0; i < nested.Length; i++)
                 {
-                    if (Detached[i] == null) continue;
-                    var ps = Detached[i].GetComponent<ParticleSystem>();
-                    if (ps == null) continue;
-                    var m = ps.main;
-                    // Worst case = longest particle's lifetime still in flight.
-                    float d = m.startLifetime.constantMax;
+                    var m = nested[i].main;
+                    float d = m.duration + m.startLifetime.constantMax;
                     if (d > maxDuration) maxDuration = d;
                 }
             }
 
+            // EVERY non-hit child PS — after the soft Stop in OnHit, their
+            // in-flight particles complete startLifetime. The entity has
+            // to live at least that long for trails / glow halos to fade
+            // smoothly. Catches loop-emitters not wired into Detached[].
+            var allPS = GetComponentsInChildren<ParticleSystem>(includeInactive: true);
+            for (int i = 0; i < allPS.Length; i++)
+            {
+                var ps = allPS[i];
+                if (ps == null) continue;
+                if (ps == hitPS) continue;
+                if (hit != null && ps.transform.IsChildOf(hit.transform)) continue;
+                var m = ps.main;
+                float d = m.startLifetime.constantMax;
+                if (d > maxDuration) maxDuration = d;
+            }
+
             // Floor at 0.3s so we never destroy IMMEDIATELY even if the
             // prefab is misconfigured (gives the hit visual a frame or
-            // two to register before the entity goes away).
-            return Mathf.Max(0.3f, maxDuration);
+            // two to register before the entity goes away). Ceiling at
+            // 4s so a misconfigured looping-particle (startLifetime = ∞)
+            // doesn't keep the bullet alive forever.
+            return Mathf.Clamp(maxDuration, 0.05f, 4f);
         }
     }
 }

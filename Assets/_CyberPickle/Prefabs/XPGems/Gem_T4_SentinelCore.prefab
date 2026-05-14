@@ -125,4 +125,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 17e26bd83f95cd44690fbe3d434fa06e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.DOTS.Authoring.XPGemAuthoring
-  defaultXPValue: 300
+  defaultXPValue: 5000

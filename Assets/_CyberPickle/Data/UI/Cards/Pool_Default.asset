@@ -18,23 +18,20 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 11d4249a2b1179b4b8074be32670f0f0, type: 2}
   - {fileID: 11400000, guid: c7a117e3d3be5b3429e348293e0b2578, type: 2}
   - {fileID: 11400000, guid: 71467b13c49d9d0448f123f516e8a8f8, type: 2}
-  - {fileID: 11400000, guid: d1dc7de003af1cf4e928bae553dd7b78, type: 2}
-  - {fileID: 11400000, guid: 9f4a7ffc4a8f19841b46a94e5989f4a6, type: 2}
-  - {fileID: 11400000, guid: 358ecbf6ad9f85040bd09dba1e762840, type: 2}
-  - {fileID: 11400000, guid: 60f8812b1f87bc8479a1e28fe8aad917, type: 2}
-  - {fileID: 11400000, guid: f87ed30c458d7f64bb7b2888b5791e25, type: 2}
-  - {fileID: 11400000, guid: 69e2fc089d1647844b8ce12961c43ead, type: 2}
+  - {fileID: 11400000, guid: 1a2b3c4d5e6f70819a2b3c4d5e6f7081, type: 2}
+  - {fileID: 11400000, guid: 2b3c4d5e6f7081923c4d5e6f70819234, type: 2}
+  - {fileID: 11400000, guid: 3c4d5e6f70819234bc5d6e7f80912345, type: 2}
   - {fileID: 11400000, guid: 7c8ffcb92348c5447a172e1be652fbc5, type: 2}
+  - {fileID: 11400000, guid: 69e2fc089d1647844b8ce12961c43ead, type: 2}
   - {fileID: 11400000, guid: cd5d2334d1b7a594491cc4c0fd7f85f2, type: 2}
   - {fileID: 11400000, guid: 176abefdce06bcd40a994d1f578029bd, type: 2}
   - {fileID: 11400000, guid: e52289ec4faa8284db18bd617e30a5ce, type: 2}
-  - {fileID: 11400000, guid: a4d7e8f3c2b91a544c8f9e2d617b0a45, type: 2}
-  - {fileID: 11400000, guid: b2c4a6e1d8f937624a9b5c3e0f1d28e7, type: 2}
-  - {fileID: 11400000, guid: c3a5b7d9e0f146834b1c2d4e5f607182, type: 2}
-  - {fileID: 11400000, guid: d4b6c8e0f1a2354904c3d5e6f708192a, type: 2}
-  - {fileID: 11400000, guid: e5c7d9f1a2b3465a14d4e6f708192a3b, type: 2}
-  - {fileID: 11400000, guid: f6d8e0a2b3c4576b24e5f708192a3b4c, type: 2}
-  - {fileID: 11400000, guid: 071e92b3c4d5687c34f608192a3b4c5d, type: 2}
+  weaponTemplatePool:
+  - {fileID: 11400000, guid: 337d641fff86e97429d92d6710915768, type: 2}
+  - {fileID: 11400000, guid: aa7e9ddd2b8d5a741bb7158f0ff0a735, type: 2}
+  - {fileID: 11400000, guid: 5868cd0a3c54dd24d95ddbd595b4d7a8, type: 2}
+  - {fileID: 11400000, guid: 88b600775eab9e8469d0a6c91b7a280b, type: 2}
+  powerUpTemplatePool: []
   weightCommon: 60
   weightUncommon: 25
   weightRare: 10

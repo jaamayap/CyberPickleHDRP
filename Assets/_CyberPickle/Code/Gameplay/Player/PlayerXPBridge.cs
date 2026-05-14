@@ -176,6 +176,37 @@ namespace CyberPickle.Gameplay.Player
 
             var xp = entityManager.GetComponentData<PlayerXP>(singletonEntity);
 
+            // ─── Pre-flight: simulate the upcoming level-ups so we can ───
+            // ─── broadcast the TOTAL count before firing per-level events. ──
+            // The coordinator needs the total up-front to render "k of N"
+            // progress on the very first draft screen; without this, the
+            // first screen would render "1 of ?" because subsequent enqueues
+            // haven't happened yet at that point in the synchronous flow.
+            //
+            // Cheap — pure arithmetic, no side effects, runs once per Update.
+            // For the common case (0 or 1 level-ups), the inner loop runs
+            // 0 or 1 times. Only the legendary multi-level-up gem pickup
+            // executes more iterations (typically <10).
+            int simXP        = xp.CurrentXP;
+            int simLevel     = xp.CurrentLevel;
+            int simThreshold = xp.XPToNextLevel;
+            int levelsGained = 0;
+            while (simXP >= simThreshold)
+            {
+                simXP -= simThreshold;
+                simLevel += 1;
+                simThreshold = ComputeXPThreshold(simLevel);
+                levelsGained++;
+            }
+
+            if (levelsGained >= 2)
+            {
+                // One broadcast per multi-level burst. Coordinator uses this
+                // to size the upcoming card-screen stack BEFORE the first
+                // screen is shown.
+                MusicEventBus.Fire(MusicEvent.MultiLevelUp, levelsGained);
+            }
+
             // Consume any level-up thresholds that have been crossed.
             // Loop in case a single big drop pushed us past multiple levels.
             bool changed = false;

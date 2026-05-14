@@ -25,12 +25,12 @@ MonoBehaviour:
   corpseDelayBeforeDissolve: 3
   corpseDissolveDuration: 1.5
   neuralCreditsOnDeath: 1
-  xpOnDeath: 1
   xpDropTable:
-    tier1Chance: 0.2
-    tier2Chance: 0.02
-    tier3Chance: 0.005
-    tier4Chance: 0
+    tier1Chance: 0.3
+    tier2Chance: 0.03
+    tier3Chance: 0.01
+    tier4Chance: 0.001
+    tier5Chance: 0
     bossMultiDropCount: 0
   rareDropChance: 0
   rareDropTable: []

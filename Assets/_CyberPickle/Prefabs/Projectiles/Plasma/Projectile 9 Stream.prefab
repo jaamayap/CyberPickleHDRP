@@ -4860,7 +4860,6 @@ GameObject:
   - component: {fileID: 4909937937562004}
   - component: {fileID: 108991988279912604}
   - component: {fileID: 8770413451883106819}
-  - component: {fileID: 1665254237810714879}
   - component: {fileID: 5429691467095985264}
   m_Layer: 0
   m_Name: Projectile 9 Stream
@@ -5091,22 +5090,6 @@ MonoBehaviour:
   m_AreaLightEmissiveMeshShadowCastingMode: 0
   m_AreaLightEmissiveMeshMotionVectorGenerationMode: 0
   m_AreaLightEmissiveMeshLayer: -1
---- !u!114 &1665254237810714879
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1569979447995748}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f8ee0f07ecc0be4d896d2fae4eb45c3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  defaultSpeed: 20
-  defaultDamage: 5
-  defaultLifetime: 3
-  hitVFXPrefab: {fileID: 0}
 --- !u!114 &5429691467095985264
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5125,7 +5108,7 @@ MonoBehaviour:
   UseFirePointRotation: 0
   rotationOffset: {x: 0, y: 0, z: 0}
   flash: {fileID: 5025925476793772019}
-  lightSource: {fileID: 0}
+  lightSource: {fileID: 108991988279912604}
   projectilePS: {fileID: 6992438867230433114}
   Detached:
   - {fileID: 1113143600131104}

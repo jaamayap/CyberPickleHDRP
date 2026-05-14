@@ -114,8 +114,11 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Projectile travel speed (world units/sec). Per-weapon constant. Heavier weapons (sniper) tend higher; mortar-style lobs (grenade) lower.")]
         [Min(0.1f)] public float baseProjectileSpeed = 10f;
 
-        [Tooltip("Area-of-effect radius (world units). Used by HitVfxApplier for hit-VFX size scaling (when hitVfxScalesWithAreaOfEffect is true) and by area-damage queries (PR E grenade).")]
+        [Tooltip("Area-of-effect radius (world units) at L1 Common. This is the BASE — final radius = baseAreaOfEffect × aoeMultiplierPerLevel[level-1] × (1 + Area_stat × 0.01). Used by HitVfxApplier for hit-VFX size scaling (when hitVfxScalesWithAreaOfEffect is true), by area-damage queries (PR E grenade explosion), and by the grenade-launcher telegraph for the ring + disc size.")]
         [Min(0.1f)] public float baseAreaOfEffect = 1f;
+
+        [Tooltip("Multiplier on baseAreaOfEffect per weapon level (index 0 = L1, 4 = L5). For percussion-family weapons (grenade launcher), Level is the characteristic axis: scaling AoE here is what makes leveling up feel like a power spike. Default = [1,1,1,1,1] (no level scaling) — opt in per weapon. Suggested for grenade launcher: [1.00, 1.15, 1.30, 1.45, 1.60] (L5 = 60% bigger than L1).")]
+        public float[] aoeMultiplierPerLevel = new float[] { 1f, 1f, 1f, 1f, 1f };
 
         [Tooltip("Pierce count — how many enemies a projectile can pass through. 0 = stop on first hit. Sniper uses 1+ scaled by level/rarity (PR D).")]
         [Min(0)] public int basePierceCount = 0;
@@ -144,6 +147,9 @@ namespace CyberPickle.Shop.Equipment.Data
 
         [Tooltip("If true, hit VFX is ADDITIONALLY scaled by baseAreaOfEffect — the burst visually fills the damage radius. Set true for grenade launcher; leave false for point-impact weapons.")]
         public bool hitVfxScalesWithAreaOfEffect = false;
+
+        [Tooltip("Optional style sheet for the grenade-launcher aim preview (parabolic arc + AoE ring + optional ground disc). Only used by parabolic weapons. Leave null to use the inspector default on the weapon's GrenadeTelegraph child. Create via Assets → Create → CyberPickle → VFX → Grenade Telegraph Style.")]
+        public CyberPickle.Gameplay.Weapons.GrenadeTelegraphStyleSO telegraphStyle;
 
         // Note: trail-linger duration USED to live here as `trailLingerSeconds`.
         // It's gone now — the fade-out duration is read directly from the
@@ -285,6 +291,37 @@ namespace CyberPickle.Shop.Equipment.Data
         public float GetDamageForRarity(Rarity rarity)
         {
             return baseDamage * rarity.DamageMultiplier();
+        }
+
+        /// <summary>
+        /// Effective AoE radius for this weapon at the given level + player
+        /// Area stat. Combines three axes:
+        ///   • baseAreaOfEffect             — per-weapon design constant
+        ///   • aoeMultiplierPerLevel[level] — per-weapon level scaling
+        ///   • (1 + areaStat × 0.01)        — player Area-of-Effect stat
+        ///                                    (decimal-percent convention,
+        ///                                     matches Power → damage).
+        ///
+        /// Level scaling is the *characteristic axis* for percussion weapons
+        /// (grenade launcher, future mortar). Projectile-family weapons keep
+        /// their default flat [1,1,1,1,1] curve and scale via fire-rate
+        /// density at level-up instead.
+        ///
+        /// Level is clamped to the array range — out-of-range levels use
+        /// the last entry, so future L6+ evolutions don't crash if the
+        /// array hasn't been extended yet.
+        /// </summary>
+        public float GetAreaOfEffectForLevel(int level, float areaStat = 0f)
+        {
+            float levelMul = 1f;
+            if (aoeMultiplierPerLevel != null && aoeMultiplierPerLevel.Length > 0)
+            {
+                int idx = Mathf.Clamp(level - 1, 0, aoeMultiplierPerLevel.Length - 1);
+                levelMul = aoeMultiplierPerLevel[idx];
+                if (levelMul < 0.01f) levelMul = 1f; // safety against bad inspector data
+            }
+            float statMul = 1f + areaStat * 0.01f;
+            return Mathf.Max(0.1f, baseAreaOfEffect * levelMul * statMul);
         }
 
         /// <summary>

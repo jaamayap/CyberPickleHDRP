@@ -47,10 +47,17 @@ namespace CyberPickle.DOTS.Systems
         {
             float3 playerPos = SystemAPI.GetSingleton<PlayerPositionData>().Position;
 
-            foreach (var (transform, velocity, speed) in
+            // Predicted-velocity lookup — written every frame so weapons
+            // (grenade launcher) can lead the target by predictedVel × flightTime.
+            // Optional on the enemy archetype (defensive HasComponent below)
+            // so we don't crash if some baked enemy variant lacks it.
+            var predLookup = SystemAPI.GetComponentLookup<EnemyPredictedVelocity>(isReadOnly: false);
+
+            foreach (var (transform, velocity, speed, enemy) in
                      SystemAPI.Query<RefRW<LocalTransform>, RefRW<PhysicsVelocity>, RefRO<MoveSpeed>>()
                               .WithAll<EnemyTag>()
-                              .WithNone<Dead>())
+                              .WithNone<Dead>()
+                              .WithEntityAccess())
             {
                 float3 selfPos = transform.ValueRO.Position;
                 float3 toPlayer = playerPos - selfPos;
@@ -67,16 +74,33 @@ namespace CyberPickle.DOTS.Systems
                 {
                     // On top of the player — stop horizontal motion.
                     velocity.ValueRW.Linear = new float3(0f, currentVy, 0f);
+                    // Prediction also zero: enemy isn't heading anywhere
+                    // useful, weapons should aim at current position.
+                    if (predLookup.HasComponent(enemy))
+                        predLookup[enemy] = new EnemyPredictedVelocity { Value = float3.zero };
                     continue;
                 }
 
                 float3 dir = toPlayer / math.sqrt(distSq);
                 float speedVal = speed.ValueRO.Value;
 
-                velocity.ValueRW.Linear = new float3(
+                float3 newLinear = new float3(
                     dir.x * speedVal,
                     currentVy,
                     dir.z * speedVal);
+                velocity.ValueRW.Linear = newLinear;
+
+                // Publish the predicted velocity. We use the XZ component
+                // only (Y is gravity/knockback, not pursuit intent) so
+                // weapons leading the target don't accidentally aim
+                // into the sky for a knockback-popped-up enemy.
+                if (predLookup.HasComponent(enemy))
+                {
+                    predLookup[enemy] = new EnemyPredictedVelocity
+                    {
+                        Value = new float3(newLinear.x, 0f, newLinear.z)
+                    };
+                }
 
                 // Face the player. Rotation written here survives the physics
                 // step because angular velocity is zeroed every frame and the

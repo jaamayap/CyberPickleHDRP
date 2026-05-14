@@ -15,54 +15,54 @@ MonoBehaviour:
   directives:
   - label: Zombies start
     enemyType: {fileID: 11400000, guid: e055186bb65fc5146887954811468fb2, type: 2}
-    spawnsPerSecond: 0.5
+    spawnsPerSecond: 0.6
     startTime: 0
-    endTime: 9999
+    endTime: 60
     oneShotBurst: 0
-    spawnRadius: 30
+    spawnRadius: 25
     radialJitter: 1.23
     speedJitter: 0.199
-  - label: Quick Zombie
-    enemyType: {fileID: 11400000, guid: 6dd9eab946b23ed468b9324b2b634c7c, type: 2}
-    spawnsPerSecond: 0.5
+  - label: Zombies doubling
+    enemyType: {fileID: 11400000, guid: e055186bb65fc5146887954811468fb2, type: 2}
+    spawnsPerSecond: 1
     startTime: 60
-    endTime: 9999
+    endTime: 180
     oneShotBurst: 0
     spawnRadius: 30
     radialJitter: 0
-    speedJitter: 0.28
-  - label: Slow Big
-    enemyType: {fileID: 11400000, guid: a49ced813c94afd47b0cf154e9769e5a, type: 2}
+    speedJitter: 0.355
+  - label: Quick Zombies
+    enemyType: {fileID: 11400000, guid: 6dd9eab946b23ed468b9324b2b634c7c, type: 2}
     spawnsPerSecond: 0.3
     startTime: 120
-    endTime: 999
+    endTime: 180
     oneShotBurst: 0
     spawnRadius: 30
     radialJitter: 0
     speedJitter: 0.224
   - label: Zombie Reinforcements
     enemyType: {fileID: 11400000, guid: e055186bb65fc5146887954811468fb2, type: 2}
-    spawnsPerSecond: 0.5
-    startTime: 90
+    spawnsPerSecond: 3
+    startTime: 180
     endTime: 9999
     oneShotBurst: 0
     spawnRadius: 30
     radialJitter: 0
-    speedJitter: 0.252
-  - label: Monster Quick
-    enemyType: {fileID: 11400000, guid: 000fb3b152eb927469455465c52b00fb, type: 2}
-    spawnsPerSecond: 0.2
-    startTime: 180
-    endTime: 999
-    oneShotBurst: 0
+    speedJitter: 0.5
+  - label: First Boss
+    enemyType: {fileID: 11400000, guid: a49ced813c94afd47b0cf154e9769e5a, type: 2}
+    spawnsPerSecond: 1
+    startTime: 240
+    endTime: 241
+    oneShotBurst: 1
     spawnRadius: 30
     radialJitter: 1.26
     speedJitter: 0.292
   - label: Monster Quick
     enemyType: {fileID: 11400000, guid: f557cf190250bca4fb4795ad8e177b82, type: 2}
     spawnsPerSecond: 0.3
-    startTime: 290
-    endTime: 999
+    startTime: 240
+    endTime: 300
     oneShotBurst: 0
     spawnRadius: 30
     radialJitter: 1.45
@@ -70,11 +70,29 @@ MonoBehaviour:
   - label: Zombie Reinforcement
     enemyType: {fileID: 11400000, guid: e055186bb65fc5146887954811468fb2, type: 2}
     spawnsPerSecond: 1
-    startTime: 180
-    endTime: 999
+    startTime: 300
+    endTime: 600
     oneShotBurst: 0
     spawnRadius: 30
     radialJitter: 1.45
     speedJitter: 0.202
-  planDuration: 600
-  loop: 0
+  - label: Final Boss
+    enemyType: {fileID: 11400000, guid: 000fb3b152eb927469455465c52b00fb, type: 2}
+    spawnsPerSecond: 1
+    startTime: 600
+    endTime: 601
+    oneShotBurst: 1
+    spawnRadius: 30
+    radialJitter: 1.45
+    speedJitter: 0.202
+  - label: Final Swarm
+    enemyType: {fileID: 11400000, guid: 6dd9eab946b23ed468b9324b2b634c7c, type: 2}
+    spawnsPerSecond: 1
+    startTime: 600
+    endTime: 660
+    oneShotBurst: 1
+    spawnRadius: 30
+    radialJitter: 1.45
+    speedJitter: 0.202
+  planDuration: 660
+  loop: 1
