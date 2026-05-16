@@ -83,3 +83,11 @@ crashlytics-build.properties
 /Assets/Wwise/API/Runtime/Plugins/iOS/
 /Assets/Wwise/API/Runtime/Plugins/tvOS/
 /Assets/Wwise/API/Runtime/Plugins/visionOS/
+
+# ─── Wwise Launcher / Integration installer artifacts ────────────────────
+# Source-distribution zips the Wwise Launcher drops at the project root
+# during integration. The iOS variant is 195MB — would exceed GitHub's
+# 100MB hard file-size limit. None of these need to be in version control;
+# the Wwise Launcher regenerates them whenever it does an Integrate.
+/WwiseUnityIntegration_*_Src.zip
+/logRunSetup.txt

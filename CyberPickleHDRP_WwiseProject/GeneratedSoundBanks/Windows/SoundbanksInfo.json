@@ -1,0 +1,93 @@
+{
+ "SoundBanksInfo": {
+  "Platform": "Windows",
+  "BasePlatform": "Windows",
+  "SchemaVersion": "16",
+  "SoundBankVersion": "172",
+  "RootPaths": {
+   "ProjectRoot": "../..",
+   "SourceFilesRoot": "../../.cache",
+   "SoundBanksRoot": ".",
+   "ExternalSourcesInputFile": "",
+   "ExternalSourcesOutputRoot": "."
+  },
+  "DialogueEvents": [],
+  "SoundBanks": [
+   {
+    "Id": "1355168291",
+    "Type": "User",
+    "GUID": "{701ECBBD-9C7B-4030-8CDB-749EE5D1C7B9}",
+    "Language": "SFX",
+    "Hash": "{7D2E5F5B-01F3-AF6D-31A9-6BD5E173F61E}",
+    "ObjectPath": "Init",
+    "ShortName": "Init",
+    "Path": "Init.bnk",
+    "Plugins": {
+     "AudioDevices": [
+      {
+       "Id": "2317455096",
+       "Name": "No_Output",
+       "ObjectPath": "\\Devices\\Default Work Unit\\No_Output",
+       "GUID": "{96F1FFF7-F52B-4EEB-9C4E-4E396D41561E}",
+       "LibName": "No Output",
+       "LibId": "11862023"
+      },
+      {
+       "Id": "3859886410",
+       "Name": "System",
+       "ObjectPath": "\\Devices\\Default Work Unit\\System",
+       "GUID": "{EB2162B2-3C4A-41EE-BB28-6C580B06FE4D}",
+       "LibName": "System",
+       "LibId": "11403271"
+      }
+     ]
+    },
+    "Busses": [
+     {
+      "Id": "3803692087",
+      "Name": "Master Audio Bus",
+      "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus",
+      "GUID": "{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}"
+     }
+    ]
+   },
+   {
+    "Id": "2082426231",
+    "Type": "User",
+    "GUID": "{64D34851-8AA8-4EB8-91AE-2C41542C0E90}",
+    "Language": "SFX",
+    "Hash": "{2CDEF787-8DF2-66CA-B46F-F2BAD59E2E8F}",
+    "ObjectPath": "\\SoundBanks\\Default Work Unit\\SoundTrack",
+    "ShortName": "SoundTrack",
+    "Path": "SoundTrack.bnk",
+    "Media": [
+     {
+      "Id": "1008750959",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Neon Dreams (Remastered)_01.wav",
+      "CachePath": "AD/{ADD8BEBF-9BEE-94E5-3060-2C719E7F5D86}.wem"
+     }
+    ],
+    "Events": [
+     {
+      "Id": "1927207284",
+      "Name": "Play_Song1_placeholder",
+      "ObjectPath": "\\Events\\Default Work Unit\\Play_Song1_placeholder",
+      "GUID": "{24BA9843-4054-4FEA-B60C-9623D7838DE2}",
+      "DurationType": "OneShot",
+      "DurationMin": "88.83998",
+      "DurationMax": "88.83998",
+      "MediaRefs": [
+       {
+        "Id": "1008750959"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "FileHash": "{73C2A6C6-BDED-7C1B-AEAF-D39427F9BDF8}"
+ }
+}

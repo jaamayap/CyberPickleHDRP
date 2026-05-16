@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WwiseDocument Type="WorkUnit" ID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}" SchemaVersion="133">
+	<Busses>
+		<WorkUnit Name="Default Work Unit" ID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}" PersistMode="Standalone">
+			<ChildrenList>
+				<Bus Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}">
+					<ReferenceList>
+						<Reference Name="AudioDevice" PluginName="System" CompanyID="0" PluginID="174" PluginType="7">
+							<ObjectRef Name="System" ID="{EB2162B2-3C4A-41EE-BB28-6C580B06FE4D}" WorkUnitID="{ADC6F405-C621-490B-9784-F8715E6F574D}"/>
+						</Reference>
+					</ReferenceList>
+					<ChildrenList>
+						<Bus Name="Music" ID="{F4D19424-6672-4157-A6A0-5A8960D06D30}">
+							<ChildrenList>
+								<Bus Name="Music_Percussion" ID="{15C616F1-A35F-433A-80BF-A3AD9184D9BE}">
+									<ChildrenList>
+										<Bus Name="Music_Kick" ID="{ECA97301-6ECC-4A91-B149-D6C727E9C3A5}"/>
+										<Bus Name="Music_Snare" ID="{6F765ABD-C6AB-42A8-9D70-39DA13B76E92}"/>
+									</ChildrenList>
+								</Bus>
+							</ChildrenList>
+						</Bus>
+					</ChildrenList>
+				</Bus>
+			</ChildrenList>
+		</WorkUnit>
+	</Busses>
+</WwiseDocument>

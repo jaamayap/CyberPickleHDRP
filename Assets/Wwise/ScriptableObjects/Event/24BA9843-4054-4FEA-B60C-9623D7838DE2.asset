@@ -15,3 +15,4 @@ MonoBehaviour:
   objectName: Play_Song1_placeholder
   id: 1927207284
   guid: 24BA9843-4054-4FEA-B60C-9623D7838DE2
+  IsInUserDefinedSoundBank: 1
