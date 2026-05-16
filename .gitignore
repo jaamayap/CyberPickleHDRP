@@ -73,3 +73,13 @@ crashlytics-build.properties
 
 # Claude Code temp worktrees
 .claude/worktrees/
+
+# ─── Wwise platform plugins we don't ship to ─────────────────────────────
+# Apple platforms (iOS/tvOS/visionOS) are not build targets. Their Wwise
+# native libs include 150-180MB .a files that exceed GitHub's 100MB file
+# limit, and historically were never tracked in main. If we ever ship to
+# Apple, run the Wwise Launcher → Modify and re-add these platforms — the
+# binaries restore in seconds.
+/Assets/Wwise/API/Runtime/Plugins/iOS/
+/Assets/Wwise/API/Runtime/Plugins/tvOS/
+/Assets/Wwise/API/Runtime/Plugins/visionOS/
