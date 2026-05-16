@@ -1,4 +1,4 @@
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
 Technology released in source code form as part of the game integration package.
@@ -13,15 +13,17 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
+
+using AK.Wwise.Unity.Logging;
 
 /// @brief This class is an example of how to load banks in Wwise, if the bank data was preloaded in memory.  
 /// This would be useful for situations where you use the WWW class
 public class AkMemBankLoader : UnityEngine.MonoBehaviour
 {
 	private const int WaitMs = 50;
-	private const long AK_BANK_PLATFORM_DATA_ALIGNMENT = AkSoundEngine.AK_BANK_PLATFORM_DATA_ALIGNMENT;
+	private const long AK_BANK_PLATFORM_DATA_ALIGNMENT = AkUnitySoundEngine.AK_BANK_PLATFORM_DATA_ALIGNMENT;
 	private const long AK_BANK_PLATFORM_DATA_ALIGNMENT_MASK = AK_BANK_PLATFORM_DATA_ALIGNMENT - 1;
 
 	/// Name of the bank to load
@@ -32,7 +34,7 @@ public class AkMemBankLoader : UnityEngine.MonoBehaviour
 
 	private string m_bankPath;
 
-	[UnityEngine.HideInInspector] public uint ms_bankID = AkSoundEngine.AK_INVALID_BANK_ID;
+	[UnityEngine.HideInInspector] public uint ms_bankID = AkUnitySoundEngine.AK_INVALID_BANK_ID;
 
 	private System.IntPtr ms_pInMemoryBankPtr = System.IntPtr.Zero;
 	private System.Runtime.InteropServices.GCHandle ms_pinnedArray;
@@ -63,7 +65,7 @@ public class AkMemBankLoader : UnityEngine.MonoBehaviour
 	public void LoadLocalizedBank(string in_bankFilename)
 	{
 		var bankPath = "file://" + System.IO.Path.Combine(
-			               System.IO.Path.Combine(AkBasePathGetter.Get().SoundBankBasePath, AkSoundEngine.GetCurrentLanguage()),
+			               System.IO.Path.Combine(AkBasePathGetter.Get().SoundBankBasePath, AkUnitySoundEngine.GetCurrentLanguage()),
 			               in_bankFilename);
 		DoLoadBank(bankPath);
 	}
@@ -124,9 +126,9 @@ public class AkMemBankLoader : UnityEngine.MonoBehaviour
         uint uInMemoryBankSize = AllocateAlignedBuffer(ms_www.bytes);
 #endif
 		uint BankType;
-        var result = AkSoundEngine.LoadBankMemoryView(ms_pInMemoryBankPtr, uInMemoryBankSize, out ms_bankID, out BankType);
+        var result = AkUnitySoundEngine.LoadBankMemoryView(ms_pInMemoryBankPtr, uInMemoryBankSize, out ms_bankID, out BankType);
 		if (result != AKRESULT.AK_Success)
-			UnityEngine.Debug.LogError("WwiseUnity: AkMemBankLoader: bank loading failed with result " + result);
+			WwiseLogger.Error("AkMemBankLoader: bank loading failed with result " + result);
 	}
 
 	private void DoLoadBank(string in_bankPath)
@@ -139,10 +141,10 @@ public class AkMemBankLoader : UnityEngine.MonoBehaviour
 	{
 		if (ms_pInMemoryBankPtr != System.IntPtr.Zero)
 		{
-			var result = AkSoundEngine.UnloadBank(ms_bankID, ms_pInMemoryBankPtr);
+			var result = AkUnitySoundEngine.UnloadBank(ms_bankID, ms_pInMemoryBankPtr);
 			if (result == AKRESULT.AK_Success)
 				ms_pinnedArray.Free();
 		}
 	}
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

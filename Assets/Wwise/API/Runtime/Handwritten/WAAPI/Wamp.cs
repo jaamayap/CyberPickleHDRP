@@ -12,7 +12,7 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 using System.Linq;
@@ -359,6 +359,8 @@ public class Wamp
 
 		return response;
 	}
+	
+	public System.Threading.CancellationTokenSource _connectionTokenSource; 
 
 	/// <summary>
 	/// Connect to the specified host, handshake and prepare the listening task.
@@ -371,13 +373,11 @@ public class Wamp
 		try
 		{
 			System.Uri uri = new System.Uri(host);
-			using (var cts = new System.Threading.CancellationTokenSource())
-			{
-				// Connect
-				if (ws == null)
-					ws = new System.Net.WebSockets.ClientWebSocket();
-				await ws.ConnectAsync(uri, cts.Token);
-			}
+			_connectionTokenSource = new System.Threading.CancellationTokenSource(timeout);
+			// Connect
+			if (ws == null)
+				ws = new System.Net.WebSockets.ClientWebSocket();
+			await ws.ConnectAsync(uri, _connectionTokenSource.Token);
 			{
 				// [HELLO, Realm|uri, Details|dict]
 				await Send($"[{(int)Messages.HELLO},\"realm1\"]", timeout);
@@ -401,6 +401,17 @@ public class Wamp
 		catch (System.Exception e)
 		{
 			throw new ErrorException(e.ToString());
+		}
+	}
+	
+	/// <summary>
+	/// Forcefully cancel the connection attempt to the host
+	/// </summary>
+	public void CancelCurrentConnection()
+	{
+		if (_connectionTokenSource != null)
+		{
+			_connectionTokenSource.Cancel(); 
 		}
 	}
 
@@ -443,7 +454,6 @@ public class Wamp
 		{
 			ws.Dispose();
 			stopServerTokenSource.Cancel();
-			return;
 		}
 	}
 

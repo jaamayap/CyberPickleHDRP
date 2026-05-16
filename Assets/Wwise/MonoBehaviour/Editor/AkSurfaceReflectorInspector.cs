@@ -13,10 +13,10 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
-[UnityEditor.CustomEditor(typeof(AkSurfaceReflector))]
+[UnityEditor.CustomEditor(typeof(AkSurfaceReflector), true)]
 [UnityEditor.CanEditMultipleObjects]
 public class AkSurfaceReflectorInspector : UnityEditor.Editor
 {
@@ -27,7 +27,9 @@ public class AkSurfaceReflectorInspector : UnityEditor.Editor
 	private UnityEditor.SerializedProperty TransmissionLossValues;
 	private UnityEditor.SerializedProperty EnableDiffraction;
 	private UnityEditor.SerializedProperty EnableDiffractionOnBoundaryEdges;
-	private UnityEditor.SerializedProperty AssociatedRoom;
+	private UnityEditor.SerializedProperty BypassPortalSubtraction;
+	private UnityEditor.SerializedProperty Solid;
+	private UnityEditor.SerializedProperty isStatic;
 
 	public void OnEnable()
 	{
@@ -38,20 +40,27 @@ public class AkSurfaceReflectorInspector : UnityEditor.Editor
 		TransmissionLossValues = serializedObject.FindProperty("TransmissionLossValues");
 		EnableDiffraction = serializedObject.FindProperty("EnableDiffraction");
 		EnableDiffractionOnBoundaryEdges = serializedObject.FindProperty("EnableDiffractionOnBoundaryEdges");
-		AssociatedRoom = serializedObject.FindProperty("AssociatedRoom");
+		Solid = serializedObject.FindProperty("Solid");
+		BypassPortalSubtraction = serializedObject.FindProperty("BypassPortalSubtraction");
+		isStatic = serializedObject.FindProperty("isStatic");
 	}
 
 	public override void OnInspectorGUI()
 	{
 		serializedObject.Update();
 
-		UnityEditor.EditorGUILayout.PropertyField(Mesh);
+		UnityEditor.EditorGUILayout.PropertyField(isStatic);
 
-		UnityEditor.EditorGUILayout.PropertyField(AcousticTextures, true);
-		CheckArraySize(m_AkSurfaceReflector, m_AkSurfaceReflector.AcousticTextures.Length, "acoustic textures");
+		using (new UnityEditor.EditorGUILayout.VerticalScope("box"))
+		{
+			UnityEditor.EditorGUILayout.PropertyField(Mesh);
 
-		UnityEditor.EditorGUILayout.PropertyField(TransmissionLossValues, true);
-		CheckArraySize(m_AkSurfaceReflector, m_AkSurfaceReflector.TransmissionLossValues.Length, "transmission loss values");
+			UnityEditor.EditorGUILayout.PropertyField(AcousticTextures, true);
+			CheckArraySize(m_AkSurfaceReflector, m_AkSurfaceReflector.AcousticTextures.Length, "acoustic textures");
+
+			UnityEditor.EditorGUILayout.PropertyField(TransmissionLossValues, true);
+			CheckArraySize(m_AkSurfaceReflector, m_AkSurfaceReflector.TransmissionLossValues.Length, "transmission loss values");
+		}
 
 		UnityEditor.EditorGUILayout.PropertyField(EnableDiffraction);
 		if (EnableDiffraction.boolValue)
@@ -59,8 +68,8 @@ public class AkSurfaceReflectorInspector : UnityEditor.Editor
 			UnityEditor.EditorGUILayout.PropertyField(EnableDiffractionOnBoundaryEdges);
 		}
 
-		UnityEditor.EditorGUILayout.PropertyField(AssociatedRoom);
-		CheckAssociatedRoom(m_AkSurfaceReflector);
+		UnityEditor.EditorGUILayout.PropertyField(BypassPortalSubtraction);
+		UnityEditor.EditorGUILayout.PropertyField(Solid);
 
 		serializedObject.ApplyModifiedProperties();
 	}
@@ -84,23 +93,6 @@ public class AkSurfaceReflectorInspector : UnityEditor.Editor
 		{
 			UnityEditor.EditorGUILayout.HelpBox(
 				"There are more " + name + " than the Mesh has submeshes. Additional ones will be ignored.",
-				UnityEditor.MessageType.Warning);
-		}
-	}
-
-	public static void CheckAssociatedRoom(AkSurfaceReflector surfaceReflector)
-	{
-		if (surfaceReflector == null || surfaceReflector.AssociatedRoom == null)
-		{
-			return;
-		}
-
-		UnityEngine.GUILayout.Space(UnityEditor.EditorGUIUtility.standardVerticalSpacing);
-
-		using (new UnityEditor.EditorGUILayout.VerticalScope("box"))
-		{
-			UnityEditor.EditorGUILayout.HelpBox(
-				"The Associated Room property is deprecated and will be removed in a future version. We recommend not using it by leaving it set to None.",
 				UnityEditor.MessageType.Warning);
 		}
 	}

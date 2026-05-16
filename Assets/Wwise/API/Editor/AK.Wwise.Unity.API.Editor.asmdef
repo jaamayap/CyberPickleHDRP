@@ -1,10 +1,14 @@
 {
     "name": "AK.Wwise.Unity.API.Editor",
+    "rootNamespace": "",
     "references": [
         "AK.Wwise.Unity.API",
         "AK.Wwise.Unity.API.WwiseTypes",
         "AK.Wwise.Unity.MonoBehaviour",
-        "Ak.Wwise.Api.WAAPI"
+        "Ak.Wwise.Api.WAAPI",
+        "AK.Wwise.Unity.ProjectDatabase",
+        "AK.Wwise.Unity.Utilities",
+        "AK.Wwise.Unity.Logging"
     ],
     "includePlatforms": [
         "Editor"
@@ -14,7 +18,20 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [ "!UNITY_SERVER" ],
-    "versionDefines": [],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.addressables",
+            "expression": "1.8",
+            "define": "UNITY_ADDRESSABLES"
+        },
+        {
+            "name": "com.audiokinetic.wwise.addressables",
+            "expression": "1.0.0",
+            "define": "AK_WWISE_ADDRESSABLES"
+        }
+    ],
     "noEngineReferences": false
 }

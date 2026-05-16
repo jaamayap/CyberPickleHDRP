@@ -1,4 +1,6 @@
-#if !(UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+using System.Collections.Generic;
+using System.Linq;
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 #if !UNITY_2019_1_OR_NEWER
 #define AK_ENABLE_TIMELINE
 #endif
@@ -18,7 +20,7 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 [UnityEngine.Timeline.TrackColor(0.855f, 0.8623f, 0.870f)]
@@ -45,6 +47,20 @@ public class AkTimelineEventTrack : UnityEngine.Timeline.TrackAsset
 
 		return playable;
 	}
+	public List<WwiseEventReference> GetEventReferences()
+	{
+		List<WwiseEventReference> returnValue = new List<WwiseEventReference>();
+		var clips = GetClips();
+		foreach (var clip in clips)
+		{
+			var timelineEventPlayable = clip.asset as AkTimelineEventPlayable;
+			if (timelineEventPlayable)
+			{
+				returnValue.Add(timelineEventPlayable.akEvent.WwiseObjectReference);
+			}
+		}
+		return returnValue;
+	}
 }
 #endif // AK_ENABLE_TIMELINE
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

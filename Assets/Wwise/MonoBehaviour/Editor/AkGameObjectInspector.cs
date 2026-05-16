@@ -13,7 +13,7 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 public class DefaultHandles
@@ -38,18 +38,19 @@ public class DefaultHandles
 }
 
 [UnityEditor.CanEditMultipleObjects]
-[UnityEditor.CustomEditor(typeof(AkGameObj))]
+[UnityEditor.CustomEditor(typeof(AkGameObj), true)]
 public class AkGameObjectInspector : UnityEditor.Editor
 {
 	private bool hideDefaultHandle;
 	private UnityEditor.SerializedProperty listeners;
 	private AkGameObj m_AkGameObject;
+	private UnityEditor.SerializedProperty usePositionOffsetData;
 
 	private void OnEnable()
 	{
 		m_AkGameObject = target as AkGameObj;
 		listeners = serializedObject.FindProperty("m_listeners");
-
+		usePositionOffsetData = serializedObject.FindProperty("usePositionOffsetData");
 		DefaultHandles.Hidden = hideDefaultHandle;
 	}
 
@@ -60,16 +61,6 @@ public class AkGameObjectInspector : UnityEditor.Editor
 
 	public override void OnInspectorGUI()
 	{
-		// Unity tries to construct a AkGameObjPositionOffsetData all the time. Need this ugly workaround
-		// to prevent it from doing this.
-		if (m_AkGameObject.m_positionOffsetData != null)
-		{
-			if (!m_AkGameObject.m_positionOffsetData.KeepMe)
-			{
-				m_AkGameObject.m_positionOffsetData = null;
-			}
-		}
-
 		var positionOffsetData = m_AkGameObject.m_positionOffsetData;
 		var positionOffset = UnityEngine.Vector3.zero;
 
@@ -77,19 +68,14 @@ public class AkGameObjectInspector : UnityEditor.Editor
 
 		using (new UnityEditor.EditorGUILayout.VerticalScope("box"))
 		{
-			var applyPosOffset = UnityEditor.EditorGUILayout.Toggle("Apply Position Offset:", positionOffsetData != null);
+			UnityEditor.EditorGUILayout.PropertyField(usePositionOffsetData, new UnityEngine.GUIContent("Apply Position Offset:"));
 
-			if (applyPosOffset != (positionOffsetData != null))
-			{
-				positionOffsetData = applyPosOffset ? new AkGameObjPositionOffsetData(true) : null;
-			}
-
-			if (positionOffsetData != null)
+			if (usePositionOffsetData.boolValue)
 			{
 				positionOffset = UnityEditor.EditorGUILayout.Vector3Field("Position Offset", positionOffsetData.positionOffset);
 
 				UnityEngine.GUILayout.Space(UnityEditor.EditorGUIUtility.standardVerticalSpacing);
-
+			
 				if (hideDefaultHandle)
 				{
 					if (UnityEngine.GUILayout.Button("Show Main Transform"))
@@ -135,7 +121,7 @@ public class AkGameObjectInspector : UnityEditor.Editor
 			UnityEditor.Undo.RecordObject(target, "AkGameObj Parameter Change");
 
 			m_AkGameObject.m_positionOffsetData = positionOffsetData;
-
+			
 			var posOffsetDataProperty = serializedObject.FindProperty("m_positionOffsetData");
 			var KeepMeProperty = posOffsetDataProperty.FindPropertyRelative("KeepMe");
 			KeepMeProperty.boolValue = (positionOffsetData != null);
@@ -166,7 +152,10 @@ public class AkGameObjectInspector : UnityEditor.Editor
 			}
 			else
 			{
-				AkSoundEngine.SetScalingFactor(m_AkGameObject.gameObject, m_AkGameObject.ScalingFactor);
+				if (m_AkGameObject.gameObject.activeInHierarchy)
+				{
+					AkUnitySoundEngine.SetScalingFactor(m_AkGameObject.gameObject, m_AkGameObject.ScalingFactor);
+				}
 			}
 		}
 		UnityEngine.GUILayout.Space(UnityEditor.EditorGUIUtility.standardVerticalSpacing);

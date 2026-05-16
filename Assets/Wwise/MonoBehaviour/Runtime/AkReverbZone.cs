@@ -1,4 +1,4 @@
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
 Technology released in source code form as part of the game integration package.
@@ -13,8 +13,10 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
+
+using AK.Wwise.Unity.Logging;
 
 [UnityEngine.AddComponentMenu("Wwise/Spatial Audio/AkReverbZone")]
 ///@brief This component establishes a parent-child relationship between two Rooms and allows for sound propagation between them as if they were the same Room, without the need for a connecting Portal.
@@ -42,7 +44,9 @@ public class AkReverbZone : UnityEngine.MonoBehaviour
 	/// Width of the transition region between the Reverb Zone and its parent. The transition zone is centered around the Reverb Zone geometry. It only applies where triangle transmission loss is set to 0.
 	public float TransitionRegionWidth = 1.0f;
 
+#if UNITY_EDITOR
 	private bool needsUpdate = false;
+#endif
 
 	#endregion
 
@@ -64,7 +68,7 @@ public class AkReverbZone : UnityEngine.MonoBehaviour
 	{
 		if (reverbZone == null)
 		{
-			UnityEngine.Debug.LogError("SetReverbZone: Invalid Room component as the Reverb Zone parameter.");
+			WwiseLogger.Error("SetReverbZone: Invalid Room component as the Reverb Zone parameter.");
 			return;
 		}
 
@@ -81,7 +85,7 @@ public class AkReverbZone : UnityEngine.MonoBehaviour
 	{
 		if (reverbZone == null)
 		{
-			UnityEngine.Debug.LogWarning("RemoveReverbZone has an invalid Room component as its Reverb Zone parameter.");
+			WwiseLogger.Warning("RemoveReverbZone has an invalid Room component as its Reverb Zone parameter.");
 			return;
 		}
 
@@ -94,7 +98,9 @@ public class AkReverbZone : UnityEngine.MonoBehaviour
 	public void SetReverbZone()
 	{
 		SetReverbZone(ReverbZone, ParentRoom, TransitionRegionWidth);
+#if UNITY_EDITOR
 		needsUpdate = false;
+#endif
 	}
 
 	/// <summary>
@@ -115,6 +121,9 @@ public class AkReverbZone : UnityEngine.MonoBehaviour
 		RemoveReverbZone();
 	}
 
+#if UNITY_EDITOR
+	// editor only function
+	// putting this in #if UNITY_EDITOR because of needsUpdate
 	private void OnValidate()
 	{
 		if (ReverbZone == null)
@@ -132,18 +141,18 @@ public class AkReverbZone : UnityEngine.MonoBehaviour
 		needsUpdate = true;
 	}
 
+	// needsUpdate is only set to true in editor. No need to update in non-editor
 	private void Update()
 	{
-#if UNITY_EDITOR
 		if (!UnityEditor.EditorApplication.isPlaying)
 		{
 			return;
 		}
-#endif
 		if (isActiveAndEnabled && needsUpdate)
 		{
 			SetReverbZone();
 		}
 	}
+#endif
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

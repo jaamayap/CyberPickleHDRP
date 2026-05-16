@@ -13,10 +13,10 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
-[UnityEditor.CustomEditor(typeof(AkRoom))]
+[UnityEditor.CustomEditor(typeof(AkRoom), true)]
 public class AkRoomInspector : UnityEditor.Editor
 {
 	private readonly AkUnityEventHandlerInspector m_PostEventHandlerInspector = new AkUnityEventHandlerInspector();
@@ -26,8 +26,10 @@ public class AkRoomInspector : UnityEditor.Editor
 	private UnityEditor.SerializedProperty reverbAuxBus;
 	private UnityEditor.SerializedProperty reverbLevel;
 	private UnityEditor.SerializedProperty transmissionLoss;
-	private UnityEditor.SerializedProperty roomToneEvent;
+    private UnityEditor.SerializedProperty distanceBehavior;
+    private UnityEditor.SerializedProperty roomToneEvent;
 	private UnityEditor.SerializedProperty roomToneAuxSend;
+	private UnityEditor.SerializedProperty isStatic;
 
 	private void OnEnable()
 	{
@@ -38,20 +40,25 @@ public class AkRoomInspector : UnityEditor.Editor
 		reverbAuxBus = serializedObject.FindProperty("reverbAuxBus");
 		reverbLevel = serializedObject.FindProperty("reverbLevel");
 		transmissionLoss = serializedObject.FindProperty("transmissionLoss");
-		priority = serializedObject.FindProperty("priority");
+        distanceBehavior = serializedObject.FindProperty("distanceBehavior");
+        priority = serializedObject.FindProperty("priority");
 		roomToneEvent = serializedObject.FindProperty("roomToneEvent");
 		roomToneAuxSend = serializedObject.FindProperty("roomToneAuxSend");
+		isStatic = serializedObject.FindProperty("isStatic");
 	}
 
 	public override void OnInspectorGUI()
 	{
 		serializedObject.Update();
 
+		UnityEditor.EditorGUILayout.PropertyField(isStatic);
+
 		using (new UnityEditor.EditorGUILayout.VerticalScope("box"))
 		{
 			UnityEditor.EditorGUILayout.PropertyField(reverbAuxBus);
 			UnityEditor.EditorGUILayout.PropertyField(reverbLevel);
 			UnityEditor.EditorGUILayout.PropertyField(transmissionLoss);
+			UnityEditor.EditorGUILayout.PropertyField(distanceBehavior);
 
 			UnityEditor.EditorGUILayout.PropertyField(priority);
 

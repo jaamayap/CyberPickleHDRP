@@ -1,3 +1,5 @@
+using UnityEngine;
+
 #if UNITY_EDITOR
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
@@ -13,10 +15,10 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
-[UnityEditor.CustomEditor(typeof(AkEnvironmentPortal))]
+[UnityEditor.CustomEditor(typeof(AkEnvironmentPortal), true)]
 public class AkEnvironmentPortalInspector : UnityEditor.Editor
 {
 	private readonly int[] m_selectedIndex = new int[AkEnvironmentPortal.MAX_ENVIRONMENTS_PER_PORTAL];
@@ -123,14 +125,17 @@ public class AkEnvironmentPortalInspector : UnityEditor.Editor
 
 		AkGameObjectInspector.RigidbodyCheck(m_envPortal.gameObject);
 	}
-
+	
 	private string GetEnvironmentName(AkEnvironment in_env)
 	{
-		foreach (var wwu in AkWwiseProjectInfo.GetData().AuxBusWwu)
-			foreach (var env in wwu.List)
-				if (in_env.data.Id == env.Id)
-					return env.Name;
-
+		foreach (var wwu in AkWwiseProjectInfo.GetData().BusRoot)
+		{
+			var found = wwu.Find(in_env.data.Id);
+			if (found != null)
+			{
+				return found.Name;
+			}
+		}
 		return string.Empty;
 	}
 
@@ -139,8 +144,11 @@ public class AkEnvironmentPortalInspector : UnityEditor.Editor
 		var myCollider = m_envPortal.gameObject.GetComponent<UnityEngine.Collider>();
 		if (myCollider == null)
 			return;
-
+#if UNITY_6000_0_OR_NEWER
+		var environments = FindObjectsByType<AkEnvironment>(FindObjectsSortMode.None);
+#else
 		var environments = FindObjectsOfType<AkEnvironment>();
+#endif
 		foreach (var environment in environments)
 		{
 			var otherCollider = environment.gameObject.GetComponent<UnityEngine.Collider>();

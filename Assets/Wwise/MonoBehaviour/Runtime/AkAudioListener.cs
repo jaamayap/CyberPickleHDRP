@@ -1,4 +1,4 @@
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
 Technology released in source code form as part of the game integration package.
@@ -13,8 +13,10 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
+
+using AK.Wwise.Unity.Logging;
 
 [UnityEngine.AddComponentMenu("Wwise/AkAudioListener")]
 [UnityEngine.RequireComponent(typeof(AkGameObj))]
@@ -26,13 +28,48 @@ Copyright (c) 2024 Audiokinetic Inc.
 public class AkAudioListener : UnityEngine.MonoBehaviour
 {
 	private static readonly DefaultListenerList defaultListeners = new DefaultListenerList();
-	private ulong akGameObjectID = AkSoundEngine.AK_INVALID_GAME_OBJECT;
+	private ulong akGameObjectID = AkUnitySoundEngine.AK_INVALID_GAME_OBJECT;
 	private System.Collections.Generic.List<AkGameObj> EmittersToStartListeningTo = 
 		new System.Collections.Generic.List<AkGameObj>();
 	private System.Collections.Generic.List<AkGameObj> EmittersToStopListeningTo = 
 		new System.Collections.Generic.List<AkGameObj>();
 
 	public bool isDefaultListener = true;
+	
+	[UnityEngine.SerializeField]
+	public bool bOverrideScalingFactor = false;
+	
+	[UnityEngine.SerializeField]
+	private float scalingFactor = -1f;
+	
+	public float ScalingFactor
+	{
+		get
+		{
+			if (bOverrideScalingFactor)
+			{
+				return scalingFactor;
+			}
+			var settings = AkWwiseInitializationSettings.Instance;
+			if (settings)
+			{
+				return settings.UserSettings.m_DefaultListenerScalingFactor;
+			}
+
+			return 1.0f;
+		}
+		set
+		{
+			if (value < 0)
+			{
+				scalingFactor = 0;
+			}
+			else
+			{
+				scalingFactor = value;
+			}
+		}
+	}
 
 	public static DefaultListenerList DefaultListeners
 	{
@@ -77,7 +114,7 @@ public class AkAudioListener : UnityEngine.MonoBehaviour
 			akGameObj.Register();
 		}
 
-		akGameObjectID = AkSoundEngine.GetAkGameObjectID(gameObject);
+		akGameObjectID = AkUnitySoundEngine.GetAkGameObjectID(gameObject);
 	}
 
 	private void OnEnable()
@@ -85,6 +122,24 @@ public class AkAudioListener : UnityEngine.MonoBehaviour
 		if (isDefaultListener)
 		{
 			DefaultListeners.Add(this);
+		}
+		if (scalingFactor < 0f)
+		{
+			var initializer = AkInitializer.GetAkInitializerGameObject();
+			if (initializer)
+			{
+				scalingFactor = initializer.GetComponent<AkInitializer>().InitializationSettings.UserSettings.m_DefaultListenerScalingFactor;
+			}
+			else
+			{
+				scalingFactor = 1f;
+			}
+		}
+
+		var akGameObj = GetComponent<AkGameObj>();
+		if (akGameObj && gameObject.activeInHierarchy)
+		{
+			AkUnitySoundEngine.SetScalingFactor(gameObject, ScalingFactor);
 		}
 	}
 
@@ -98,7 +153,7 @@ public class AkAudioListener : UnityEngine.MonoBehaviour
 
 	private void OnDestroy()
 	{
-		AkSoundEngine.UnregisterGameObj(gameObject);
+		AkUnitySoundEngine.UnregisterGameObj(gameObject);
 	}
 
 	private void Update()
@@ -190,9 +245,9 @@ public class AkAudioListener : UnityEngine.MonoBehaviour
 		public override bool Add(AkAudioListener listener)
 		{
 			var ret = base.Add(listener);
-			if (ret && AkSoundEngine.IsInitialized())
+			if (ret && AkUnitySoundEngine.IsInitialized())
 			{
-				AkSoundEngine.AddDefaultListener(listener.gameObject);
+				AkUnitySoundEngine.AddDefaultListener(listener.gameObject);
 			}
 			return ret;
 		}
@@ -200,9 +255,9 @@ public class AkAudioListener : UnityEngine.MonoBehaviour
 		public override bool Remove(AkAudioListener listener)
 		{
 			var ret = base.Remove(listener);
-			if (ret && AkSoundEngine.IsInitialized())
+			if (ret && AkUnitySoundEngine.IsInitialized())
 			{
-				AkSoundEngine.RemoveDefaultListener(listener.gameObject);
+				AkUnitySoundEngine.RemoveDefaultListener(listener.gameObject);
 			}
 
 			return ret;
@@ -222,10 +277,10 @@ public class AkAudioListener : UnityEngine.MonoBehaviour
 	public void Migrate14()
 	{
 		var wasDefaultListener = listenerId == 0;
-		UnityEngine.Debug.Log("WwiseUnity: AkAudioListener.Migrate14 for " + gameObject.name);
+		WwiseLogger.Log("AkAudioListener.Migrate14 for " + gameObject.name);
 		isDefaultListener = wasDefaultListener;
 	}
 
 	#endregion
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

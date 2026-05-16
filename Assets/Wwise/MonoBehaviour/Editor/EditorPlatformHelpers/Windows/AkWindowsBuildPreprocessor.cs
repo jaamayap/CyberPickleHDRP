@@ -12,7 +12,7 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 ﻿#if UNITY_EDITOR
@@ -26,12 +26,6 @@ public class AkWindowsBuildPreprocessor
 			return;
 		}
 
-		var buildConfig = new AkBuildPreprocessor.PlatformConfiguration
-		{
-			WwisePlatformName = "Windows"
-		};
-		AkBuildPreprocessor.RegisterBuildTarget(UnityEditor.BuildTarget.StandaloneWindows, buildConfig);
-		AkBuildPreprocessor.RegisterBuildTarget(UnityEditor.BuildTarget.StandaloneWindows64, buildConfig);
 		WwiseSetupWizard.AddBuildTargetGroup(UnityEditor.BuildTargetGroup.Standalone);
 	}
 }

@@ -12,10 +12,12 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+using AK.Wwise.Unity.Logging;
+
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 
 namespace AK.Wwise
 {
@@ -46,11 +48,11 @@ namespace AK.Wwise
 
 		public uint Id
 		{
-			get { return IsValid() ? ObjectReference.Id : AkSoundEngine.AK_INVALID_UNIQUE_ID; }
+			get { return IsValid() ? ObjectReference.Id : AkUnitySoundEngine.AK_INVALID_UNIQUE_ID; }
 		}
 		public static uint InvalidId
 		{
-			get { return AkSoundEngine.AK_INVALID_UNIQUE_ID; }
+			get { return AkUnitySoundEngine.AK_INVALID_UNIQUE_ID; }
 		}
 
 		public virtual bool IsValid()
@@ -63,15 +65,15 @@ namespace AK.Wwise
 			if (IsValid())
 				return true;
 
-			UnityEngine.Debug.LogWarning("Wwise ID has not been resolved. Consider picking a new " + GetType().Name + ".");
+			WwiseLogger.Warning("Wwise ID has not been resolved. Consider picking a new " + GetType().Name + ".");
 			return false;
 		}
 
 		protected void Verify(AKRESULT result)
 		{
 #if UNITY_EDITOR
-			if (result != AKRESULT.AK_Success && AkSoundEngine.IsInitialized())
-				UnityEngine.Debug.LogWarning("Unsuccessful call made on " + GetType().Name + ".");
+			if (result != AKRESULT.AK_Success && AkUnitySoundEngine.IsInitialized())
+				WwiseLogger.Warning("Unsuccessful call made on " + GetType().Name + ".");
 #endif
 		}
 
@@ -101,13 +103,13 @@ namespace AK.Wwise
 		}
 
 		#region Obsolete
-		[System.Obsolete(AkSoundEngine.Deprecation_2018_1_2)]
+		[System.Obsolete(AkUnitySoundEngine.Deprecation_2018_1_2)]
 		public int ID
 		{
 			get { return (int)Id; }
 		}
 
-		[System.Obsolete(AkSoundEngine.Deprecation_2018_1_6)]
+		[System.Obsolete(AkUnitySoundEngine.Deprecation_2018_1_6)]
 		public byte[] valueGuid
 		{
 			get
@@ -132,4 +134,4 @@ namespace AK.Wwise
 		#endregion
 	}
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

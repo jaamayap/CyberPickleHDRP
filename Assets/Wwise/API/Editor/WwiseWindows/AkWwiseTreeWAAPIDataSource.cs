@@ -13,7 +13,7 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 using System.Linq;
@@ -21,6 +21,16 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using UnityEditor.IMGUI.Controls;
+using AK.Wwise.Unity.Logging;
+
+#if UNITY_6000_2_OR_NEWER
+using WwiseTreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
+using WwiseTreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
+#else
+using WwiseTreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem;
+using WwiseTreeViewState = UnityEditor.IMGUI.Controls.TreeViewState;
+#endif
+
 
 /// <summary>
 /// This class communicates with Wwise Authoring via AkWaapiUtilities to keep track of the Wwise object hierarchy in the project.
@@ -32,12 +42,12 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 
 	private System.Timers.Timer selectTimer;
 	private System.Timers.Timer searchTimer;
+	private int counter = 0;
+	public System.Action ObjectInfoLoaded;
 
 	private ReturnOptions waapiWwiseObjectOptions = 
 		new ReturnOptions(new string[] { "id", "name", "type", "childrenCount", "path", "workunitType", "parent" });
 
-
-	public bool AutoSyncSelection;
 	public bool WaitingForSearchResults;
 
 	public AkWwiseTreeWAAPIDataSource() : base()
@@ -60,14 +70,21 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 		Data.Clear();
 		m_MaxID = 0;
 		ProjectRoot = CreateProjectRootItem();
+		counter = 0;
 
 		foreach (var type in FolderNames.Keys)
 		{
 			AkWaapiUtilities.GetResultListDelegate<WwiseObjectInfoJsonObject> callback = (List<WwiseObjectInfoJsonObject> items) =>
 			{
 				AddBaseFolder(AkWaapiUtilities.ParseObjectInfo(items), type);
+				counter++;
+				if (counter >= FolderNames.Count)
+				{
+					ObjectInfoLoaded?.Invoke();
+					counter = 0;
+				}
 			};
-			AkWaapiUtilities.GetWwiseObjectAndDescendants(FolderNames[type], waapiWwiseObjectOptions, 2, callback);
+			AkWaapiUtilities.GetWwiseObjectAndDescendants("\\" + FolderNames[type], waapiWwiseObjectOptions, -1, callback);
 		}
 		Changed();
 	}
@@ -112,7 +129,7 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 
 	private string searchString;
 	private WwiseObjectType searchObjectTypeFilter;
-	public override void UpdateSearchResults(string searchFilter, WwiseObjectType objectType = WwiseObjectType.None)
+	public override void UpdateSearchResults(string searchFilter, WwiseObjectType objectType = WwiseObjectType.None, BrowserFilter Filters = BrowserFilter.None)
 	{
 		searchTimer.Stop();
 		searchString = searchFilter;
@@ -185,8 +202,8 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 		}
 		catch (System.Exception e)
 		{
-			UnityEngine.Debug.LogError("Search died");
-			UnityEngine.Debug.LogError(e.Message);
+			WwiseLogger.Error("Search died");
+			WwiseLogger.Error(e.Message);
 		}
 	}
 
@@ -368,20 +385,6 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 		return true;
 	}
 
-	private ReadOnlyDictionary<WwiseObjectType, string> FolderNames = new ReadOnlyDictionary<WwiseObjectType, string>(new Dictionary<WwiseObjectType, string>()
-	{
-		{ WwiseObjectType.AuxBus ,  @"\Master-Mixer Hierarchy" },
-		{ WwiseObjectType.Event ,  @"\Events" },
-		{ WwiseObjectType.State, @"\States"},
-		{ WwiseObjectType.StateGroup, @"\States"},
-		{ WwiseObjectType.Soundbank, @"\SoundBanks"},
-		{ WwiseObjectType.Switch, @"\Switches"},
-		{ WwiseObjectType.SwitchGroup, @"\Switches"},
-		{ WwiseObjectType.AcousticTexture, @"\Virtual Acoustics" },
-		{ WwiseObjectType.Trigger, @"\Triggers" },
-		{ WwiseObjectType.GameParameter, @"\Game Parameters" },
-	 });
-
 
 	static List<AkWaapiUtilities.SubscriptionInfo> subscriptions = new List<AkWaapiUtilities.SubscriptionInfo>();
 
@@ -390,10 +393,9 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 	/// </summary>
 	public void SubscribeTopics()
 	{
-		AkWaapiUtilities.Subscribe(ak.wwise.core.@object.nameChanged, OnWaapiRenamed, SubscriptionHandshake);
-		AkWaapiUtilities.Subscribe(ak.wwise.core.@object.childAdded, OnWaapiChildAdded, SubscriptionHandshake);
-		AkWaapiUtilities.Subscribe(ak.wwise.core.@object.childRemoved, OnWaapiChildRemoved, SubscriptionHandshake);
-		AkWaapiUtilities.Subscribe(ak.wwise.ui.selectionChanged, OnWwiseSelectionChanged, SubscriptionHandshake);
+		var options = new ReturnOptions(new string[] { "id", "parent", "name", "type", "childrenCount", "path", "workunitType" });
+		AkWaapiUtilities.Subscribe(ak.wwise.core.@object.structureChanged, OnWaapiStructureChanged, SubscriptionHandshake, options);
+		AkWaapiUtilities.Subscribe(ak.wwise.ui.selectionChanged, OnWwiseSelectionChanged, SubscriptionHandshake, options);
 	}
 
 	public void SubscriptionHandshake(AkWaapiUtilities.SubscriptionInfo sub)
@@ -420,17 +422,101 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 	void OnWaapiRenamed(string json)
 	{
 		var renamedItem = AkWaapiUtilities.ParseRenameObject(json);
-		treeviewCommandQueue.Enqueue(new TreeViewCommand(() => Rename(renamedItem.objectInfo.objectGUID, renamedItem.newName)));
+		//An object was added. This will be handled in OnWaapiChildAdded
+		if (renamedItem.newName == renamedItem.objectInfo.path)
+		{
+			return;
+		}
+		treeviewCommandQueue.Enqueue(new TreeViewCommand(() => Rename(renamedItem.objectInfo.objectGUID, renamedItem.newName, renamedItem.objectInfo.path)));
 	}
 
-	void OnWaapiChildAdded(string json)
+	class WwiseStructureChangeRenameInfo : System.IComparable
 	{
-		var added = AkWaapiUtilities.ParseChildAddedOrRemoved(json);
+		public WwiseObjectInfoJsonObject @object;
+		public string newName;
+		
+		public int CompareTo(object obj)
+		{
+			if (obj is WwiseStructureChangeRenameInfo)
+			{
+				return @object.CompareTo((obj as WwiseStructureChangeRenameInfo).@object);
+			}
+			return 0;
+		}
+	}
 
-		if (added.childInfo.type == WwiseObjectType.None)
+	class WwiseStructureChangeMoveInfo : System.IComparable
+	{
+		public WwiseObjectInfoJsonObject @object;
+		public WwiseObjectInfoJsonObject oldParent;
+		public WwiseObjectInfoJsonObject newParent;
+		
+		public int CompareTo(object obj)
+		{
+			if (obj is WwiseStructureChangeMoveInfo)
+			{
+				return @object.CompareTo((obj as WwiseStructureChangeMoveInfo).@object);
+			}
+			return 0;
+		}
+	}
+
+	void OnWaapiStructureChanged(string json)
+	{
+		List<WwiseObjectInfoJsonObject> createOperations = new List<WwiseObjectInfoJsonObject>();
+		List<WwiseStructureChangeRenameInfo> renameOperations = new List<WwiseStructureChangeRenameInfo>();
+		List<WwiseStructureChangeMoveInfo> moveOperations = new List<WwiseStructureChangeMoveInfo>();
+		var changes = AkWaapiUtilities.ParseStructureChange(json);
+		foreach (var change in changes)
+		{
+			foreach (var operation in change.changes)
+			{
+				if (operation.type == "create")
+				{
+					createOperations.Add(change.@object);
+				}
+
+				if (operation.type == "nameChange")
+				{
+					renameOperations.Add(new WwiseStructureChangeRenameInfo { @object = change.@object, newName = operation.nameChange.newName });
+				}
+				
+				if (operation.type == "parentChange")
+				{
+					moveOperations.Add(new WwiseStructureChangeMoveInfo { @object = change.@object, oldParent = operation.parentChange.oldParent, newParent = operation.parentChange.newParent});
+				}
+			}
+		}
+		
+		createOperations.Sort();
+		renameOperations.Sort();
+		moveOperations.Sort();
+		
+		foreach (var moveOp in moveOperations)
+		{
+			OnWaapiMoved(moveOp.@object, moveOp.oldParent, moveOp.newParent);
+		}
+
+		foreach (var createOp in createOperations)
+		{
+			OnWaapiChildAdded(createOp);
+		}
+
+		foreach (var renameOp in renameOperations)
+		{
+			OnWaapiRenamed(renameOp.@object, renameOp.newName);
+		}
+		ScheduleRebuild();
+	}
+	
+	void OnWaapiChildAdded(WwiseObjectInfoJsonObject jsonInfo)
+	{
+		WwiseObjectInfo info = WwiseObjectInfoJsonObject.ToObjectInfo(jsonInfo);
+
+		if (info.type == WwiseObjectType.None)
 			return;
 
-		var parent = FindByGuid(added.parentInfo.objectGUID);
+		var parent = FindByGuid(info.parentID);
 
 		// New object created, but parent is not loaded yet, so we can ignore it
 		if (parent == null)
@@ -438,20 +524,23 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 			return;
 		}
 
-		var child = FindByGuid(added.childInfo.objectGUID);
+		var child = FindByGuid(info.objectGUID);
 		if (child == null)
 		{
-			child = new AkWwiseTreeViewItem(added.childInfo, GenerateUniqueID(), parent.depth + 1);
+			child = new AkWwiseTreeViewItem(info, GenerateUniqueID(), parent.depth + 1);
 		}
 		else
 		{
-			child.numChildren = added.childInfo.childrenCount;
-			child.displayName = added.childInfo.name;
+			child.numChildren = info.childrenCount;
+			child.displayName = info.name;
 		}
+		child.path = info.path;
+		child.waapiPath = info.path;
+		child.waapiName = info.name;
+		child.objectGuid = info.objectGUID;
 
 		parent.AddWwiseItemChild(child);
 		Data.Add(child);
-		parent.numChildren = added.parentInfo.childrenCount;
 		child.depth = parent.depth + 1;
 
 		if (!CheckIfFullyLoaded(parent))
@@ -471,18 +560,51 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 			};
 			AkWaapiUtilities.GetChildren(child.objectGuid, waapiWwiseObjectOptions, callback);
 		}
-		ScheduleRebuild();
 	}
-
-	void OnWaapiChildRemoved(string json)
+	
+	void OnWaapiRenamed(WwiseObjectInfoJsonObject jsonInfo, string newName)
 	{
-		var removed = AkWaapiUtilities.ParseChildAddedOrRemoved(json);
-		toRequeue.Enqueue(new TreeViewCommand(() => Remove(removed.parentInfo, removed.childInfo)));
+		WwiseObjectInfo info = WwiseObjectInfoJsonObject.ToObjectInfo(jsonInfo);
+		treeviewCommandQueue.Enqueue(new TreeViewCommand(() => Rename(info.objectGUID, newName, info.path)));
+	}
+	
+	void OnWaapiMoved(WwiseObjectInfoJsonObject jsonInfo, WwiseObjectInfoJsonObject oldParentJson, WwiseObjectInfoJsonObject newParentJson)
+	{
+		WwiseObjectInfo info = WwiseObjectInfoJsonObject.ToObjectInfo(jsonInfo);
+		WwiseObjectInfo oldParentInfo = WwiseObjectInfoJsonObject.ToObjectInfo(oldParentJson);
+		WwiseObjectInfo newParentInfo = WwiseObjectInfoJsonObject.ToObjectInfo(newParentJson);
+		
+		var child = FindByGuid(info.objectGUID);
+		if (child == null)
+		{
+			return;
+		}
+		var oldParent = FindByGuid(oldParentInfo.objectGUID);
+		AkWwiseTreeViewItem newParent = null;
+		if (newParentInfo.objectGUID != System.Guid.Empty)
+		{
+			newParent = FindByGuid(newParentInfo.objectGUID);	
+		}
+
+		if (oldParent != null)
+		{
+			oldParent.children.Remove(child);
+			Data.Remove(child);
+			oldParent.numChildren--;
+		}
+
+		//If newParent is null, it means the item was deleted.
+		if (newParent != null)
+		{
+			newParent.AddWwiseItemChild(child);
+			child.path = newParent.path + "\\" + child.name;
+			Data.Add(child);
+		}
 	}
 
 	void OnWwiseSelectionChanged(string json)
 	{
-		if (AutoSyncSelection)
+		if (AkWwiseEditorSettings.Instance.AutoSyncWaapi)
 		{
 			var objects = AkWaapiUtilities.ParseSelectedObjects(json);
 			if (objects.Count > 0)
@@ -495,35 +617,20 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 		}
 	}
 
-	public void Rename(System.Guid objectGuid, string newName)
+	public void Rename(System.Guid objectGuid, string newName, string newPath)
 	{
 		var item = FindByGuid(objectGuid);
 		if (item != null)
 		{
 			item.name = newName;
+			item.path = newPath;
+			item.waapiPath = newPath;
 		}
 		else
 		{
-			toRequeue.Enqueue(new TreeViewCommand(() => Rename(objectGuid, newName)));
+			toRequeue.Enqueue(new TreeViewCommand(() => Rename(objectGuid, newName, newPath)));
 		}
-	}
-
-	public void Remove(WwiseObjectInfo parentInfo, WwiseObjectInfo childInfo)
-	{
-		var parent = FindByGuid(parentInfo.objectGUID);
-
-		//Object removed, but it was never loaded so we can ignore it
-		if (parent == null)
-		{
-			return;
-		}
-
-		parent.numChildren = parentInfo.childrenCount;
-		var index = parent.children.FindIndex(el => ((AkWwiseTreeViewItem)el).objectGuid == childInfo.objectGUID);
-		if (index != -1)
-		{
-			parent.children.RemoveAt(index);
-		}
+		ScheduleRebuild();
 	}
 
 	public void Expand(System.Guid objectGuid, bool select)
@@ -567,7 +674,7 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 		var splitpath = path.Split('\\');
 		if (splitpath.Length > 1)
 		{
-			var folder = @"\" + splitpath[1];
+			var folder = splitpath[1];
 			if (FolderNames.Values.Contains(folder) || WaapiKeywords.FolderDisplaynames.Values.Contains(folder))
 			{
 				return true;
@@ -578,7 +685,7 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 
 	public override void ItemSelected(AkWwiseTreeViewItem item)
 	{
-		if (AutoSyncSelection)
+		if (AkWwiseEditorSettings.Instance.AutoSyncWaapi)
 		{
 			SelectObjectInAuthoring(item.objectGuid);
 		}
@@ -644,10 +751,6 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 		if (rebuildFlag)
 		{
 			TreeUtility.TreeToList(ProjectRoot, ref Data);
-			if (TreeView != null)
-			{
-				Preload(ProjectRoot, TreeView.state);
-			}
 			refreshFlag = true;
 			rebuildFlag = false;
 		}
@@ -661,7 +764,7 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 		}
 	}
 
-	void Preload(AkWwiseTreeViewItem parent, TreeViewState treeState)
+	void Preload(AkWwiseTreeViewItem parent, WwiseTreeViewState treeState)
 	{
 		if (parent == null)
 		{
@@ -718,7 +821,7 @@ public class AkWwiseTreeWAAPIDataSource : AkWwiseTreeDataSource
 	{
 		this.treeviewCommandQueue = new ConcurrentQueue<TreeViewCommand>();
 		if (ProjectRoot != null)
-			ProjectRoot.children = new List<TreeViewItem>();
+			ProjectRoot.children = new List<WwiseTreeViewItem>();
 		if (still_connected)
 		{
 			UnsubscribeTopics();

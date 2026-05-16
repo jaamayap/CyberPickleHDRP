@@ -12,68 +12,46 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
-public class AkWwiseProjectData : UnityEngine.ScriptableObject
+public class AkWwiseProjectData
 {
-	public System.Collections.Generic.List<AkInfoWorkUnit> AcousticTextureWwu =
-		new System.Collections.Generic.List<AkInfoWorkUnit>();
+	[FormerlySerializedAs("AcousticTextureWwu")] public System.Collections.Generic.List<WwiseTreeObject> AcousticTextureRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
-	public System.Collections.Generic.List<AkInfoWorkUnit> AuxBusWwu =
-		new System.Collections.Generic.List<AkInfoWorkUnit>();
+	[FormerlySerializedAs("AuxBusWwu")] public System.Collections.Generic.List<WwiseTreeObject> BusRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
-	public System.Collections.Generic.List<AkInfoWorkUnit> BankWwu =
-		new System.Collections.Generic.List<AkInfoWorkUnit>();
+	[FormerlySerializedAs("BankWwu")] public System.Collections.Generic.List<WwiseTreeObject> BankRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
-	public System.Collections.Generic.List<EventWorkUnit> EventWwu =
-		new System.Collections.Generic.List<EventWorkUnit>();
+	[FormerlySerializedAs("EventWwu")] public System.Collections.Generic.List<WwiseTreeObject> EventRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
-	public System.Collections.Generic.List<AkInfoWorkUnit> RtpcWwu =
-		new System.Collections.Generic.List<AkInfoWorkUnit>();
+	[FormerlySerializedAs("RtpcWwu")] public System.Collections.Generic.List<WwiseTreeObject> GameParameterRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
-	public System.Collections.Generic.List<GroupValWorkUnit> StateWwu =
-		new System.Collections.Generic.List<GroupValWorkUnit>();
+	[FormerlySerializedAs("StateWwu")] public System.Collections.Generic.List<WwiseTreeObject> StateRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
-	public System.Collections.Generic.List<GroupValWorkUnit> SwitchWwu =
-		new System.Collections.Generic.List<GroupValWorkUnit>();
+	[FormerlySerializedAs("SwitchWwu")] public System.Collections.Generic.List<WwiseTreeObject> SwitchRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
-	public System.Collections.Generic.List<AkInfoWorkUnit> TriggerWwu =
-		new System.Collections.Generic.List<AkInfoWorkUnit>();
+	[FormerlySerializedAs("TriggerWwu")] public System.Collections.Generic.List<WwiseTreeObject> TriggerRoot =
+		new System.Collections.Generic.List<WwiseTreeObject>();
 
 	////Contains the int id of all items that are expanded in the Wwise picker
 	public System.Collections.Generic.List<int> ExpandedFileSystemItemIds = new System.Collections.Generic.List<int>();
 	public System.Collections.Generic.List<int> ExpandedWaapiItemIds = new System.Collections.Generic.List<int>();
 
 	public bool AutoSyncSelection;
-	public bool autoPopulateEnabled = true;
-	public AkWwiseProjectInfo.DataSourceType currentDataSource;
 
 	public string CurrentPluginConfig;
-
-	public System.Collections.ArrayList GetWwuListByString(string in_wwuType)
-	{
-		if (string.Equals(in_wwuType, "Events", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(EventWwu);
-		if (string.Equals(in_wwuType, "States", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(StateWwu);
-		if (string.Equals(in_wwuType, "Switches", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(SwitchWwu);
-		if (string.Equals(in_wwuType, "Master-Mixer Hierarchy", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(AuxBusWwu);
-		if (string.Equals(in_wwuType, "SoundBanks", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(BankWwu);
-		if (string.Equals(in_wwuType, "Game Parameters", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(RtpcWwu);
-		if (string.Equals(in_wwuType, "Triggers", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(TriggerWwu);
-		if (string.Equals(in_wwuType, "Virtual Acoustics", System.StringComparison.OrdinalIgnoreCase))
-			return System.Collections.ArrayList.Adapter(AcousticTextureWwu);
-
-		return null;
-	}
 
 	public float GetEventMaxAttenuation(uint eventID)
 	{
@@ -83,14 +61,12 @@ public class AkWwiseProjectData : UnityEngine.ScriptableObject
 
 	public Event GetEventInfo(uint eventID)
 	{
-		foreach (var wwu in EventWwu)
+		foreach (var root in EventRoot)
 		{
-			foreach (var entry in wwu.List)
+			var found = root.Find(eventID);
+			if (found != null)
 			{
-				if (entry.Id == eventID)
-				{
-					return entry;
-				}
+				return found as Event;
 			}
 		}
 
@@ -99,43 +75,14 @@ public class AkWwiseProjectData : UnityEngine.ScriptableObject
 
 	public void Reset()
 	{
-		EventWwu = new System.Collections.Generic.List<EventWorkUnit>();
-		StateWwu = new System.Collections.Generic.List<GroupValWorkUnit>();
-		SwitchWwu = new System.Collections.Generic.List<GroupValWorkUnit>();
-		BankWwu = new System.Collections.Generic.List<AkInfoWorkUnit>();
-		AuxBusWwu = new System.Collections.Generic.List<AkInfoWorkUnit>();
-		RtpcWwu = new System.Collections.Generic.List<AkInfoWorkUnit>();
-		TriggerWwu = new System.Collections.Generic.List<AkInfoWorkUnit>();
-		AcousticTextureWwu = new System.Collections.Generic.List<AkInfoWorkUnit>();
-	}
-
-	public void Migrate()
-	{
-		foreach (var wwu in EventWwu)
-			wwu.Migrate();
-
-		foreach (var wwu in StateWwu)
-			wwu.Migrate();
-
-		foreach (var wwu in SwitchWwu)
-			wwu.Migrate();
-
-		foreach (var wwu in BankWwu)
-			wwu.Migrate();
-
-		foreach (var wwu in AuxBusWwu)
-			wwu.Migrate();
-
-		foreach (var wwu in RtpcWwu)
-			wwu.Migrate();
-
-		foreach (var wwu in TriggerWwu)
-			wwu.Migrate();
-
-		foreach (var wwu in AcousticTextureWwu)
-			wwu.Migrate();
-
-		UnityEditor.EditorUtility.SetDirty(this);
+		EventRoot = new System.Collections.Generic.List<WwiseTreeObject>();
+		StateRoot = new System.Collections.Generic.List<WwiseTreeObject>();
+		SwitchRoot = new System.Collections.Generic.List<WwiseTreeObject>();
+		BankRoot = new System.Collections.Generic.List<WwiseTreeObject>();
+		BusRoot = new System.Collections.Generic.List<WwiseTreeObject>();
+		GameParameterRoot = new System.Collections.Generic.List<WwiseTreeObject>();
+		TriggerRoot = new System.Collections.Generic.List<WwiseTreeObject>();
+		AcousticTextureRoot = new System.Collections.Generic.List<WwiseTreeObject>();
 	}
 
 	[System.Serializable]
@@ -183,16 +130,13 @@ public class AkWwiseProjectData : UnityEngine.ScriptableObject
 				id = AkUtilities.ShortIDGenerator.Compute(value);
 			}
 		}
-
-		[UnityEngine.HideInInspector]
-		[UnityEngine.SerializeField]
-		[UnityEngine.Serialization.FormerlySerializedAs("Guid")]
-		private byte[] guid = null;
+		
+		private System.Guid guid;
 
 		public System.Guid Guid
 		{
-			get { return GetGuid(guid); }
-			set { guid = value.ToByteArray(); }
+			get { return guid; }
+			set { guid = value; }
 		}
 
 		[UnityEngine.SerializeField]
@@ -202,6 +146,8 @@ public class AkWwiseProjectData : UnityEngine.ScriptableObject
 		public uint Id
 		{
 			get { return id; }
+
+			set { id = value; }
 		}
 
 		[UnityEngine.HideInInspector]
@@ -234,51 +180,38 @@ public class AkWwiseProjectData : UnityEngine.ScriptableObject
 	}
 
 	[System.Serializable]
-	public class AkInformation : AkBaseInformation
+	public class WwiseTreeObject : AkBaseInformation
 	{
 		public string Path;
-	}
+		public List<WwiseTreeObject> Children;
+		public WwiseObjectType Type = WwiseObjectType.Folder;
 
-	[System.Serializable]
-	public class GroupValue : AkInformation
-	{
-		public System.Collections.Generic.List<AkBaseInformation> values =
-			new System.Collections.Generic.List<AkBaseInformation>();
-
-		[UnityEngine.HideInInspector]
-		[UnityEngine.SerializeField]
-		private System.Collections.Generic.List<ByteArrayWrapper> ValueGuids =
-			new System.Collections.Generic.List<ByteArrayWrapper>();
-		[UnityEngine.HideInInspector]
-		[UnityEngine.SerializeField]
-		private System.Collections.Generic.List<PathElement> ValueIcons = new System.Collections.Generic.List<PathElement>();
-		[UnityEngine.HideInInspector]
-		[UnityEngine.SerializeField]
-		[UnityEngine.Serialization.FormerlySerializedAs("values")]
-		private System.Collections.Generic.List<string> valuesInternal = new System.Collections.Generic.List<string>();
-
-		public void Migrate()
+		public WwiseTreeObject Find(uint shortId)
 		{
-			var count = ValueGuids.Count;
-			if (count < 1 || count != ValueIcons.Count || count != valuesInternal.Count)
-				return;
-
-			values.Clear();
-			for (var i = 0; i < count; ++i)
+			if (Id == shortId)
 			{
-				var value = new AkBaseInformation
-				{
-					Name = valuesInternal[i],
-					Guid = GetGuid(ValueGuids[i].bytes)
-				};
-				value.PathAndIcons.Add(ValueIcons[i]);
-				values.Add(value);
+				return this;
 			}
+
+			if (Children == null)
+			{
+				return null;
+			}
+			foreach(var Child in Children)
+			{
+				var found = Child.Find(shortId);
+				if (found != null)
+				{
+					return found;
+				}
+			}
+
+			return null;
 		}
 	}
 
 	[System.Serializable]
-	public class Event : AkInformation
+	public class Event : WwiseTreeObject
 	{
 		public float maxAttenuation;
 		public float maxDuration = -1;
@@ -286,112 +219,11 @@ public class AkWwiseProjectData : UnityEngine.ScriptableObject
 	}
 
 	[System.Serializable]
-	public class WorkUnit : System.IComparable
-	{
-		public string PhysicalPath;
-
-		[UnityEngine.HideInInspector]
-		public System.Collections.Generic.List<PathElement> PathAndIcons = new System.Collections.Generic.List<PathElement>();
-
-		[UnityEngine.Serialization.FormerlySerializedAs("ParentPhysicalPath")]
-		public string ParentPath;
-
-		[UnityEngine.HideInInspector]
-		[UnityEngine.SerializeField]
-		private byte[] guid = null;
-
-		[UnityEngine.HideInInspector]
-		[UnityEngine.SerializeField]
-		[UnityEngine.Serialization.FormerlySerializedAs("Guid")]
-		private string GuidInternal = string.Empty;
-
-		public System.Guid Guid
-		{
-			get { return GetGuid(guid); }
-			set { guid = value.ToByteArray(); }
-		}
-
-		[UnityEngine.HideInInspector]
-		[UnityEngine.SerializeField]
-		private long m_lastTime;
-
-		public System.DateTime LastTime
-		{
-			get { return m_lastTime == 0 ? System.DateTime.MinValue : System.DateTime.FromBinary(m_lastTime); }
-			set { m_lastTime = value.ToBinary(); }
-		}
-
-		public virtual void Migrate()
-		{
-			try
-			{
-				Guid = new System.Guid(GuidInternal);
-			}
-			catch
-			{
-				Guid = System.Guid.Empty;
-			}
-		}
-
-		int System.IComparable.CompareTo(object other)
-		{
-			if (other == null)
-				return 1;
-
-			var otherWwu = other as WorkUnit;
-			if (otherWwu == null)
-				throw new System.ArgumentException("Object is not a WorkUnit");
-
-			return PhysicalPath.CompareTo(otherWwu.PhysicalPath);
-		}
-
-
-		public virtual System.Collections.ArrayList GetChildrenArrayList() { return null; }
-	}
-
-	[System.Serializable]
-	public class GenericWorkUnit<T> : WorkUnit where T : AkInformation
-	{
-		public System.Collections.Generic.List<T> List = new System.Collections.Generic.List<T>();
-
-		public T Find(string name)
-		{
-			foreach (var item in List)
-				if (item.Name == name)
-					return item;
-
-			return null;
-		}
-
-		public override System.Collections.ArrayList GetChildrenArrayList()
-		{
-			return System.Collections.ArrayList.Adapter(List);
-		}
-	}
-
-	[System.Serializable]
-	public class AkInfoWorkUnit : GenericWorkUnit<AkInformation> { }
-
-	[System.Serializable]
-	public class EventWorkUnit : GenericWorkUnit<Event> { }
-
-	[System.Serializable]
-	public class GroupValWorkUnit : GenericWorkUnit<GroupValue>
-	{
-		public override void Migrate()
-		{
-			base.Migrate();
-
-			foreach (var item in List)
-				item.Migrate();
-		}
-	}
-
-	[System.Serializable]
 	public class PathElement
 	{
 		public string ElementName;
 		public WwiseObjectType ObjectType;
+		public string Path;
 
 		[UnityEngine.SerializeField]
 		[UnityEngine.HideInInspector]

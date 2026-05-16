@@ -1,4 +1,4 @@
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
 Technology released in source code form as part of the game integration package.
@@ -13,7 +13,7 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 [UnityEngine.AddComponentMenu("Wwise/Spatial Audio/AkSpatialAudioDebugDraw")]
@@ -36,7 +36,7 @@ public class AkSpatialAudioDebugDraw : UnityEngine.MonoBehaviour
 
 	private void OnDrawGizmos()
 	{
-		if (!UnityEngine.Application.isPlaying || !AkSoundEngine.IsInitialized())
+		if (!UnityEngine.Application.isPlaying || !AkUnitySoundEngine.IsInitialized())
 		{
 			return;
 		}
@@ -81,7 +81,7 @@ public class AkSpatialAudioDebugDraw : UnityEngine.MonoBehaviour
 			var listenerPosition = UnityEngine.Vector3.zero;
 			var emitterPosition = UnityEngine.Vector3.zero;
 			uint numValidPaths = (uint)indirectPathInfoArray.Count();
-			if (AkSoundEngine.QueryReflectionPaths(gameObject, 0, ref listenerPosition, ref emitterPosition, indirectPathInfoArray, out numValidPaths) != AKRESULT.AK_Success)
+			if (AkUnitySoundEngine.QueryReflectionPaths(gameObject, 0, ref listenerPosition, ref emitterPosition, indirectPathInfoArray, out numValidPaths) != AKRESULT.AK_Success)
 			{
 				return;
 			}
@@ -130,12 +130,6 @@ public class AkSpatialAudioDebugDraw : UnityEngine.MonoBehaviour
 					UnityEngine.Gizmos.color = path.isOccluded ? colorLightGrey : colorLight;
 					UnityEngine.Gizmos.DrawWireSphere(pt, radiusSphere / 2 / order);
 
-					if (!path.isOccluded)
-					{
-						var surface = path.GetAcousticSurface((uint)idxSeg);
-						DrawLabelInFrontOfCam(pt, surface.strName, 100000, colorDark);
-					}
-
 					float dfrnAmount = path.GetDiffraction((uint)idxSeg);
 					if (dfrnAmount > 0)
 					{
@@ -159,7 +153,7 @@ public class AkSpatialAudioDebugDraw : UnityEngine.MonoBehaviour
 			var listenerPosition = UnityEngine.Vector3.zero;
 			var emitterPosition = UnityEngine.Vector3.zero;
 			uint numValidPaths = (uint)diffractionPathInfoArray.Count();
-			if (AkSoundEngine.QueryDiffractionPaths(gameObject, 0, ref listenerPosition, ref emitterPosition, diffractionPathInfoArray, out numValidPaths) != AKRESULT.AK_Success)
+			if (AkUnitySoundEngine.QueryDiffractionPaths(gameObject, 0, ref listenerPosition, ref emitterPosition, diffractionPathInfoArray, out numValidPaths) != AKRESULT.AK_Success)
 			{
 				return;
 			}
@@ -210,4 +204,4 @@ public class AkSpatialAudioDebugDraw : UnityEngine.MonoBehaviour
 	}
 #endif
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

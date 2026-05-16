@@ -12,11 +12,12 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 #if UNITY_EDITOR
 using UnityEditor;
+using AK.Wwise.Unity.Logging;
 
 [UnityEditor.InitializeOnLoad]
 public class AkWindowsPluginActivator : AkPlatformPluginActivator
@@ -58,7 +59,7 @@ public class AkWindowsPluginActivator : AkPlatformPluginActivator
 	{
 		if (pluginImporterInformation.PluginArch != "x86" && pluginImporterInformation.PluginArch != "x86_64")
 		{
-			UnityEngine.Debug.Log("WwiseUnity: Architecture not found: " + pluginImporterInformation.PluginArch);
+			WwiseLogger.Log("Architecture not found: " + pluginImporterInformation.PluginArch);
 			return false;
 		}
 
@@ -67,6 +68,12 @@ public class AkWindowsPluginActivator : AkPlatformPluginActivator
 		pluginImporter.SetPlatformData(BuildTarget.StandaloneWindows64, "CPU", pluginImporterInformation.IsX64 ? "AnyCPU" : "None");
 		pluginImporter.SetPlatformData(BuildTarget.StandaloneOSX, "CPU", "None");
 		return true;
+	}
+	
+	public override void FilterOutPlatformIfNeeded(BuildTarget target, PluginImporter pluginImporter,
+		string pluginPlatform)
+	{
+		pluginImporter.SetCompatibleWithPlatform(target, false);
 	}
 }
 #endif

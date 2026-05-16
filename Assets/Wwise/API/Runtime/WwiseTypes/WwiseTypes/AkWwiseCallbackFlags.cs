@@ -12,10 +12,10 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
-#if !(UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 
 namespace AK.Wwise
 {
@@ -48,9 +48,9 @@ namespace AK.Wwise
 				var callbacktypes = System.Enum.GetValues(typeof(AkCallbackType)) as AkCallbackType[];
 				var unsupportedCallbackValues = new[]
 				{
-					AkCallbackType.AK_SpeakerVolumeMatrix, AkCallbackType.AK_MusicSyncAll,
-					AkCallbackType.AK_CallbackBits, AkCallbackType.AK_Monitoring, AkCallbackType.AK_AudioSourceChange,
-					AkCallbackType.AK_Bank, AkCallbackType.AK_AudioInterruption
+					AkCallbackType.AK_SpeakerVolumeMatrix,
+					AkCallbackType.AK_MusicSyncAll,
+					AkCallbackType.AK_CallbackBits
 				};
 
 				m_supportedCallbackFlags = new string[callbacktypes.Length - unsupportedCallbackValues.Length];
@@ -142,4 +142,4 @@ namespace AK.Wwise
 #endif
 	}
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

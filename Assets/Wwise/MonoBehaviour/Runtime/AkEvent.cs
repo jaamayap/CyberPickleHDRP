@@ -1,4 +1,4 @@
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
 Technology released in source code form as part of the game integration package.
@@ -13,8 +13,10 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
+
+using AK.Wwise.Unity.Logging;
 
 /// <summary>
 ///     Event callback information.
@@ -28,7 +30,7 @@ public class AkEventCallbackMsg
 	/// GameObject from whom the callback function was called
 	public UnityEngine.GameObject sender;
 
-	///AkSoundEngine.PostEvent callback flags. See the AkCallbackType enumeration for a list of all callbacks
+	///AkUnitySoundEngine.PostEvent callback flags. See the AkCallbackType enumeration for a list of all callbacks
 	public AkCallbackType type;
 }
 
@@ -71,11 +73,13 @@ public class AkEvent : AkDragDropTriggerHandler
 				GameObject.SendMessage(FunctionName, eventCallbackMsg);
 		}
 	}
-
+	
+	private UnityEngine.GameObject otherGameObject;
 	public bool useCallbacks = false;
+	public bool stopSoundOnDestroy = true;
 	public System.Collections.Generic.List<CallbackData> Callbacks = new System.Collections.Generic.List<CallbackData>();
 
-	public uint playingId = AkSoundEngine.AK_INVALID_PLAYING_ID;
+	public uint playingId => data.PlayingId;
 
 	/// Game object onto which the Event will be posted.  By default, when empty, it is posted on the same object on which the component was added.
 	public UnityEngine.GameObject soundEmitterObject;
@@ -131,6 +135,10 @@ public class AkEvent : AkDragDropTriggerHandler
 	{
 		var gameObj = useOtherObject && in_gameObject != null ? in_gameObject : gameObject;
 		soundEmitterObject = gameObj;
+		if (useOtherObject)
+		{
+			otherGameObject = in_gameObject;
+		}
 
 		if (enableActionOnEvent)
 		{
@@ -151,12 +159,22 @@ public class AkEvent : AkDragDropTriggerHandler
 
 			if (flags != 0)
 			{
-				playingId = data.Post(gameObj, flags, Callback);
+				data.Post(gameObj, flags, Callback);
 				return;
 			}
 		}
 
-		playingId = data.Post(gameObj);
+		data.Post(gameObj);
+	}
+
+	protected void OnDisable()
+	{
+		var akGameObj = gameObject.GetComponent<AkGameObj>();
+		if (stopSoundOnDestroy && akGameObj != null && akGameObj.GameObjIsRegistered())
+		{
+			var gameObj = useOtherObject && otherGameObject != null ? otherGameObject : gameObject;
+			data.ExecuteAction(gameObj, AkActionOnEventType.AkActionOnEventType_Stop, (int)transitionDuration * 1000, curveInterpolation);
+		}
 	}
 
 	public void Stop(int _transitionDuration)
@@ -170,10 +188,10 @@ public class AkEvent : AkDragDropTriggerHandler
 	}
 
 	#region Obsolete
-	[System.Obsolete(AkSoundEngine.Deprecation_2018_1_2)]
-	public int eventID { get { return (int)(data == null ? AkSoundEngine.AK_INVALID_UNIQUE_ID : data.Id); } }
+	[System.Obsolete(AkUnitySoundEngine.Deprecation_2018_1_2)]
+	public int eventID { get { return (int)(data == null ? AkUnitySoundEngine.AK_INVALID_UNIQUE_ID : data.Id); } }
 
-	[System.Obsolete(AkSoundEngine.Deprecation_2018_1_6)]
+	[System.Obsolete(AkUnitySoundEngine.Deprecation_2018_1_6)]
 	public byte[] valueGuid
 	{
 		get
@@ -186,7 +204,7 @@ public class AkEvent : AkDragDropTriggerHandler
 		}
 	}
 
-	[System.Obsolete(AkSoundEngine.Deprecation_2018_1_6)]
+	[System.Obsolete(AkUnitySoundEngine.Deprecation_2018_1_6)]
 	public AkEventCallbackData m_callbackData { get { return m_callbackDataInternal; } }
 	#endregion
 
@@ -195,7 +213,7 @@ public class AkEvent : AkDragDropTriggerHandler
 	[UnityEngine.HideInInspector]
 	[UnityEngine.SerializeField]
 	[UnityEngine.Serialization.FormerlySerializedAs("eventID")]
-	private int eventIdInternal = (int)AkSoundEngine.AK_INVALID_UNIQUE_ID;
+	private int eventIdInternal = (int)AkUnitySoundEngine.AK_INVALID_UNIQUE_ID;
 	[UnityEngine.HideInInspector]
 	[UnityEngine.SerializeField]
 	[UnityEngine.Serialization.FormerlySerializedAs("valueGuid")]
@@ -227,7 +245,7 @@ public class AkEvent : AkDragDropTriggerHandler
 		var count = oldCallbackData.callbackFlags.Count;
 		if (count != oldCallbackData.callbackFunc.Count || count != oldCallbackData.callbackGameObj.Count)
 		{
-			UnityEngine.Debug.LogWarning("WwiseUnity: Inconsistent callback data!");
+			WwiseLogger.Warning("Inconsistent callback data!");
 			return hasMigrated;
 		}
 
@@ -241,7 +259,7 @@ public class AkEvent : AkDragDropTriggerHandler
 			data.FindPropertyRelative("GameObject").objectReferenceValue = oldCallbackData.callbackGameObj[i];
 			data.FindPropertyRelative("FunctionName").stringValue = oldCallbackData.callbackFunc[i];
 			data.FindPropertyRelative("Flags.value").intValue = oldCallbackData.callbackFlags[i];
-			UnityEngine.Debug.Log("WwiseUnity: Migrated Callback for function \"" + oldCallbackData.callbackFunc[i] + "\" on <" + oldCallbackData.callbackGameObj[i] + "> with flags <" + (AkCallbackType)oldCallbackData.callbackFlags[i] + ">.");
+			WwiseLogger.Log("Migrated Callback for function \"" + oldCallbackData.callbackFunc[i] + "\" on <" + oldCallbackData.callbackGameObj[i] + "> with flags <" + (AkCallbackType)oldCallbackData.callbackFlags[i] + ">.");
 		}
 
 		return true;
@@ -249,4 +267,4 @@ public class AkEvent : AkDragDropTriggerHandler
 #endif
 	#endregion
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

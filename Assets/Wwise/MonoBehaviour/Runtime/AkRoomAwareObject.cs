@@ -1,4 +1,4 @@
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
 Technology released in source code form as part of the game integration package.
@@ -13,7 +13,7 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 /// <summary>
@@ -66,13 +66,14 @@ public class AkRoomAwareObject : UnityEngine.MonoBehaviour
 		roomPriorityList.Clear();
 
 		AkRoomAwareManager.UnregisterRoomAwareObject(this);
-
-		SetGameObjectInRoom(null);
 	}
 
 	private void OnDestroy()
 	{
-		ColliderToRoomAwareObjectMap.Remove(m_Collider);
+		if (m_Collider)
+		{
+			ColliderToRoomAwareObjectMap.Remove(m_Collider);
+		}
 	}
 
 	public void SetGameObjectInHighestPriorityActiveAndEnabledRoom()
@@ -82,7 +83,7 @@ public class AkRoomAwareObject : UnityEngine.MonoBehaviour
 
 	private void SetGameObjectInRoom(AkRoom room)
 	{
-		AkSoundEngine.SetGameObjectInRoom(gameObject, AkRoom.GetAkRoomID(room));
+		AkUnitySoundEngine.SetGameObjectInRoom(gameObject, AkRoom.GetAkRoomID(room));
 	}
 
 	/// <summary>
@@ -103,4 +104,4 @@ public class AkRoomAwareObject : UnityEngine.MonoBehaviour
 		roomPriorityList.Remove(room);
 	}
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.

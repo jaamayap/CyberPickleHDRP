@@ -1,4 +1,4 @@
-#if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#if !(UNITY_QNX) // Disable under unsupported platforms.
 /*******************************************************************************
 The content of this file includes portions of the proprietary AUDIOKINETIC Wwise
 Technology released in source code form as part of the game integration package.
@@ -13,13 +13,13 @@ Licensees holding valid licenses to the AUDIOKINETIC Wwise Technology may use
 this file in accordance with the end user license agreement provided with the
 software or, alternatively, in accordance with the terms contained
 in a written agreement between you and Audiokinetic Inc.
-Copyright (c) 2024 Audiokinetic Inc.
+Copyright (c) 2026 Audiokinetic Inc.
 *******************************************************************************/
 
 public class AkAuxSendArray : System.IDisposable
 {
 	private const int MAX_COUNT = 4;
-	private readonly int SIZE_OF_AKAUXSENDVALUE = AkSoundEnginePINVOKE.CSharp_AkAuxSendValue_GetSizeOf();
+	private readonly int SIZE_OF_AKAUXSENDVALUE = AkUnitySoundEnginePINVOKE.CSharp_AkAuxSendValue_GetSizeOf();
 
 	private System.IntPtr m_Buffer;
 	private int m_Count;
@@ -71,8 +71,8 @@ public class AkAuxSendArray : System.IDisposable
 		if (isFull)
 			return false;
 
-		AkSoundEnginePINVOKE.CSharp_AkAuxSendValue_Set(GetObjectPtr(m_Count),
-			AkSoundEngine.GetAkGameObjectID(in_listenerGameObj), in_AuxBusID, in_fValue);
+		AkUnitySoundEnginePINVOKE.CSharp_AkAuxSendValue_Set(GetObjectPtr(m_Count),
+			AkUnitySoundEngine.GetAkGameObjectID(in_listenerGameObj), in_AuxBusID, in_fValue);
 		m_Count++;
 		return true;
 	}
@@ -82,7 +82,7 @@ public class AkAuxSendArray : System.IDisposable
 		if (isFull)
 			return false;
 
-		AkSoundEnginePINVOKE.CSharp_AkAuxSendValue_Set(GetObjectPtr(m_Count), AkSoundEngine.AK_INVALID_GAME_OBJECT,
+		AkUnitySoundEnginePINVOKE.CSharp_AkAuxSendValue_Set(GetObjectPtr(m_Count), AkUnitySoundEngine.AK_INVALID_GAME_OBJECT,
 			in_AuxBusID, in_fValue);
 		m_Count++;
 		return true;
@@ -95,8 +95,8 @@ public class AkAuxSendArray : System.IDisposable
 
 		for (var i = 0; i < m_Count; i++)
 		{
-			if (AkSoundEnginePINVOKE.CSharp_AkAuxSendValue_IsSame(GetObjectPtr(i),
-				AkSoundEngine.GetAkGameObjectID(in_listenerGameObj), in_AuxBusID))
+			if (AkUnitySoundEnginePINVOKE.CSharp_AkAuxSendValue_IsSame(GetObjectPtr(i),
+				AkUnitySoundEngine.GetAkGameObjectID(in_listenerGameObj), in_AuxBusID))
 				return true;
 		}
 
@@ -110,7 +110,7 @@ public class AkAuxSendArray : System.IDisposable
 
 		for (var i = 0; i < m_Count; i++)
 		{
-			if (AkSoundEnginePINVOKE.CSharp_AkAuxSendValue_IsSame(GetObjectPtr(i), AkSoundEngine.AK_INVALID_GAME_OBJECT, in_AuxBusID))
+			if (AkUnitySoundEnginePINVOKE.CSharp_AkAuxSendValue_IsSame(GetObjectPtr(i), AkUnitySoundEngine.AK_INVALID_GAME_OBJECT, in_AuxBusID))
 				return true;
 		}
 
@@ -119,13 +119,13 @@ public class AkAuxSendArray : System.IDisposable
 
 	public AKRESULT SetValues(UnityEngine.GameObject gameObject)
 	{
-		return (AKRESULT) AkSoundEnginePINVOKE.CSharp_SetGameObjectAuxSendValues(AkSoundEngine.GetAkGameObjectID(gameObject), m_Buffer, (uint) m_Count);
+		return (AKRESULT) AkUnitySoundEnginePINVOKE.CSharp_SetGameObjectAuxSendValues(AkUnitySoundEngine.GetAkGameObjectID(gameObject), m_Buffer, (uint) m_Count);
 	}
 
 	public AKRESULT GetValues(UnityEngine.GameObject gameObject)
 	{
 		uint count = MAX_COUNT;
-		var res = (AKRESULT) AkSoundEnginePINVOKE.CSharp_GetGameObjectAuxSendValues(AkSoundEngine.GetAkGameObjectID(gameObject), m_Buffer, ref count);
+		var res = (AKRESULT) AkUnitySoundEnginePINVOKE.CSharp_GetGameObjectAuxSendValues(AkUnitySoundEngine.GetAkGameObjectID(gameObject), m_Buffer, ref count);
 		m_Count = (int) count;
 		return res;
 	}
@@ -145,4 +145,4 @@ public class AkAuxSendArray : System.IDisposable
 		return (System.IntPtr) (m_Buffer.ToInt64() + SIZE_OF_AKAUXSENDVALUE * index);
 	}
 }
-#endif // #if ! (UNITY_DASHBOARD_WIDGET || UNITY_WEBPLAYER || UNITY_WII || UNITY_WIIU || UNITY_NACL || UNITY_FLASH || UNITY_BLACKBERRY) // Disable under unsupported platforms.
+#endif // #if !(UNITY_QNX) // Disable under unsupported platforms.
