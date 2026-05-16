@@ -91,3 +91,7 @@ crashlytics-build.properties
 # the Wwise Launcher regenerates them whenever it does an Integrate.
 /WwiseUnityIntegration_*_Src.zip
 /logRunSetup.txt
+
+# Wwise Authoring's per-WAV scrub-data cache. Regenerated on demand by
+# Wwise when you open the audio source — no value in tracking these.
+*.wav.asd

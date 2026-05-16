@@ -17,6 +17,7 @@ using Unity.Entities;
 using UnityEngine;
 using CyberPickle.Core;
 using CyberPickle.DOTS.Components;
+using CyberPickle.Gameplay.Audio;
 using CyberPickle.Gameplay.Combat;
 using CyberPickle.Gameplay.Weapons;
 
@@ -101,6 +102,22 @@ namespace CyberPickle.DOTS.Systems
                         hitDirection: new Vector3(report.HitDirection.x, report.HitDirection.y, report.HitDirection.z),
                         damageDealt:  report.DamageDealt,
                         isCrit:       report.IsCrit);
+                }
+
+                // M10 PHASE 5: dispatch the music "detonate" event for AoE
+                // central-explosion reports. WwiseMusicAdapter receives this
+                // and posts the per-weapon Snare event at the epicenter,
+                // spatially-panned but at full music-bus volume (the beat
+                // stays rock-solid regardless of where on the map it lands).
+                // Exactly one such report per detonation — see the
+                // IsDetonation comment on DamageHitReport.
+                if (report.IsDetonation)
+                {
+                    MusicEventBus.Fire(MusicEvent.WeaponDetonate, new WeaponDetonatePayload
+                    {
+                        WeaponId      = report.WeaponId.ToString(),
+                        WorldPosition = new Vector3(report.HitPosition.x, report.HitPosition.y, report.HitPosition.z),
+                    });
                 }
             }
         }

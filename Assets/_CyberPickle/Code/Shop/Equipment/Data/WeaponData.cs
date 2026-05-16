@@ -151,6 +151,30 @@ namespace CyberPickle.Shop.Equipment.Data
         [Tooltip("Optional style sheet for the grenade-launcher aim preview (parabolic arc + AoE ring + optional ground disc). Only used by parabolic weapons. Leave null to use the inspector default on the weapon's GrenadeTelegraph child. Create via Assets → Create → CyberPickle → VFX → Grenade Telegraph Style.")]
         public CyberPickle.Gameplay.Weapons.GrenadeTelegraphStyleSO telegraphStyle;
 
+        // ─── Audio (Wwise) ────────────────────────────────────────────────
+        //
+        // Per-weapon Wwise events posted by WwiseMusicAdapter when this
+        // weapon fires or its AoE projectile detonates. The adapter looks
+        // these up from the WeaponData (via WeaponLoadoutRuntime.
+        // FindByWeaponId) so every weapon owns its own audio mapping in
+        // the SAME asset as its other properties. No separate mapping
+        // table to maintain.
+        //
+        // Convention (matches the Phase 3 Wwise authoring):
+        //   wwiseFireEventName     = "Play_{WeaponName}_Kick"
+        //   wwiseDetonateEventName = "Play_{WeaponName}_Snare"  (AoE only)
+        //
+        // Both are 2D-locked through the Music bus chain (so the beat
+        // stays consistent) but the detonate event is positioned in 3D
+        // for pan-only spatialization at the explosion epicenter.
+
+        [Header("Audio (Wwise)")]
+        [Tooltip("Wwise event posted on weapon fire. Typically the percussive kick layer. Example: 'Play_GrenadeLauncher_Kick'. Leave empty for weapons without authored audio (silent on fire).")]
+        public string wwiseFireEventName;
+
+        [Tooltip("Wwise event posted on AoE detonation. Typically the snare layer at the explosion epicenter. Example: 'Play_GrenadeLauncher_Snare'. Leave empty for non-AoE weapons or weapons without detonate audio.")]
+        public string wwiseDetonateEventName;
+
         // Note: trail-linger duration USED to live here as `trailLingerSeconds`.
         // It's gone now — the fade-out duration is read directly from the
         // projectile prefab itself (CyberPickleProjectileVisual.GetTotalFadeDuration

@@ -13,18 +13,25 @@ namespace AK
 {
     namespace EVENTS
     {
+        static const AkUniqueID PLAY_GRENADELAUNCHER_KICK = 2352743601U;
+        static const AkUniqueID PLAY_GRENADELAUNCHER_SNARE = 2047028982U;
         static const AkUniqueID PLAY_SONG1_PLACEHOLDER = 1927207284U;
     } // namespace EVENTS
 
     namespace BANKS
     {
         static const AkUniqueID INIT = 1355168291U;
+        static const AkUniqueID MUSIC_WEAPONS = 1906748436U;
         static const AkUniqueID SOUNDTRACK = 2082426231U;
     } // namespace BANKS
 
     namespace BUSSES
     {
         static const AkUniqueID MASTER_AUDIO_BUS = 3803692087U;
+        static const AkUniqueID MUSIC = 3991942870U;
+        static const AkUniqueID MUSIC_KICK = 1433241079U;
+        static const AkUniqueID MUSIC_PERCUSSION = 910111134U;
+        static const AkUniqueID MUSIC_SNARE = 366622112U;
     } // namespace BUSSES
 
     namespace AUDIO_DEVICES

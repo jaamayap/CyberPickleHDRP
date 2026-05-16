@@ -3881,6 +3881,8 @@ GameObject:
   m_Component:
   - component: {fileID: 625675775}
   - component: {fileID: 625675774}
+  - component: {fileID: 625675776}
+  - component: {fileID: 625675777}
   m_Layer: 0
   m_Name: '[MusicConductor]'
   m_TagString: Untagged
@@ -3924,6 +3926,46 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &625675776
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 625675773}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58d4d2bf1a55da246a343249dc02c99b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CyberPickle.Gameplay.Audio.WwiseMusicAdapter
+  verboseLogging: 0
+  detonateGameObjectLifetime: 1
+--- !u!114 &625675777
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 625675773}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7119b6ea186185c4fb23ab25c7112e55, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.MonoBehaviour::AkBank
+  triggerList: f7e1664c
+  useOtherObject: 0
+  data:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: a1f0f9b6dd3646d3bfec8a48128a0fe3,
+      type: 2}
+  decodeBank: 0
+  overrideLoadSetting: 0
+  loadAsynchronous: 0
+  saveDecodedBank: 0
+  unloadTriggerList: 958ca0ea
+  bankNameInternal: Music_Weapons
+  valueGuidInternal: 1aa6f9f0dd36d346bfec8a48128a0fe3
 --- !u!1 &653216787
 GameObject:
   m_ObjectHideFlags: 0
@@ -6211,7 +6253,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 386b53f48098ee641afcf00c3c9e2db3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  InitializationSettings: {fileID: 11400000, guid: 8846488f92a238b47bbff42a10e7c129,
+  InitializationSettings: {fileID: 11400000, guid: d69e03c61b73d504d87d4ea2f9831853,
     type: 2}
   basePath: 
   language: 
@@ -10368,9 +10410,10 @@ GameObject:
   m_Component:
   - component: {fileID: 2059096378}
   - component: {fileID: 2059096377}
-  - component: {fileID: 2059096376}
   - component: {fileID: 2059096379}
   - component: {fileID: 2059096380}
+  - component: {fileID: 2059096382}
+  - component: {fileID: 2059096381}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -10378,14 +10421,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!81 &2059096376
-AudioListener:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2059096375}
-  m_Enabled: 1
 --- !u!20 &2059096377
 Camera:
   m_ObjectHideFlags: 0
@@ -10623,6 +10658,46 @@ MonoBehaviour:
       m_PostInfinity: 2
       m_RotationOrder: 4
   CustomBlends: {fileID: 0}
+--- !u!114 &2059096381
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2059096375}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b8f87fa7f6cce74b89b3652fdfd732b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.MonoBehaviour::AkAudioListener
+  isDefaultListener: 1
+  bOverrideScalingFactor: 0
+  scalingFactor: -1
+  listenerId: 0
+--- !u!114 &2059096382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2059096375}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 594e07aca4320174a9995fa1d4aabcac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.MonoBehaviour::AkGameObj
+  m_listeners:
+    initialListenerList: []
+    useDefaultListeners: 1
+  isEnvironmentAware: 1
+  isStaticObject: 0
+  usePositionOffsetData: 0
+  m_positionOffsetData:
+    KeepMe: 0
+    positionOffset: {x: 0, y: 0, z: 0}
+  scalingFactor: 1
+  m_posOffsetData: {fileID: 0}
+  listenerMask: 1
 --- !u!1 &2064485468
 GameObject:
   m_ObjectHideFlags: 0

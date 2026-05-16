@@ -18,7 +18,7 @@
     "Type": "User",
     "GUID": "{701ECBBD-9C7B-4030-8CDB-749EE5D1C7B9}",
     "Language": "SFX",
-    "Hash": "{9312EA03-BFC6-1A84-3885-8E822A0C4741}",
+    "Hash": "{42F7428E-8A3A-0F54-B83B-2D620484E7EE}",
     "ObjectPath": "Init",
     "ShortName": "Init",
     "Path": "Init.bnk",
@@ -44,10 +44,169 @@
     },
     "Busses": [
      {
+      "Id": "366622112",
+      "Name": "Music_Snare",
+      "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus\\Music\\Music_Percussion\\Music_Snare",
+      "GUID": "{6F765ABD-C6AB-42A8-9D70-39DA13B76E92}"
+     },
+     {
+      "Id": "910111134",
+      "Name": "Music_Percussion",
+      "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus\\Music\\Music_Percussion",
+      "GUID": "{15C616F1-A35F-433A-80BF-A3AD9184D9BE}"
+     },
+     {
+      "Id": "1433241079",
+      "Name": "Music_Kick",
+      "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus\\Music\\Music_Percussion\\Music_Kick",
+      "GUID": "{ECA97301-6ECC-4A91-B149-D6C727E9C3A5}"
+     },
+     {
       "Id": "3803692087",
       "Name": "Master Audio Bus",
       "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus",
       "GUID": "{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}"
+     },
+     {
+      "Id": "3991942870",
+      "Name": "Music",
+      "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus\\Music",
+      "GUID": "{F4D19424-6672-4157-A6A0-5A8960D06D30}"
+     }
+    ]
+   },
+   {
+    "Id": "1906748436",
+    "Type": "User",
+    "GUID": "{F0F9A61A-36DD-46D3-BFEC-8A48128A0FE3}",
+    "Language": "SFX",
+    "Hash": "{AC3AD12B-6E4E-BE56-4807-B937DAE9FF28}",
+    "ObjectPath": "\\SoundBanks\\Default Work Unit\\Music_Weapons",
+    "ShortName": "Music_Weapons",
+    "Path": "Music_Weapons.bnk",
+    "Media": [
+     {
+      "Id": "19127390",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Snare_Non_Elemental\\Snare_1_NonElement_v05.wav",
+      "CachePath": "89/{890A18F6-77D0-D31D-498C-D161419FB2B9}.wem"
+     },
+     {
+      "Id": "51445410",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Kick_Non_Elemental\\Kick_1_NonElement_v04.wav",
+      "CachePath": "77/{77321F85-5AD8-4532-A820-E81CA824B046}.wem"
+     },
+     {
+      "Id": "168394228",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Kick_Non_Elemental\\Kick_1_NonElement_v03.wav",
+      "CachePath": "03/{03490FA3-33EC-01F4-BDE3-8220CADC96A4}.wem"
+     },
+     {
+      "Id": "263874256",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Snare_Non_Elemental\\Snare_1_NonElement_v03.wav",
+      "CachePath": "2E/{2E9B4EEB-A5E0-4EC3-530D-780CC6B5A538}.wem"
+     },
+     {
+      "Id": "274974807",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Kick_Non_Elemental\\Kick_1_NonElement_v05.wav",
+      "CachePath": "B2/{B2D2F940-160A-FE37-D8F7-C51EB3025903}.wem"
+     },
+     {
+      "Id": "624423633",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Snare_Non_Elemental\\Snare_1_NonElement_v01.wav",
+      "CachePath": "FE/{FED678EC-CD66-D7FD-D0A2-56EA2035C6AF}.wem"
+     },
+     {
+      "Id": "834405918",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Snare_Non_Elemental\\Snare_1_NonElement_v02.wav",
+      "CachePath": "E5/{E5F634CD-0C34-CEB4-CA20-51C03614CEEE}.wem"
+     },
+     {
+      "Id": "894665343",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Snare_Non_Elemental\\Snare_1_NonElement_v04.wav",
+      "CachePath": "53/{533AB3DB-D0A8-EE06-1A10-C41156BB8ADC}.wem"
+     },
+     {
+      "Id": "945465748",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Music\\Kick_Non_Elemental\\Kick_1_NonElement_v02.wav",
+      "CachePath": "AE/{AEDE52B1-7F02-912D-12AE-538ABA5E3BBF}.wem"
+     }
+    ],
+    "Events": [
+     {
+      "Id": "2352743601",
+      "Name": "Play_GrenadeLauncher_Kick",
+      "ObjectPath": "\\Events\\Default Work Unit\\GrenadeLauncher\\Play_GrenadeLauncher_Kick",
+      "GUID": "{83598B5C-2D38-4557-A69D-A98A82B2FA0E}",
+      "DurationType": "OneShot",
+      "DurationMin": "0.5100807",
+      "DurationMax": "0.5250272",
+      "MediaRefs": [
+       {
+        "Id": "51445410"
+       },
+       {
+        "Id": "168394228"
+       },
+       {
+        "Id": "274974807"
+       },
+       {
+        "Id": "945465748"
+       }
+      ]
+     },
+     {
+      "Id": "2047028982",
+      "Name": "Play_GrenadeLauncher_Snare",
+      "ObjectPath": "\\Events\\Default Work Unit\\GrenadeLauncher\\Play_GrenadeLauncher_Snare",
+      "GUID": "{2D52E0A1-76DF-4437-A836-588A7EE566DF}",
+      "DurationType": "OneShot",
+      "DurationMin": "0.5100807",
+      "DurationMax": "0.5250272",
+      "MediaRefs": [
+       {
+        "Id": "19127390"
+       },
+       {
+        "Id": "263874256"
+       },
+       {
+        "Id": "624423633"
+       },
+       {
+        "Id": "834405918"
+       },
+       {
+        "Id": "894665343"
+       }
+      ]
      }
     ]
    },
@@ -88,6 +247,6 @@
     ]
    }
   ],
-  "FileHash": "{A01B549B-9AE4-AA9E-3B15-1C9864A30DA3}"
+  "FileHash": "{25B9511D-22E3-76F9-A141-E05D30815085}"
  }
 }

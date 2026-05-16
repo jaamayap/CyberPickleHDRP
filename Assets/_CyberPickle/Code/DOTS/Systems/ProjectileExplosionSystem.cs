@@ -202,6 +202,13 @@ namespace CyberPickle.DOTS.Systems
                 // damage attribution (no double-counting). This is what fires
                 // when the grenade lands in EMPTY ground — the user sees the
                 // explosion regardless of whether any enemies were hit.
+                //
+                // IsDetonation=true — DamageReportDrainSystem reads this flag
+                // and fires MusicEvent.WeaponDetonate so the Wwise adapter
+                // posts the per-weapon Snare event at this exact world
+                // position (3D-spatialized panning). Per-enemy reports above
+                // carry IsDetonation=false so the snare hits ONCE per
+                // explosion, not N times.
                 if (queueExists)
                 {
                     reportQueue.Enqueue(new DamageHitReport
@@ -214,6 +221,7 @@ namespace CyberPickle.DOTS.Systems
                         Element               = element,
                         HitDirection          = hitDir,
                         SuppressDefaultHitVfx = false,          // ← THIS one fires HitVfxApplier
+                        IsDetonation          = true,           // ← THIS one fires the snare
                     });
                 }
 

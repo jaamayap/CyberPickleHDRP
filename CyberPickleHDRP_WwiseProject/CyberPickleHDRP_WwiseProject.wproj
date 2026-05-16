@@ -12897,9 +12897,6 @@
 				<PhysicalFolder Path="Containers">
 					<WorkUnit Name="Containers" ID="{5EA7BBF8-64C0-4A50-8821-A07E8BE21D68}" PersistMode="Standalone"/>
 				</PhysicalFolder>
-				<PhysicalFolder Path="Containers\Music (Migrated)">
-					<WorkUnit Name="Music (Migrated)" ID="{49FED366-B530-42A8-993B-924873AAB707}" PersistMode="Standalone"/>
-				</PhysicalFolder>
 				<PhysicalFolder Path="Control Surface Sessions">
 					<WorkUnit Name="Control Surface Sessions" ID="{1751E4CD-8018-4E2C-9A8A-C77764D1D653}" PersistMode="Standalone"/>
 				</PhysicalFolder>

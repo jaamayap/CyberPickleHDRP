@@ -1,0 +1,15 @@
+Event	ID	Name			Wwise Object Path	Notes
+	2047028982	Play_GrenadeLauncher_Snare			\Default Work Unit\GrenadeLauncher\Play_GrenadeLauncher_Snare	
+	2352743601	Play_GrenadeLauncher_Kick			\Default Work Unit\GrenadeLauncher\Play_GrenadeLauncher_Kick	
+
+In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
+	19127390	Snare_1_NonElement_v05	.cache\89\{890A18F6-77D0-D31D-498C-D161419FB2B9}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Snare\Snare_1_NonElement_v05		49776
+	51445410	Kick_1_NonElement_v04	.cache\77\{77321F85-5AD8-4532-A820-E81CA824B046}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Kick\Kick_1_NonElement_v04		49776
+	168394228	Kick_1_NonElement_v03	.cache\03\{03490FA3-33EC-01F4-BDE3-8220CADC96A4}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Kick\Kick_1_NonElement_v03		49776
+	263874256	Snare_1_NonElement_v03	.cache\2E\{2E9B4EEB-A5E0-4EC3-530D-780CC6B5A538}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Snare\Snare_1_NonElement_v03		49776
+	274974807	Kick_1_NonElement_v05	.cache\B2\{B2D2F940-160A-FE37-D8F7-C51EB3025903}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Kick\Kick_1_NonElement_v05		49776
+	624423633	Snare_1_NonElement_v01	.cache\FE\{FED678EC-CD66-D7FD-D0A2-56EA2035C6AF}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Snare\Snare_1_NonElement_v01		49776
+	834405918	Snare_1_NonElement_v02	.cache\E5\{E5F634CD-0C34-CEB4-CA20-51C03614CEEE}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Snare\Snare_1_NonElement_v02		49776
+	894665343	Snare_1_NonElement_v04	.cache\53\{533AB3DB-D0A8-EE06-1A10-C41156BB8ADC}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Snare\Snare_1_NonElement_v04		49776
+	945465748	Kick_1_NonElement_v02	.cache\AE\{AEDE52B1-7F02-912D-12AE-538ABA5E3BBF}.wem		\Containers\Default Work Unit\Music\GrenadeLauncher\RND_GrenadeLauncher_Kick\Kick_1_NonElement_v02		49776
+

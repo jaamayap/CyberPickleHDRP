@@ -14,6 +14,32 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Folder Name="GrenadeLauncher" ID="{66B835AE-B5F3-4AEE-AD3E-8E0988EE70C6}" ShortID="865304329">
+					<ChildrenList>
+						<Event Name="Play_GrenadeLauncher_Kick" ID="{83598B5C-2D38-4557-A69D-A98A82B2FA0E}">
+							<ChildrenList>
+								<Action Name="" ID="{6E752EFC-BD0E-431A-9DC7-F0F76459826C}" ShortID="33300611">
+									<ReferenceList>
+										<Reference Name="Target">
+											<ObjectRef Name="RND_GrenadeLauncher_Kick" ID="{366D577A-7F0D-47E9-921D-8356ECB552BE}" WorkUnitID="{FD147431-CE59-4E42-B51E-BA37E05C76C0}"/>
+										</Reference>
+									</ReferenceList>
+								</Action>
+							</ChildrenList>
+						</Event>
+						<Event Name="Play_GrenadeLauncher_Snare" ID="{2D52E0A1-76DF-4437-A836-588A7EE566DF}">
+							<ChildrenList>
+								<Action Name="" ID="{C937F9E2-8FE1-4408-AD26-6F5036839B52}" ShortID="317450089">
+									<ReferenceList>
+										<Reference Name="Target">
+											<ObjectRef Name="RND_GrenadeLauncher_Snare" ID="{083AF742-4AE4-4CC0-BDDD-8BD87ADD776A}" WorkUnitID="{FD147431-CE59-4E42-B51E-BA37E05C76C0}"/>
+										</Reference>
+									</ReferenceList>
+								</Action>
+							</ChildrenList>
+						</Event>
+					</ChildrenList>
+				</Folder>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>

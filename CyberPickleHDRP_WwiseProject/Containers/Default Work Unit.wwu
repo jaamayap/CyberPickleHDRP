@@ -25,6 +25,297 @@
 						<ActiveSource Name="Song1_placeholder" ID="{27A62CCF-F92D-47B7-BC7B-3F568A64E03E}" Platform="Linked"/>
 					</ActiveSourceList>
 				</Sound>
+				<Folder Name="Music" ID="{CAF7BC54-7115-4482-AAC9-25CAF4A6776A}" ShortID="156904404">
+					<ChildrenList>
+						<Folder Name="GrenadeLauncher" ID="{D81DB450-90A6-4139-8AF7-7B0902F917CD}" ShortID="682340764">
+							<ChildrenList>
+								<RandomSequenceContainer Name="RND_GrenadeLauncher_Kick" ID="{366D577A-7F0D-47E9-921D-8356ECB552BE}" ShortID="25185594">
+									<PropertyList>
+										<Property Name="3DSpatialization" Type="int16" Value="1"/>
+										<Property Name="EnableAttenuation" Type="bool" Value="False"/>
+										<Property Name="Pitch" Type="int32">
+											<ModifierList>
+												<ModifierInfo>
+													<Modifier Name="" ID="{1E171A7A-4BEA-4F30-A7C6-E157794D0C18}">
+														<PropertyList>
+															<Property Name="Enabled" Type="bool" Value="True"/>
+															<Property Name="Max" Type="Real64" Value="25"/>
+															<Property Name="Min" Type="Real64" Value="-25"/>
+														</PropertyList>
+													</Modifier>
+												</ModifierInfo>
+											</ModifierList>
+										</Property>
+										<Property Name="RandomAvoidRepeatingCount" Type="int32" Value="2"/>
+										<Property Name="Volume" Type="Real64">
+											<ModifierList>
+												<ModifierInfo>
+													<Modifier Name="" ID="{5AE5754E-6FF0-48DE-9417-25CEE3CCA6B1}">
+														<PropertyList>
+															<Property Name="Enabled" Type="bool" Value="True"/>
+															<Property Name="Max" Type="Real64" Value="1"/>
+															<Property Name="Min" Type="Real64" Value="-1"/>
+														</PropertyList>
+													</Modifier>
+												</ModifierInfo>
+											</ModifierList>
+										</Property>
+									</PropertyList>
+									<ReferenceList>
+										<Reference Name="Conversion">
+											<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+										</Reference>
+										<Reference Name="OutputBus">
+											<ObjectRef Name="Music_Kick" ID="{ECA97301-6ECC-4A91-B149-D6C727E9C3A5}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+										</Reference>
+									</ReferenceList>
+									<ChildrenList>
+										<Sound Name="Kick_1_NonElement_v02" ID="{F302F29B-DDFB-49DB-8381-251E01CB937B}" ShortID="60713152">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Kick_1_NonElement_v02" ID="{4DB08CB9-864B-4F1D-B303-6972973E1667}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Kick_Non_Elemental\Kick_1_NonElement_v02.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="945465748"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Kick_1_NonElement_v02" ID="{4DB08CB9-864B-4F1D-B303-6972973E1667}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+										<Sound Name="Kick_1_NonElement_v03" ID="{09A9A3C0-ACDB-437D-9F90-6FD17561B40C}" ShortID="716612993">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Kick_1_NonElement_v03" ID="{99FA6C73-80FE-4A31-875A-A64CDAF44B5C}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Kick_Non_Elemental\Kick_1_NonElement_v03.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="168394228"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Kick_1_NonElement_v03" ID="{99FA6C73-80FE-4A31-875A-A64CDAF44B5C}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+										<Sound Name="Kick_1_NonElement_v04" ID="{3F251CC7-8104-41DA-9BF1-B1A642F549B3}" ShortID="316336561">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Kick_1_NonElement_v04" ID="{5DE8BD7F-AC1D-4B26-BEA5-CCA12E92FDD2}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Kick_Non_Elemental\Kick_1_NonElement_v04.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="51445410"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Kick_1_NonElement_v04" ID="{5DE8BD7F-AC1D-4B26-BEA5-CCA12E92FDD2}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+										<Sound Name="Kick_1_NonElement_v05" ID="{49DDD366-C4DF-4EC2-8FEB-8D0DFDF0BD9E}" ShortID="26198566">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Kick_1_NonElement_v05" ID="{36584938-50A1-49FA-8321-685A2A55A22E}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Kick_Non_Elemental\Kick_1_NonElement_v05.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="274974807"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Kick_1_NonElement_v05" ID="{36584938-50A1-49FA-8321-685A2A55A22E}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+									</ChildrenList>
+								</RandomSequenceContainer>
+								<RandomSequenceContainer Name="RND_GrenadeLauncher_Snare" ID="{083AF742-4AE4-4CC0-BDDD-8BD87ADD776A}" ShortID="1069737504">
+									<PropertyList>
+										<Property Name="3DSpatialization" Type="int16" Value="1"/>
+										<Property Name="EnableAttenuation" Type="bool" Value="False"/>
+										<Property Name="Pitch" Type="int32">
+											<ModifierList>
+												<ModifierInfo>
+													<Modifier Name="" ID="{8CFFFEE1-B946-4099-B423-E7B05EC86370}">
+														<PropertyList>
+															<Property Name="Enabled" Type="bool" Value="True"/>
+															<Property Name="Max" Type="Real64" Value="25"/>
+															<Property Name="Min" Type="Real64" Value="-25"/>
+														</PropertyList>
+													</Modifier>
+												</ModifierInfo>
+											</ModifierList>
+										</Property>
+										<Property Name="Volume" Type="Real64">
+											<ModifierList>
+												<ModifierInfo>
+													<Modifier Name="" ID="{4CB08492-7164-4173-B5BB-E350ADCDFFD5}">
+														<PropertyList>
+															<Property Name="Enabled" Type="bool" Value="True"/>
+															<Property Name="Max" Type="Real64" Value="1"/>
+															<Property Name="Min" Type="Real64" Value="-1"/>
+														</PropertyList>
+													</Modifier>
+												</ModifierInfo>
+											</ModifierList>
+										</Property>
+									</PropertyList>
+									<ReferenceList>
+										<Reference Name="Conversion">
+											<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+										</Reference>
+										<Reference Name="OutputBus">
+											<ObjectRef Name="Music_Snare" ID="{6F765ABD-C6AB-42A8-9D70-39DA13B76E92}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+										</Reference>
+									</ReferenceList>
+									<ChildrenList>
+										<Sound Name="Snare_1_NonElement_v01" ID="{9492FB75-3B2E-41FF-B534-3B97A96887E5}" ShortID="819457199">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Snare_1_NonElement_v01" ID="{43F0E5BB-6120-4F7D-8D46-DF212E610D80}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Snare_Non_Elemental\Snare_1_NonElement_v01.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="624423633"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Snare_1_NonElement_v01" ID="{43F0E5BB-6120-4F7D-8D46-DF212E610D80}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+										<Sound Name="Snare_1_NonElement_v02" ID="{1EE02701-4D5A-4A21-9B4E-68FF8678D2E2}" ShortID="81192880">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Snare_1_NonElement_v02" ID="{E6F59765-5DF2-4B36-A0D8-EE1E20941A0A}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Snare_Non_Elemental\Snare_1_NonElement_v02.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="834405918"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Snare_1_NonElement_v02" ID="{E6F59765-5DF2-4B36-A0D8-EE1E20941A0A}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+										<Sound Name="Snare_1_NonElement_v03" ID="{49932FCD-4710-4421-89A9-66E9511432BD}" ShortID="509905141">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Snare_1_NonElement_v03" ID="{D4C00F49-C009-4D0B-B0EB-057E23CA25B5}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Snare_Non_Elemental\Snare_1_NonElement_v03.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="263874256"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Snare_1_NonElement_v03" ID="{D4C00F49-C009-4D0B-B0EB-057E23CA25B5}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+										<Sound Name="Snare_1_NonElement_v04" ID="{D990FC33-8821-4A76-A9F5-062823CCB74D}" ShortID="230572616">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Snare_1_NonElement_v04" ID="{F1D42614-43BE-44D2-B8F4-4CC884F7E899}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Snare_Non_Elemental\Snare_1_NonElement_v04.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="894665343"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Snare_1_NonElement_v04" ID="{F1D42614-43BE-44D2-B8F4-4CC884F7E899}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+										<Sound Name="Snare_1_NonElement_v05" ID="{8EB5233E-3842-44BA-AA03-47E383D9645B}" ShortID="208068291">
+											<ReferenceList>
+												<Reference Name="Conversion">
+													<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{72513914-9CDE-4FB8-B02A-C760667F9415}"/>
+												</Reference>
+												<Reference Name="OutputBus">
+													<ObjectRef Name="Master Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{91FEB8B9-92C4-4D4A-91EF-10C0D1B6E7FA}"/>
+												</Reference>
+											</ReferenceList>
+											<ChildrenList>
+												<AudioFileSource Name="Snare_1_NonElement_v05" ID="{50775EF7-C26D-4004-9722-6A290B859A14}">
+													<Language>SFX</Language>
+													<AudioFile>Music\Snare_Non_Elemental\Snare_1_NonElement_v05.wav</AudioFile>
+													<MediaIDList>
+														<MediaID ID="19127390"/>
+													</MediaIDList>
+												</AudioFileSource>
+											</ChildrenList>
+											<ActiveSourceList>
+												<ActiveSource Name="Snare_1_NonElement_v05" ID="{50775EF7-C26D-4004-9722-6A290B859A14}" Platform="Linked"/>
+											</ActiveSourceList>
+										</Sound>
+									</ChildrenList>
+								</RandomSequenceContainer>
+							</ChildrenList>
+						</Folder>
+					</ChildrenList>
+				</Folder>
 			</ChildrenList>
 		</WorkUnit>
 	</Containers>

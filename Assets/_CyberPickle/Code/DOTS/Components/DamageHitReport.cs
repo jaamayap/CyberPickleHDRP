@@ -61,5 +61,16 @@ namespace CyberPickle.DOTS.Components
         /// slightly different positions ("weird behavior" pre-fix).
         /// </summary>
         public bool SuppressDefaultHitVfx;
+
+        /// <summary>
+        /// Marks the SINGLE central-explosion report that
+        /// ProjectileExplosionSystem emits per detonation (the one at the
+        /// AoE epicenter with DamageDealt=0). DamageReportDrainSystem fires
+        /// MusicEvent.WeaponDetonate exactly when it sees this flag — so
+        /// the Wwise snare hits once per grenade explosion, not once per
+        /// damaged enemy. Always false on per-enemy hit reports (those
+        /// already carry DamageDealt > 0).
+        /// </summary>
+        public bool IsDetonation;
     }
 }

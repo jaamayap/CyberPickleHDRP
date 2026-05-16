@@ -41,6 +41,15 @@ namespace CyberPickle.Gameplay.Audio
         Crit            = 12,
         // payload: enemy-id or null
         EnemyDeath      = 13,
+        // payload: WeaponDetonatePayload (WeaponId + WorldPosition). Fired by
+        // DamageReportDrainSystem when ProjectileExplosionSystem emits a
+        // central-explosion report (IsDetonation=true) — i.e., the moment an
+        // AoE projectile (grenade) reaches its rhythm-locked detonation. The
+        // Wwise adapter spawns a transient AkGameObj at WorldPosition and
+        // posts the per-weapon Snare event (Play_{WeaponId}_Snare) for
+        // 3D-spatialized pan without volume attenuation (the beat stays
+        // consistent regardless of where on screen the explosion happens).
+        WeaponDetonate  = 14,
 
         // ─── Combat — incoming ───────────────────────────────────────────
         // payload: damage value (float)

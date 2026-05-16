@@ -1,5 +1,9 @@
 Audio Bus	ID	Name			Wwise Object Path	Notes
+	366622112	Music_Snare			\Default Work Unit\Master Audio Bus\Music\Music_Percussion\Music_Snare	
+	910111134	Music_Percussion			\Default Work Unit\Master Audio Bus\Music\Music_Percussion	
+	1433241079	Music_Kick			\Default Work Unit\Master Audio Bus\Music\Music_Percussion\Music_Kick	
 	3803692087	Master Audio Bus			\Default Work Unit\Master Audio Bus	
+	3991942870	Music			\Default Work Unit\Master Audio Bus\Music	
 
 Audio Devices	ID	Name	Type				Notes
 	2317455096	No_Output	No Output			

@@ -44,6 +44,8 @@ MonoBehaviour:
   hitVfxScale: 2
   hitVfxScalesWithAreaOfEffect: 1
   telegraphStyle: {fileID: 11400000, guid: a279ce32789ccce4d9698a806ebdb330, type: 2}
+  wwiseFireEventName: Play_GrenadeLauncher_Kick
+  wwiseDetonateEventName: Play_GrenadeLauncher_Snare
   trajectory: 1
   flightBeats: 2
   tumbleRateDegreesPerSecond: {x: 0, y: 0, z: 0}

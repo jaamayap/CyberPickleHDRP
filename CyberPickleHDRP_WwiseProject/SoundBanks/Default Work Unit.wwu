@@ -10,6 +10,13 @@
 					<ObjectExclusionList/>
 					<GameSyncExclusionList/>
 				</SoundBank>
+				<SoundBank Name="Music_Weapons" ID="{F0F9A61A-36DD-46D3-BFEC-8A48128A0FE3}">
+					<ObjectInclusionList>
+						<ObjectRef Name="GrenadeLauncher" ID="{66B835AE-B5F3-4AEE-AD3E-8E0988EE70C6}" WorkUnitID="{64BCD357-2672-454A-BC2D-DF921E03087B}" Origin="Manual" Filter="7"/>
+					</ObjectInclusionList>
+					<ObjectExclusionList/>
+					<GameSyncExclusionList/>
+				</SoundBank>
 			</ChildrenList>
 		</WorkUnit>
 	</SoundBanks>
